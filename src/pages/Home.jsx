@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Swords, Zap, Download } from "lucide-react";
 import ArmyUploader from '../components/army/ArmyUploader';
 import { base44 } from "@/api/base44Client";
-import { createPageUrl } from './utils';
+
 
 export default function Home() {
   const navigate = useNavigate();
@@ -33,7 +33,7 @@ export default function Home() {
         event_log: []
       });
       
-      navigate(createPageUrl('Battle') + `?id=${battle.id}`);
+      navigate(`/Battle?id=${battle.id}`);
     } catch (err) {
       console.error('Failed to create battle:', err);
     } finally {

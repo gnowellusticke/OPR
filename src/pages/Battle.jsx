@@ -10,7 +10,7 @@ import CombatResolver from '../components/battle/CombatResolver';
 import { base44 } from "@/api/base44Client";
 import { BPMNEngine, DMNEngine, CMMNEngine } from '../components/engine/GameEngine';
 import { RulesEngine } from '../components/engine/RulesEngine';
-import { createPageUrl } from './utils';
+
 
 export default function Battle() {
   const navigate = useNavigate();
@@ -46,7 +46,7 @@ export default function Battle() {
     const id = params.get('id');
     
     if (!id) {
-      navigate(createPageUrl('Home'));
+      navigate('/Home');
       return;
     }
 
@@ -432,7 +432,7 @@ export default function Battle() {
       <div className="max-w-[2000px] mx-auto mb-4 flex justify-between items-center">
         <Button
           variant="outline"
-          onClick={() => navigate(createPageUrl('Home'))}
+          onClick={() => navigate('/Home')}
           className="border-slate-600 text-slate-300"
         >
           <Home className="w-4 h-4 mr-2" />
