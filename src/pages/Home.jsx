@@ -95,18 +95,18 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-6xl mx-auto space-y-6 sm:space-y-8">
         {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-3">
-            <Swords className="w-12 h-12 text-blue-500" />
-            <h1 className="text-5xl font-bold text-white">
+        <div className="text-center space-y-3 sm:space-y-4">
+          <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+            <Swords className="w-8 h-8 sm:w-12 sm:h-12 text-blue-500" />
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-bold text-white">
               Grimdark Future AI Battle Simulator
             </h1>
-            <Swords className="w-12 h-12 text-red-500" />
+            <Swords className="w-8 h-8 sm:w-12 sm:h-12 text-red-500" />
           </div>
-          <p className="text-slate-400 text-lg">
+          <p className="text-slate-400 text-sm sm:text-base lg:text-lg px-4">
             Watch two AI agents battle using BPMN, DMN, and CMMN frameworks
           </p>
         </div>
@@ -114,12 +114,12 @@ export default function Home() {
         {/* Info Card */}
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-500" />
+            <CardTitle className="text-white flex items-center gap-2 text-base sm:text-lg">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500" />
               How It Works
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-slate-300">
+          <CardContent className="space-y-3 text-sm sm:text-base text-slate-300">
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full bg-blue-900/50 border border-blue-600 flex items-center justify-center flex-shrink-0 text-blue-400 font-bold">
                 1
@@ -168,7 +168,7 @@ export default function Home() {
         </div>
 
         {/* Army Uploaders */}
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <ArmyUploader 
             label="Agent A Army (Blue)" 
             color="blue"
@@ -187,17 +187,19 @@ export default function Home() {
             size="lg"
             disabled={!armyA || !armyB || creating}
             onClick={handleStartBattle}
-            className="bg-gradient-to-r from-blue-600 to-red-600 hover:from-blue-700 hover:to-red-700 text-white px-12 py-6 text-xl"
+            className="bg-gradient-to-r from-blue-600 to-red-600 hover:from-blue-700 hover:to-red-700 text-white px-6 sm:px-12 py-4 sm:py-6 text-base sm:text-xl w-full sm:w-auto"
           >
             {creating ? (
               <>
-                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-3" />
-                Preparing Battle...
+                <div className="animate-spin w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full mr-2 sm:mr-3" />
+                <span className="hidden sm:inline">Preparing Battle...</span>
+                <span className="sm:hidden">Preparing...</span>
               </>
             ) : (
               <>
-                <Swords className="w-6 h-6 mr-3" />
-                Start Battle Simulation
+                <Swords className="w-5 h-5 sm:w-6 sm:h-6 mr-2 sm:mr-3" />
+                <span className="hidden sm:inline">Start Battle Simulation</span>
+                <span className="sm:hidden">Start Battle</span>
               </>
             )}
           </Button>
