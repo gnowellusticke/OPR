@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card } from "@/components/ui/card";
+import { Users, User } from "lucide-react";
 
 export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) {
   const GRID_SIZE = 6; // inches per grid cell
@@ -10,6 +11,18 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
   const units = gameState?.units || [];
   const terrain = gameState?.terrain || [];
   const objectives = gameState?.objectives || [];
+
+  // Detect overlapping units and adjust positions
+  const adjustedUnits = units.map((unit, idx) => {
+    const overlaps = units.slice(0, idx).filter(other => 
+      Math.abs(unit.x - other.x) < 6 && Math.abs(unit.y - other.y) < 6
+    );
+    
+    const offsetX = overlaps.length > 0 ? (overlaps.length * 4) : 0;
+    const offsetY = overlaps.length > 0 ? (overlaps.length * 4) : 0;
+    
+    return { ...unit, displayX: unit.x + offsetX, displayY: unit.y + offsetY };
+  });
 
   return (
     <Card className="bg-slate-900 border-slate-700 p-4">
@@ -69,42 +82,51 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
         ))}
 
         {/* Units */}
-        {units.map((unit) => (
-          <div
-            key={unit.id}
-            onClick={() => onUnitClick?.(unit)}
-            className={`absolute rounded-lg border-2 cursor-pointer transition-all ${
-              activeUnit?.id === unit.id ? 'ring-4 ring-yellow-400 scale-110' : ''
-            } ${
-              unit.status === 'shaken' ? 'opacity-60' : ''
-            }`}
-            style={{
-              left: (unit.x / GRID_SIZE) * CELL_SIZE - 20,
-              top: (unit.y / GRID_SIZE) * CELL_SIZE - 20,
-              width: 40,
-              height: 40,
-              backgroundColor: unit.owner === 'agent_a' ? '#1e40af' : '#991b1b',
-              borderColor: unit.owner === 'agent_a' ? '#3b82f6' : '#ef4444',
-              zIndex: activeUnit?.id === unit.id ? 100 : unit.status === 'shaken' ? 1 : 10
-            }}
-            title={`${unit.name} (${unit.current_models}/${unit.total_models})`}
-          >
-            <div className="text-white text-xs text-center leading-tight p-1">
-              <div className="font-bold truncate">{unit.name.substring(0, 3)}</div>
-              <div className="text-[10px]">{unit.current_models}</div>
+        {adjustedUnits.map((unit) => {
+          const isMultiModel = unit.current_models > 1;
+          return (
+            <div
+              key={unit.id}
+              onClick={() => onUnitClick?.(unit)}
+              className={`absolute rounded-lg border-2 cursor-pointer transition-all ${
+                activeUnit?.id === unit.id ? 'ring-4 ring-yellow-400 scale-110' : ''
+              } ${
+                unit.status === 'shaken' ? 'opacity-60' : ''
+              }`}
+              style={{
+                left: (unit.displayX / GRID_SIZE) * CELL_SIZE - 20,
+                top: (unit.displayY / GRID_SIZE) * CELL_SIZE - 20,
+                width: 40,
+                height: 40,
+                backgroundColor: unit.owner === 'agent_a' ? '#1e40af' : '#991b1b',
+                borderColor: unit.owner === 'agent_a' ? '#3b82f6' : '#ef4444',
+                zIndex: activeUnit?.id === unit.id ? 100 : unit.status === 'shaken' ? 1 : 10
+              }}
+              title={`${unit.name} (${unit.current_models}/${unit.total_models})`}
+            >
+              <div className="flex flex-col items-center justify-center h-full text-white">
+                {isMultiModel ? (
+                  <Users className="w-5 h-5 mb-0.5" />
+                ) : (
+                  <User className="w-5 h-5 mb-0.5" />
+                )}
+                <div className="text-[10px] font-bold">
+                  {isMultiModel ? unit.current_models : '1'}
+                </div>
+              </div>
+              {unit.fatigued && (
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full" title="Fatigued" />
+              )}
+              {unit.status === 'shaken' && (
+                <div className="absolute -top-1 -left-1 w-3 h-3 bg-red-500 rounded-full" title="Shaken" />
+              )}
             </div>
-            {unit.fatigued && (
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full" title="Fatigued" />
-            )}
-            {unit.status === 'shaken' && (
-              <div className="absolute -top-1 -left-1 w-3 h-3 bg-red-500 rounded-full" title="Shaken" />
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Legend */}
-      <div className="mt-4 flex gap-6 text-xs text-slate-300">
+      <div className="mt-4 flex flex-wrap gap-4 sm:gap-6 text-xs text-slate-300">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-blue-700 border-2 border-blue-500 rounded" />
           <span>Agent A</span>
@@ -112,6 +134,14 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-red-700 border-2 border-red-500 rounded" />
           <span>Agent B</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4" />
+          <span>Multi-Model Unit</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4" />
+          <span>Single Model</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 bg-yellow-500 rounded-full" />
