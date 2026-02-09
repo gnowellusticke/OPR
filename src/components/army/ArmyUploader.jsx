@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Upload, CheckCircle2, AlertCircle, FileJson } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import { ArmyForgeParser } from './ArmyForgeParser';
 
 export default function ArmyUploader({ label, color, onArmyUploaded }) {
   const [file, setFile] = useState(null);
   const [army, setArmy] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [parser] = useState(new ArmyForgeParser());
 
   const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
@@ -21,22 +23,27 @@ export default function ArmyUploader({ label, color, onArmyUploaded }) {
 
     try {
       const text = await selectedFile.text();
-      const data = JSON.parse(text);
+      const rawData = JSON.parse(text);
       
-      // Validate army structure
-      if (!data.name || !data.units || !Array.isArray(data.units)) {
-        throw new Error('Invalid army format. Must include name and units array.');
+      // Try to parse as Army Forge format first
+      let parsedData;
+      if (rawData.gameSystem && rawData.list && rawData.list.units) {
+        // OPR Army Forge format
+        parsedData = parser.parse(rawData);
+      } else if (rawData.name && rawData.units && Array.isArray(rawData.units)) {
+        // Simple format
+        parsedData = rawData;
+        parsedData.total_points = rawData.units.reduce((sum, unit) => sum + (unit.points || 0), 0);
+      } else {
+        throw new Error('Unsupported army list format. Please use OPR Army Forge export or simple JSON format.');
       }
-
-      // Calculate total points
-      const totalPoints = data.units.reduce((sum, unit) => sum + (unit.points || 0), 0);
       
       // Save to database
       const savedArmy = await base44.entities.ArmyList.create({
-        name: data.name,
-        faction: data.faction || 'Unknown',
-        total_points: totalPoints,
-        units: data.units
+        name: parsedData.name,
+        faction: parsedData.faction || 'Unknown',
+        total_points: parsedData.total_points,
+        units: parsedData.units
       });
 
       setArmy(savedArmy);
