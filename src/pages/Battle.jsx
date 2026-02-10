@@ -110,15 +110,30 @@ export default function Battle() {
 
   const generateTerrain = () => {
     const terrain = [];
-    for (let i = 0; i < 8; i++) {
-      terrain.push({
+    const checkOverlap = (newTerrain, existing) => {
+      return existing.some(t => {
+        const xOverlap = newTerrain.x < t.x + t.width && newTerrain.x + newTerrain.width > t.x;
+        const yOverlap = newTerrain.y < t.y + t.height && newTerrain.y + newTerrain.height > t.y;
+        return xOverlap && yOverlap;
+      });
+    };
+    
+    let attempts = 0;
+    while (terrain.length < 8 && attempts < 50) {
+      const newTerrain = {
         type: Math.random() > 0.5 ? 'cover' : 'difficult',
         x: Math.random() * 60 + 6,
         y: Math.random() * 36 + 6,
         width: 6 + Math.random() * 6,
         height: 6 + Math.random() * 6
-      });
+      };
+      
+      if (!checkOverlap(newTerrain, terrain)) {
+        terrain.push(newTerrain);
+      }
+      attempts++;
     }
+    
     return terrain;
   };
 

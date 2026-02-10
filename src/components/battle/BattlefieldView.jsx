@@ -114,6 +114,16 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
                   {isMultiModel ? unit.current_models : '1'}
                 </div>
               </div>
+              <div 
+                className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-[9px] font-semibold text-white bg-slate-900/90 px-1.5 py-0.5 rounded whitespace-nowrap"
+                style={{ 
+                  maxWidth: '80px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+              >
+                {unit.name}
+              </div>
               {unit.fatigued && (
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full" title="Fatigued" />
               )}
