@@ -139,14 +139,14 @@ export default function Battle() {
     const units = [];
     let idCounter = 0;
     
-    // Deploy Army A (bottom edge)
+    // Deploy Army A (bottom 12" deployment zone: y: 0-12)
     armyA.units.forEach((unit, idx) => {
       units.push({
         ...unit,
         id: `a_${idCounter++}`,
         owner: 'agent_a',
         x: (idx * 12) % 60 + 6,
-        y: 6,
+        y: 6 + (Math.floor(idx / 5) * 3), // Spread within 12" zone
         current_models: unit.models,
         total_models: unit.models,
         status: 'normal',
@@ -155,14 +155,14 @@ export default function Battle() {
       });
     });
     
-    // Deploy Army B (top edge)
+    // Deploy Army B (top 12" deployment zone: y: 36-48)
     armyB.units.forEach((unit, idx) => {
       units.push({
         ...unit,
         id: `b_${idCounter++}`,
         owner: 'agent_b',
         x: (idx * 12) % 60 + 6,
-        y: 42,
+        y: 42 - (Math.floor(idx / 5) * 3), // Spread within 12" zone from top
         current_models: unit.models,
         total_models: unit.models,
         status: 'normal',
