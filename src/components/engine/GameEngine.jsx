@@ -32,25 +32,28 @@ export class DMNEngine {
     const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
     const nearestEnemy = this.findNearestEnemy(unit, enemies);
     const nearestObjective = this.findNearestObjective(unit, gameState.objectives);
+    
+    // Strategic analysis - evaluate if we're winning or losing
+    const strategicState = this.analyzeStrategicPosition(gameState, owner);
 
     // Hold - good for shooting units or if already in good position
     options.push({
       action: 'Hold',
-      score: this.scoreHoldAction(unit, gameState, nearestEnemy),
+      score: this.scoreHoldAction(unit, gameState, nearestEnemy, strategicState),
       selected: false
     });
 
     // Advance - balanced option for moving and shooting
     options.push({
       action: 'Advance',
-      score: this.scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective),
+      score: this.scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState),
       selected: false
     });
 
     // Rush - for getting into position quickly
     options.push({
       action: 'Rush',
-      score: this.scoreRushAction(unit, gameState, nearestObjective),
+      score: this.scoreRushAction(unit, gameState, nearestObjective, strategicState),
       selected: false
     });
 
@@ -58,7 +61,7 @@ export class DMNEngine {
     if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= 12) {
       options.push({
         action: 'Charge',
-        score: this.scoreChargeAction(unit, nearestEnemy),
+        score: this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState),
         selected: false
       });
     }
@@ -69,8 +72,65 @@ export class DMNEngine {
 
     return options;
   }
+  
+  analyzeStrategicPosition(gameState, owner) {
+    const myUnits = gameState.units.filter(u => u.owner === owner && u.current_models > 0);
+    const enemyUnits = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
+    
+    // Count total strength
+    const myStrength = myUnits.reduce((sum, u) => sum + u.current_models, 0);
+    const enemyStrength = enemyUnits.reduce((sum, u) => sum + u.current_models, 0);
+    
+    // Count objectives controlled
+    const myObjectives = gameState.objectives.filter(o => o.controlled_by === owner).length;
+    const enemyObjectives = gameState.objectives.filter(o => o.controlled_by !== owner && o.controlled_by !== null).length;
+    
+    // Determine if we're winning
+    const strengthRatio = myStrength / Math.max(enemyStrength, 1);
+    const objectivesWinning = myObjectives > enemyObjectives;
+    const isWinning = objectivesWinning || strengthRatio > 1.3;
+    const isLosing = !objectivesWinning && strengthRatio < 0.7;
+    
+    return {
+      isWinning,
+      isLosing,
+      myStrength,
+      enemyStrength,
+      strengthRatio,
+      myObjectives,
+      enemyObjectives,
+      roundsRemaining: Math.max(0, 5 - (gameState.current_round || 1))
+    };
+  }
+  
+  predictOpponentResponse(unit, action, gameState, owner) {
+    // Simulate what opponent might do in response
+    const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
+    
+    let threatLevel = 0;
+    
+    for (const enemy of enemies) {
+      const distance = this.getDistance(unit, enemy);
+      
+      // If we're in charge range, opponent might charge us
+      if (distance <= 12 && enemy.weapons?.some(w => w.range <= 2)) {
+        threatLevel += 0.4;
+      }
+      
+      // If we're in shooting range, opponent might shoot us
+      if (distance <= 24 && enemy.weapons?.some(w => w.range > 12)) {
+        threatLevel += 0.2;
+      }
+      
+      // Consider enemy strength
+      const enemyStrength = enemy.current_models * (enemy.quality <= 3 ? 1.5 : 1.0);
+      threatLevel += (enemyStrength / 10) * 0.1;
+    }
+    
+    return threatLevel;
+  }
 
-  scoreHoldAction(unit, gameState, nearestEnemy) {
+  scoreHoldAction(unit, gameState, nearestEnemy, strategicState) {
     let score = 0.3;
     
     // Bonus if unit has good ranged weapons
@@ -83,15 +143,32 @@ export class DMNEngine {
     // Penalty if unit is shaken
     if (unit.status === 'shaken') score = 1.0; // Must hold to recover
     
+    // Strategic adjustments
+    if (strategicState.isWinning && hasRanged) {
+      // If winning, defensive shooting is good
+      score += 0.2;
+    }
+    
+    // If on an objective, holding is valuable
+    const onObjective = gameState.objectives.some(obj => 
+      this.getDistance(unit, obj) <= 3
+    );
+    if (onObjective) score += 0.3;
+    
     return score;
   }
 
-  scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective) {
+  scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState) {
     let score = 0.5;
     
     // Bonus for moving toward objectives
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 3) {
       score += 0.3;
+      
+      // If losing on objectives, advancing to them is critical
+      if (strategicState.myObjectives < strategicState.enemyObjectives) {
+        score += 0.4;
+      }
     }
     
     // Bonus if enemies are at medium range
@@ -100,10 +177,15 @@ export class DMNEngine {
       if (dist > 12 && dist < 30) score += 0.2;
     }
     
+    // If losing and need to pressure, advance is good
+    if (strategicState.isLosing && strategicState.roundsRemaining < 3) {
+      score += 0.3;
+    }
+    
     return score;
   }
 
-  scoreRushAction(unit, gameState, nearestObjective) {
+  scoreRushAction(unit, gameState, nearestObjective, strategicState) {
     let score = 0.4;
     
     // High bonus for getting to objectives quickly
@@ -115,10 +197,20 @@ export class DMNEngine {
     const hasRanged = unit.weapons?.some(w => w.range > 6);
     if (hasRanged) score -= 0.3;
     
+    // If we're behind on objectives and time is running out, rush!
+    if (strategicState.isLosing && strategicState.roundsRemaining <= 2) {
+      score += 0.5;
+    }
+    
+    // If enemy controls more objectives, rush to contest
+    if (strategicState.enemyObjectives > strategicState.myObjectives) {
+      score += 0.3;
+    }
+    
     return score;
   }
 
-  scoreChargeAction(unit, nearestEnemy) {
+  scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState) {
     let score = 0.6;
     
     // Bonus for melee-focused units
@@ -128,6 +220,35 @@ export class DMNEngine {
     // Consider unit strength vs enemy
     const strengthRatio = unit.current_models / (nearestEnemy.current_models || 1);
     score += Math.min(strengthRatio * 0.2, 0.3);
+    
+    // Strategic considerations
+    if (strategicState.isLosing) {
+      // If losing, need to be aggressive and eliminate threats
+      score += 0.4;
+      
+      // Especially target weak enemies we can finish off
+      const enemyHealthRatio = nearestEnemy.current_models / nearestEnemy.total_models;
+      if (enemyHealthRatio < 0.5) score += 0.3;
+    }
+    
+    // Predict opponent counter-charge risk
+    const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
+    const counterChargeRisk = enemies.filter(e => 
+      e.id !== nearestEnemy.id && 
+      this.getDistance(unit, e) <= 12 &&
+      e.current_models > unit.current_models
+    ).length;
+    
+    score -= counterChargeRisk * 0.2; // Reduce score if we'll get counter-charged
+    
+    // If target is on objective and we need it, charge!
+    const targetOnObjective = gameState.objectives.some(obj =>
+      this.getDistance(nearestEnemy, obj) <= 3 && 
+      obj.controlled_by !== owner
+    );
+    if (targetOnObjective && strategicState.enemyObjectives >= strategicState.myObjectives) {
+      score += 0.5;
+    }
     
     return score;
   }
@@ -148,9 +269,12 @@ export class DMNEngine {
   scoreTarget(unit, enemy) {
     let score = 0;
     
-    // Prefer weakened targets
+    // Prefer weakened targets we can finish off
     const healthRatio = enemy.current_models / enemy.total_models;
-    score += (1 - healthRatio) * 0.4;
+    score += (1 - healthRatio) * 0.5;
+    
+    // Big bonus for nearly destroyed units (finish them off!)
+    if (healthRatio < 0.3) score += 0.4;
     
     // Prefer closer targets
     const distance = this.getDistance(unit, enemy);
@@ -158,6 +282,10 @@ export class DMNEngine {
     
     // Prefer targets we can damage
     if (enemy.defense <= 3) score += 0.3;
+    
+    // Prioritize threats - units with high quality/firepower
+    if (enemy.quality <= 3) score += 0.2;
+    if (enemy.weapons?.some(w => w.range > 18 && w.attacks >= 3)) score += 0.2;
     
     return score;
   }
