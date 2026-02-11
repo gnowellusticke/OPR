@@ -206,11 +206,11 @@ export default function Battle() {
       return;
     }
 
-    // Get next unit to activate
+    // Get next unit to activate from current agent
     const agentUnits = activeUnits.filter(u => u.owner === gameState.active_agent);
     
     if (agentUnits.length === 0) {
-      // Switch agent
+      // Current agent has no units left, switch to other agent
       const newState = {
         ...gameState,
         active_agent: gameState.active_agent === 'agent_a' ? 'agent_b' : 'agent_a'
@@ -242,10 +242,11 @@ export default function Battle() {
     // Execute action
     await executeAction(unit, selectedAction);
     
-    // Mark as activated
+    // Mark as activated and switch to other agent for alternating activations
     const newState = {
       ...gameState,
-      units_activated: [...(gameState.units_activated || []), unit.id]
+      units_activated: [...(gameState.units_activated || []), unit.id],
+      active_agent: gameState.active_agent === 'agent_a' ? 'agent_b' : 'agent_a'
     };
     setGameState(newState);
     setActiveUnit(null);
