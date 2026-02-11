@@ -31,10 +31,10 @@ export class ArmyTextParser {
 
       // Check if this is a unit line (contains Q and D stats)
       if (line.includes('Q') && line.includes('D') && line.includes('+')) {
-        const unit = this.parseUnit(lines, i);
-        if (unit) {
-          units.push(unit);
-          i = unit.nextLineIndex;
+        const result = this.parseUnit(lines, i);
+        if (result) {
+          units.push(...result.units);
+          i = result.nextLineIndex;
         } else {
           i++;
         }
