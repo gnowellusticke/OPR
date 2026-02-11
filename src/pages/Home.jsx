@@ -12,6 +12,10 @@ export default function Home() {
   const [armyA, setArmyA] = useState(null);
   const [armyB, setArmyB] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [armyTextA, setArmyTextA] = useState('');
+  const [armyTextB, setArmyTextB] = useState('');
+  const [errorA, setErrorA] = useState('');
+  const [errorB, setErrorB] = useState('');
 
   const handleStartBattle = async () => {
     if (!armyA || !armyB) return;

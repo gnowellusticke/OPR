@@ -63,6 +63,10 @@ export default function Battle() {
         setGameState(battleData.game_state);
         setEvents(battleData.event_log || []);
       }
+
+      // Store army names for display
+      battleData.armyAName = armyA.name;
+      battleData.armyBName = armyB.name;
     } catch (err) {
       console.error('Failed to load battle:', err);
     }
@@ -479,7 +483,12 @@ export default function Battle() {
       <div className="max-w-[2000px] mx-auto grid grid-cols-12 gap-4">
         {/* Left Sidebar */}
         <div className="col-span-3 space-y-4">
-          <GameStatePanel battle={battle} gameState={gameState} />
+          <GameStatePanel 
+            battle={battle} 
+            gameState={gameState}
+            armyAName={battle?.armyAName}
+            armyBName={battle?.armyBName}
+          />
           <DecisionTreeView decision={currentDecision} />
         </div>
 

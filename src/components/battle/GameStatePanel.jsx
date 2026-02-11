@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Target, Users, Flag } from "lucide-react";
 
-export default function GameStatePanel({ battle, gameState }) {
+export default function GameStatePanel({ battle, gameState, armyAName, armyBName }) {
   if (!gameState) return null;
 
   const agentAScore = gameState.objectives?.filter(o => o.controlled_by === 'agent_a').length || 0;
