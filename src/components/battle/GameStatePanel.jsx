@@ -30,7 +30,7 @@ export default function GameStatePanel({ battle, gameState, armyAName, armyBName
         <div>
           <div className="text-slate-400 text-sm mb-1">Active Player</div>
           <Badge className={gameState.active_agent === 'agent_a' ? 'bg-blue-600' : 'bg-red-600'}>
-            {gameState.active_agent === 'agent_a' ? 'Agent A' : 'Agent B'}
+            {gameState.active_agent === 'agent_a' ? (armyAName || 'Agent A') : (armyBName || 'Agent B')}
           </Badge>
         </div>
 
@@ -42,11 +42,11 @@ export default function GameStatePanel({ battle, gameState, armyAName, armyBName
           </div>
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-blue-400 font-semibold">Agent A</span>
+              <span className="text-blue-400 font-semibold">{armyAName || 'Agent A'}</span>
               <span className="text-white text-lg font-bold">{agentAScore}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-red-400 font-semibold">Agent B</span>
+              <span className="text-red-400 font-semibold">{armyBName || 'Agent B'}</span>
               <span className="text-white text-lg font-bold">{agentBScore}</span>
             </div>
           </div>
@@ -60,11 +60,11 @@ export default function GameStatePanel({ battle, gameState, armyAName, armyBName
           </div>
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="text-blue-400">Agent A</span>
+              <span className="text-blue-400">{armyAName || 'Agent A'}</span>
               <span className="text-white">{gameState.units?.filter(u => u.owner === 'agent_a' && u.current_models > 0).length || 0}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-red-400">Agent B</span>
+              <span className="text-red-400">{armyBName || 'Agent B'}</span>
               <span className="text-white">{gameState.units?.filter(u => u.owner === 'agent_b' && u.current_models > 0).length || 0}</span>
             </div>
           </div>
