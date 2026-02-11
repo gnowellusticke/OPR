@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Swords, Zap, Download } from "lucide-react";
-import ArmyUploader from '../components/army/ArmyUploader';
+import { Swords, Zap } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { ArmyTextParser } from '../components/army/ArmyTextParser';
 import { base44 } from "@/api/base44Client";
 
 
@@ -16,6 +17,17 @@ export default function Home() {
   const [armyTextB, setArmyTextB] = useState('');
   const [errorA, setErrorA] = useState('');
   const [errorB, setErrorB] = useState('');
+
+  const handleParseArmy = async (text, setArmy, setError) => {
+    setError('');
+    try {
+      const parsed = ArmyTextParser.parse(text);
+      const army = await base44.entities.ArmyList.create(parsed);
+      setArmy(army);
+    } catch (err) {
+      setError(err.message || 'Failed to parse army list');
+    }
+  };
 
   const handleStartBattle = async () => {
     if (!armyA || !armyB) return;
@@ -45,58 +57,7 @@ export default function Home() {
     }
   };
 
-  const downloadExampleArmy = () => {
-    const example = {
-      name: "Example Space Marines",
-      faction: "Space Marines",
-      units: [
-        {
-          name: "Captain",
-          quality: 3,
-          defense: 3,
-          models: 1,
-          total_models: 1,
-          points: 100,
-          weapons: [
-            { name: "Plasma Pistol", range: 12, attacks: 2, ap: -2 },
-            { name: "Power Sword", range: 1, attacks: 3, ap: -1 }
-          ],
-          special_rules: ["Hero", "Fearless"]
-        },
-        {
-          name: "Tactical Squad",
-          quality: 4,
-          defense: 4,
-          models: 10,
-          total_models: 10,
-          points: 150,
-          weapons: [
-            { name: "Bolters", range: 18, attacks: 1, ap: 0 }
-          ],
-          special_rules: []
-        },
-        {
-          name: "Devastator Squad",
-          quality: 4,
-          defense: 4,
-          models: 5,
-          total_models: 5,
-          points: 120,
-          weapons: [
-            { name: "Heavy Bolters", range: 36, attacks: 3, ap: -1 }
-          ],
-          special_rules: ["Relentless"]
-        }
-      ]
-    };
-    
-    const blob = new Blob([JSON.stringify(example, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'example_army.json';
-    a.click();
-  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 sm:p-6 lg:p-8">
@@ -129,7 +90,7 @@ export default function Home() {
                 1
               </div>
               <div>
-                <strong className="text-white">Upload Army Lists:</strong> Provide JSON files for both armies with units, weapons, and stats
+                <strong className="text-white">Paste Army Lists:</strong> Provide text army lists for both armies with units, weapons, and stats
               </div>
             </div>
             <div className="flex gap-3">
@@ -159,30 +120,63 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* Example Download */}
-        <div className="flex justify-center">
-          <Button 
-            variant="outline" 
-            onClick={downloadExampleArmy}
-            className="border-slate-600 text-slate-300 hover:bg-slate-800"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Download Example Army List
-          </Button>
-        </div>
-
-        {/* Army Uploaders */}
+        {/* Army Input Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-          <ArmyUploader 
-            label="Agent A Army (Blue)" 
-            color="blue"
-            onArmyUploaded={setArmyA}
-          />
-          <ArmyUploader 
-            label="Agent B Army (Red)" 
-            color="red"
-            onArmyUploaded={setArmyB}
-          />
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-white text-base sm:text-lg">Army A (Blue)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea
+                placeholder="Paste army list text here..."
+                value={armyTextA}
+                onChange={(e) => setArmyTextA(e.target.value)}
+                className="min-h-[200px] bg-slate-900/50 border-slate-600 text-white font-mono text-xs sm:text-sm"
+              />
+              <Button
+                onClick={() => handleParseArmy(armyTextA, setArmyA, setErrorA)}
+                disabled={!armyTextA.trim() || !!armyA}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                {armyA ? '✓ Army Loaded' : 'Parse Army List'}
+              </Button>
+              {errorA && <p className="text-red-400 text-sm">{errorA}</p>}
+              {armyA && (
+                <div className="text-slate-300 text-sm bg-slate-900/50 p-3 rounded border border-slate-700">
+                  <p className="font-semibold text-white">{armyA.name}</p>
+                  <p>{armyA.total_points} pts - {armyA.units.length} units</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-white text-base sm:text-lg">Army B (Red)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea
+                placeholder="Paste army list text here..."
+                value={armyTextB}
+                onChange={(e) => setArmyTextB(e.target.value)}
+                className="min-h-[200px] bg-slate-900/50 border-slate-600 text-white font-mono text-xs sm:text-sm"
+              />
+              <Button
+                onClick={() => handleParseArmy(armyTextB, setArmyB, setErrorB)}
+                disabled={!armyTextB.trim() || !!armyB}
+                className="w-full bg-red-600 hover:bg-red-700"
+              >
+                {armyB ? '✓ Army Loaded' : 'Parse Army List'}
+              </Button>
+              {errorB && <p className="text-red-400 text-sm">{errorB}</p>}
+              {armyB && (
+                <div className="text-slate-300 text-sm bg-slate-900/50 p-3 rounded border border-slate-700">
+                  <p className="font-semibold text-white">{armyB.name}</p>
+                  <p>{armyB.total_points} pts - {armyB.units.length} units</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Start Button */}
