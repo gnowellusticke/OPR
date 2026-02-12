@@ -8,7 +8,7 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
   const BATTLEFIELD_HEIGHT = 48; // 4 feet = 48 inches
   const CELL_SIZE = 40; // pixels
 
-  const units = gameState?.units || [];
+  const units = (gameState?.units || []).filter(u => u.current_models > 0);
   const terrain = gameState?.terrain || [];
   const objectives = gameState?.objectives || [];
 

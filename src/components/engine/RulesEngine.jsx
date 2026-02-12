@@ -6,8 +6,8 @@ export class RulesEngine {
   }
 
   // Movement
-  executeMovement(unit, action, targetPosition, gameState) {
-    const moveDistance = this.getMoveDistance(unit, action);
+  executeMovement(unit, action, targetPosition, terrain) {
+    const moveDistance = this.getMoveDistance(unit, action, terrain);
     const distance = this.calculateDistance(unit, targetPosition);
     
     if (distance <= moveDistance) {
@@ -24,13 +24,21 @@ export class RulesEngine {
     return { success: true, distance: moveDistance };
   }
 
-  getMoveDistance(unit, action) {
+  getMoveDistance(unit, action, terrain) {
     let base = 0;
     switch (action) {
       case 'Hold': base = 0; break;
       case 'Advance': base = 6; break;
       case 'Rush': base = 12; break;
       case 'Charge': base = 12; break;
+    }
+    
+    // Apply difficult terrain penalty
+    if (terrain) {
+      const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
+      if (unitTerrain && unitTerrain.type === 'difficult') {
+        base = Math.max(0, base - 2); // -2" for difficult terrain
+      }
     }
     
     // Apply special rules
@@ -41,9 +49,9 @@ export class RulesEngine {
   }
 
   // Shooting
-  resolveShooting(attacker, defender, weapon, gameState) {
+  resolveShooting(attacker, defender, weapon, terrain) {
     const hits = this.rollToHit(attacker, weapon);
-    const wounds = this.rollDefense(defender, hits, weapon);
+    const wounds = this.rollDefense(defender, hits.successes, weapon, terrain);
     
     return {
       weapon: weapon.name,
@@ -66,9 +74,16 @@ export class RulesEngine {
     };
   }
 
-  rollDefense(unit, hitCount, weapon) {
-    const defense = unit.defense || 5;
+  rollDefense(unit, hitCount, weapon, terrain) {
+    let defense = unit.defense || 5;
     const ap = weapon.ap || 0;
+    
+    // Apply cover bonus
+    if (terrain) {
+      const coverBonus = this.getCoverBonus(unit, terrain);
+      defense += coverBonus;
+    }
+    
     const modifiedDefense = Math.min(6, Math.max(2, defense + ap));
     
     const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
@@ -200,5 +215,21 @@ export class RulesEngine {
     // Simplified LOS - check if terrain blocks
     // In a full implementation, this would do ray-casting
     return true; // For now, always true
+  }
+
+  getTerrainAtPosition(x, y, terrain) {
+    if (!terrain) return null;
+    return terrain.find(t => 
+      x >= t.x && x <= t.x + t.width &&
+      y >= t.y && y <= t.y + t.height
+    );
+  }
+
+  getCoverBonus(unit, terrain) {
+    const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
+    if (unitTerrain && unitTerrain.type === 'cover') {
+      return 1; // +1 Defense for cover
+    }
+    return 0;
   }
 }

@@ -3,8 +3,6 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Swords, Crosshair, Shield, Skull } from "lucide-react";
 
 export default function CombatResolver({ combatEvent }) {
-  if (!combatEvent) return null;
-
   const renderDiceRolls = (rolls) => {
     if (!rolls || rolls.length === 0) return null;
     return (
@@ -24,6 +22,22 @@ export default function CombatResolver({ combatEvent }) {
       </div>
     );
   };
+
+  if (!combatEvent) {
+    return (
+      <Card className="bg-slate-900 border-slate-700">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-white flex items-center gap-2 text-sm">
+            <Crosshair className="w-4 h-4" />
+            Combat Resolution
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-slate-400 text-sm">No active combat.</div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="bg-slate-900 border-slate-700">

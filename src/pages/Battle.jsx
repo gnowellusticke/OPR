@@ -287,7 +287,7 @@ export default function Battle() {
     } else if (action === 'Rush') {
       const target = dmn.findNearestObjective(unit, gameState.objectives);
       if (target) {
-        const result = rules.executeMovement(unit, action, target, gameState);
+        const result = rules.executeMovement(unit, action, target, gameState.terrain);
         newEvents.push({
           round: gameState.current_round,
           type: 'movement',
@@ -302,7 +302,7 @@ export default function Battle() {
       
       if (target) {
         unit.just_charged = true;
-        rules.executeMovement(unit, action, target, gameState);
+        rules.executeMovement(unit, action, target, gameState.terrain);
         
         newEvents.push({
           round: gameState.current_round,
@@ -328,7 +328,7 @@ export default function Battle() {
         if (weapon.range > 2) {
           const dist = rules.calculateDistance(unit, target);
           if (dist <= weapon.range) {
-            const result = rules.resolveShooting(unit, target, weapon, gameState);
+            const result = rules.resolveShooting(unit, target, weapon, gameState.terrain);
             
             target.current_models -= result.models_killed;
             
