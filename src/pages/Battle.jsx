@@ -273,7 +273,7 @@ export default function Battle() {
       // Move toward nearest objective
       const target = dmn.findNearestObjective(unit, gameState.objectives);
       if (target) {
-        const result = rules.executeMovement(unit, action, target, gameState);
+        const result = rules.executeMovement(unit, action, target, gameState.terrain);
         newEvents.push({
           round: gameState.current_round,
           type: 'movement',
