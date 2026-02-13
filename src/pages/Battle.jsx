@@ -144,13 +144,45 @@ export default function Battle() {
   const generateObjectives = () => {
     const count = Math.floor(Math.random() * 3) + 3; // D3+2
     const objectives = [];
-    for (let i = 0; i < count; i++) {
-      objectives.push({
-        x: Math.random() * 54 + 9,
-        y: Math.random() * 30 + 9,
-        controlled_by: null
-      });
+    const MIN_DISTANCE = 9; // At least 9 inches apart
+    const MAX_ATTEMPTS = 100;
+    
+    // Deployment zones: 0-12" (bottom) and 36-48" (top)
+    // Objectives must be in the middle zone: y between 15-33"
+    
+    while (objectives.length < count) {
+      let validPosition = false;
+      let attempts = 0;
+      
+      while (!validPosition && attempts < MAX_ATTEMPTS) {
+        const newObj = {
+          x: Math.random() * 54 + 9, // Between 9-63"
+          y: Math.random() * 18 + 15, // Between 15-33" (outside deployment zones)
+          controlled_by: null
+        };
+        
+        // Check if at least 9" away from all existing objectives
+        const tooClose = objectives.some(existing => {
+          const dx = newObj.x - existing.x;
+          const dy = newObj.y - existing.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          return distance < MIN_DISTANCE;
+        });
+        
+        if (!tooClose) {
+          objectives.push(newObj);
+          validPosition = true;
+        }
+        
+        attempts++;
+      }
+      
+      // If we couldn't place this objective after many attempts, break to avoid infinite loop
+      if (attempts >= MAX_ATTEMPTS) {
+        break;
+      }
     }
+    
     return objectives;
   };
 
