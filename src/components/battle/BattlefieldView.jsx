@@ -6,7 +6,7 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
   const GRID_SIZE = 6; // inches per grid cell
   const BATTLEFIELD_WIDTH = 72; // 6 feet = 72 inches
   const BATTLEFIELD_HEIGHT = 48; // 4 feet = 48 inches
-  const CELL_SIZE = 40; // pixels
+  const CELL_SIZE = 60; // pixels
 
   const units = (gameState?.units || []).filter(u => u.current_models > 0);
   const terrain = gameState?.terrain || [];
