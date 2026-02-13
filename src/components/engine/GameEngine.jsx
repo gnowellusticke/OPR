@@ -27,6 +27,40 @@ export class BPMNEngine {
 
 // DMN Decision Tables - AI Logic
 export class DMNEngine {
+  constructor() {
+    this.learningData = null;
+  }
+
+  async loadLearningData(armyId) {
+    try {
+      const { base44 } = await import('@/api/base44Client');
+      const analytics = await base44.entities.BattleAnalytics.filter({ army_id: armyId });
+      this.learningData = this.analyzePastPerformance(analytics);
+    } catch (err) {
+      this.learningData = null;
+    }
+  }
+
+  analyzePastPerformance(analytics) {
+    if (!analytics || analytics.length === 0) return null;
+
+    const wins = analytics.filter(a => a.result === 'won').length;
+    const totalBattles = analytics.length;
+    const winRate = totalBattles > 0 ? wins / totalBattles : 0;
+
+    // Aggregate successful actions
+    const actionSuccess = {};
+    analytics.forEach(a => {
+      if (a.successful_actions) {
+        Object.keys(a.successful_actions).forEach(action => {
+          actionSuccess[action] = (actionSuccess[action] || 0) + a.successful_actions[action];
+        });
+      }
+    });
+
+    return { winRate, actionSuccess, totalBattles };
+  }
+
   evaluateActionOptions(unit, gameState, owner) {
     const options = [];
     const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
@@ -63,6 +97,17 @@ export class DMNEngine {
         action: 'Charge',
         score: this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState),
         selected: false
+      });
+    }
+
+    // Apply learning adjustments
+    if (this.learningData && this.learningData.actionSuccess) {
+      const totalActions = Object.values(this.learningData.actionSuccess).reduce((a, b) => a + b, 0);
+      options.forEach(opt => {
+        const successCount = this.learningData.actionSuccess[opt.action] || 0;
+        const successRate = totalActions > 0 ? successCount / totalActions : 0;
+        // Boost successful actions by up to 20 points based on historical success
+        opt.score += successRate * 20;
       });
     }
 
