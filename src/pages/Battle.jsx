@@ -27,6 +27,7 @@ export default function Battle() {
   const [dmn] = useState(new DMNEngine());
   const [cmmn] = useState(new CMMNEngine());
   const [rules] = useState(new RulesEngine());
+  const [actionTracking, setActionTracking] = useState({ agent_a: {}, agent_b: {} });
 
   useEffect(() => {
     loadBattle();
@@ -54,7 +55,11 @@ export default function Battle() {
       const battleData = await base44.entities.Battle.get(id);
       const armyA = await base44.entities.ArmyList.get(battleData.army_a_id);
       const armyB = await base44.entities.ArmyList.get(battleData.army_b_id);
-      
+
+      // Load learning data for both agents
+      await dmn.loadLearningData(battleData.army_a_id);
+      await dmn.loadLearningData(battleData.army_b_id);
+
       setBattle(battleData);
       
       if (battleData.status === 'setup') {
@@ -287,6 +292,11 @@ export default function Battle() {
   const executeAction = async (unit, action) => {
     const newEvents = [...events];
     
+    // Track action for learning
+    const tracking = { ...actionTracking };
+    tracking[unit.owner][action] = (tracking[unit.owner][action] || 0) + 1;
+    setActionTracking(tracking);
+    
     if (action === 'Hold') {
       // Can shoot, recover from shaken
       if (unit.status === 'shaken') {
@@ -456,6 +466,28 @@ export default function Battle() {
       winner,
       game_state: gameState,
       event_log: events
+    });
+    
+    // Save learning data for both armies
+    const aUnits = gameState.units.filter(u => u.owner === 'agent_a' && u.current_models > 0).length;
+    const bUnits = gameState.units.filter(u => u.owner === 'agent_b' && u.current_models > 0).length;
+    
+    await base44.entities.BattleAnalytics.create({
+      battle_id: battle.id,
+      army_id: battle.army_a_id,
+      result: winner === 'agent_a' ? 'won' : winner === 'agent_b' ? 'lost' : 'draw',
+      objectives_controlled: aScore,
+      units_survived: aUnits,
+      successful_actions: actionTracking.agent_a
+    });
+    
+    await base44.entities.BattleAnalytics.create({
+      battle_id: battle.id,
+      army_id: battle.army_b_id,
+      result: winner === 'agent_b' ? 'won' : winner === 'agent_a' ? 'lost' : 'draw',
+      objectives_controlled: bScore,
+      units_survived: bUnits,
+      successful_actions: actionTracking.agent_b
     });
     
     setBattle({ ...battle, status: 'completed', winner });
