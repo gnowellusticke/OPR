@@ -33,8 +33,8 @@ export class RulesEngine {
       case 'Charge': base = 12; break;
     }
     
-    // Apply difficult terrain penalty
-    if (terrain) {
+    // Apply difficult terrain penalty (unless Strider or Flying)
+    if (terrain && !unit.special_rules?.includes('Strider') && !unit.special_rules?.includes('Flying')) {
       const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
       if (unitTerrain && unitTerrain.type === 'difficult') {
         base = Math.max(0, base - 2); // -2" for difficult terrain
@@ -50,8 +50,8 @@ export class RulesEngine {
 
   // Shooting
   resolveShooting(attacker, defender, weapon, terrain) {
-    const hits = this.rollToHit(attacker, weapon);
-    const wounds = this.rollDefense(defender, hits.successes, weapon, terrain);
+    const hits = this.rollToHit(attacker, weapon, defender);
+    const wounds = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
     
     return {
       weapon: weapon.name,
@@ -63,18 +63,35 @@ export class RulesEngine {
     };
   }
 
-  rollToHit(unit, weapon) {
+  rollToHit(unit, weapon, target) {
     const quality = unit.quality || 4;
-    const attacks = weapon.attacks || 1;
+    let attacks = weapon.attacks || 1;
+    
+    // Blast (X): Get +X attacks vs units with 5+ models
+    if (weapon.special_rules?.includes('Blast') && target?.current_models >= 5) {
+      const blastMatch = weapon.special_rules.match(/Blast\((\d+)\)/);
+      const blastBonus = blastMatch ? parseInt(blastMatch[1]) : 3;
+      attacks += blastBonus;
+    }
+    
     const rolls = this.dice.rollQualityTest(quality, attacks);
+    let successes = rolls.filter(r => r.success).length;
+    
+    // Deadly (X): Unmodified rolls of X+ count as 2 hits
+    if (weapon.special_rules?.includes('Deadly')) {
+      const deadlyMatch = weapon.special_rules.match(/Deadly\((\d+)\)/);
+      const deadlyThreshold = deadlyMatch ? parseInt(deadlyMatch[1]) : 6;
+      const deadlyHits = rolls.filter(r => r.value >= deadlyThreshold).length;
+      successes += deadlyHits; // Each deadly roll counts as 2 hits total (1 + 1 extra)
+    }
     
     return {
       rolls,
-      successes: rolls.filter(r => r.success).length
+      successes
     };
   }
 
-  rollDefense(unit, hitCount, weapon, terrain) {
+  rollDefense(unit, hitCount, weapon, terrain, hitRolls) {
     let defense = unit.defense || 5;
     const ap = weapon.ap || 0;
     
@@ -84,14 +101,45 @@ export class RulesEngine {
       defense += coverBonus;
     }
     
+    // Stealth: +1 defense when being shot at (range > 2)
+    if (unit.special_rules?.includes('Stealth') && weapon.range > 2) {
+      defense += 1;
+    }
+    
     const modifiedDefense = Math.min(6, Math.max(2, defense + ap));
     
     const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
-    const blocks = rolls.filter(r => r.success).length;
+    let blocks = rolls.filter(r => r.success).length;
+    
+    // Rending: Unmodified 6s on hit rolls auto-wound (ignore defense)
+    let autoWounds = 0;
+    if (weapon.special_rules?.includes('Rending') && hitRolls) {
+      autoWounds = hitRolls.filter(r => r.value === 6 && r.success).length;
+      // Remove auto-wounds from the defense pool
+      blocks = Math.max(0, blocks - autoWounds);
+    }
+    
+    let wounds = hitCount - blocks;
+    
+    // Tough (X): Reduce wounds by X (min 1)
+    if (unit.special_rules?.includes('Tough') && wounds > 0) {
+      const toughMatch = unit.special_rules.match(/Tough\((\d+)\)/);
+      const toughReduction = toughMatch ? parseInt(toughMatch[1]) : 3;
+      wounds = Math.max(1, wounds - toughReduction);
+    }
+    
+    // Regeneration: Roll to ignore each wound
+    if (unit.special_rules?.includes('Regeneration') && wounds > 0) {
+      let regenSaves = 0;
+      for (let i = 0; i < wounds; i++) {
+        if (this.dice.roll() >= 5) regenSaves++;
+      }
+      wounds -= regenSaves;
+    }
     
     return {
       rolls,
-      wounds: hitCount - blocks
+      wounds
     };
   }
 
@@ -128,7 +176,13 @@ export class RulesEngine {
     
     attacker.weapons?.forEach(weapon => {
       if (weapon.range <= 2) { // Melee weapons
-        const result = this.resolveShooting(attacker, defender, weapon);
+        // Furious: +1 attack on charge
+        let modifiedWeapon = { ...weapon };
+        if (attacker.just_charged && attacker.special_rules?.includes('Furious')) {
+          modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
+        }
+        
+        const result = this.resolveShooting(attacker, defender, modifiedWeapon, null);
         results.push(result);
         totalWounds += result.wounds;
       }

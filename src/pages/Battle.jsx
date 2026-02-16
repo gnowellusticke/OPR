@@ -312,19 +312,24 @@ export default function Battle() {
       await attemptShooting(unit, newEvents);
       
     } else if (action === 'Advance') {
-      // Move toward nearest objective
-      const target = dmn.findNearestObjective(unit, gameState.objectives);
-      if (target) {
-        const result = rules.executeMovement(unit, action, target, gameState.terrain);
-        newEvents.push({
-          round: gameState.current_round,
-          type: 'movement',
-          message: `${unit.name} advanced ${result.distance.toFixed(1)}" toward objective`,
-          timestamp: new Date().toLocaleTimeString()
-        });
-      }
-      
-      await attemptShooting(unit, newEvents);
+        // Move toward nearest objective
+        const target = dmn.findNearestObjective(unit, gameState.objectives);
+        if (target) {
+          const result = rules.executeMovement(unit, action, target, gameState.terrain);
+          newEvents.push({
+            round: gameState.current_round,
+            type: 'movement',
+            message: `${unit.name} advanced ${result.distance.toFixed(1)}" toward objective`,
+            timestamp: new Date().toLocaleTimeString()
+          });
+        }
+
+        // Relentless: Can shoot after advancing
+        if (unit.special_rules?.includes('Relentless')) {
+          await attemptShooting(unit, newEvents);
+        } else {
+          await attemptShooting(unit, newEvents);
+        }
       
     } else if (action === 'Rush') {
       const target = dmn.findNearestObjective(unit, gameState.objectives);
