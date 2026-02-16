@@ -27,10 +27,11 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
   return (
     <Card className="bg-slate-900 border-slate-700 p-4">
       <div 
-        className="relative bg-slate-800 border-2 border-slate-600 rounded-lg overflow-hidden"
+        className="relative bg-slate-800 border-2 border-slate-600 rounded-lg overflow-hidden mx-auto"
         style={{ 
           width: (BATTLEFIELD_WIDTH / GRID_SIZE) * CELL_SIZE,
-          height: (BATTLEFIELD_HEIGHT / GRID_SIZE) * CELL_SIZE 
+          height: (BATTLEFIELD_HEIGHT / GRID_SIZE) * CELL_SIZE,
+          minWidth: (BATTLEFIELD_WIDTH / GRID_SIZE) * CELL_SIZE
         }}
       >
         {/* Grid overlay */}

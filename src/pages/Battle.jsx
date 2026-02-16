@@ -550,9 +550,9 @@ export default function Battle() {
       </div>
 
       {/* Main Layout */}
-      <div className="max-w-[2000px] mx-auto grid grid-cols-12 gap-4">
+      <div className="max-w-[2000px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Sidebar */}
-        <div className="col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-4">
           <GameStatePanel 
             battle={battle} 
             gameState={gameState}
@@ -563,7 +563,7 @@ export default function Battle() {
         </div>
 
         {/* Center - Battlefield */}
-        <div className="col-span-6">
+        <div className="lg:col-span-6 overflow-x-auto">
           <BattlefieldView 
             gameState={gameState}
             activeUnit={activeUnit}
@@ -572,7 +572,7 @@ export default function Battle() {
         </div>
 
         {/* Right Sidebar */}
-        <div className="col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-4">
           <CombatResolver combatEvent={currentCombat} />
           <ActionLog events={events} />
         </div>
