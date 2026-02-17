@@ -5,6 +5,101 @@ export class RulesEngine {
     this.dice = new DiceRoller();
   }
 
+  // Transport Management
+  getTransportCapacity(transport) {
+    const match = transport.special_rules?.match(/Transport\((\d+)\)/);
+    return match ? parseInt(match[1]) : 0;
+  }
+
+  getUnitTransportSize(unit) {
+    // Heroes with Tough(6) or less take 1 space
+    // Non-heroes with Tough(3) or less take 1 space
+    // Non-heroes with Tough(3+) take 3 spaces
+    const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
+    const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
+    const isHero = unit.special_rules?.includes('Hero');
+    
+    if (isHero && toughValue <= 6) return 1;
+    if (!isHero && toughValue <= 3) return 1;
+    if (!isHero && toughValue > 3) return 3;
+    return 1; // Default
+  }
+
+  canEmbark(unit, transport, gameState) {
+    if (!transport.special_rules?.includes('Transport')) return false;
+    if (unit.embarked_in) return false;
+    if (this.calculateDistance(unit, transport) > 1) return false;
+    
+    const capacity = this.getTransportCapacity(transport);
+    const currentLoad = this.getTransportCurrentLoad(transport, gameState);
+    const unitSize = this.getUnitTransportSize(unit);
+    
+    return currentLoad + unitSize <= capacity;
+  }
+
+  getTransportCurrentLoad(transport, gameState) {
+    const embarked = gameState.units.filter(u => u.embarked_in === transport.id);
+    return embarked.reduce((sum, u) => sum + this.getUnitTransportSize(u), 0);
+  }
+
+  embark(unit, transport, gameState) {
+    if (!this.canEmbark(unit, transport, gameState)) return false;
+    
+    unit.embarked_in = transport.id;
+    unit.x = transport.x;
+    unit.y = transport.y;
+    return true;
+  }
+
+  disembark(unit, transport, gameState) {
+    if (unit.embarked_in !== transport.id) return false;
+    
+    // Place within 6" of transport
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 3 + Math.random() * 3; // 3-6 inches
+    
+    unit.x = transport.x + Math.cos(angle) * distance;
+    unit.y = transport.y + Math.sin(angle) * distance;
+    unit.embarked_in = null;
+    
+    return true;
+  }
+
+  handleTransportDestruction(transport, gameState, events) {
+    const embarked = gameState.units.filter(u => u.embarked_in === transport.id);
+    
+    embarked.forEach(unit => {
+      // Dangerous terrain test
+      const roll = this.dice.roll();
+      if (roll <= 1) {
+        unit.current_models = Math.max(0, unit.current_models - 1);
+        events.push({
+          round: gameState.current_round,
+          type: 'transport',
+          message: `${unit.name} lost 1 model from transport destruction`,
+          timestamp: new Date().toLocaleTimeString()
+        });
+      }
+      
+      // Immediately Shaken
+      unit.status = 'shaken';
+      
+      // Place within 6"
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * 6;
+      unit.x = transport.x + Math.cos(angle) * distance;
+      unit.y = transport.y + Math.sin(angle) * distance;
+      unit.embarked_in = null;
+      
+      events.push({
+        round: gameState.current_round,
+        type: 'transport',
+        message: `${unit.name} disembarked from destroyed transport and is Shaken`,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    });
+  }
+
   // Movement
   executeMovement(unit, action, targetPosition, terrain) {
     const moveDistance = this.getMoveDistance(unit, action, terrain);
@@ -241,7 +336,7 @@ export class RulesEngine {
   updateObjectives(gameState) {
     gameState.objectives?.forEach(obj => {
       const unitsNear = gameState.units.filter(u => 
-        this.calculateDistance(u, obj) <= 3 && u.current_models > 0
+        this.calculateDistance(u, obj) <= 3 && u.current_models > 0 && !u.embarked_in
       );
       
       const agentANear = unitsNear.filter(u => u.owner === 'agent_a' && u.status !== 'shaken').length > 0;

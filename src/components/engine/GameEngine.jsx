@@ -70,6 +70,20 @@ export class DMNEngine {
     // Strategic analysis - evaluate if we're winning or losing
     const strategicState = this.analyzeStrategicPosition(gameState, owner);
 
+    // Check if embarked
+    if (unit.embarked_in) {
+      // Only option is to disembark
+      options.push({
+        action: 'Disembark',
+        score: this.scoreDisembarkAction(unit, gameState, owner),
+        selected: true
+      });
+      return options;
+    }
+
+    // Check if this is a transport with passengers
+    const isTransport = unit.special_rules?.includes('Transport');
+    
     // Hold - good for shooting units or if already in good position
     options.push({
       action: 'Hold',
@@ -91,8 +105,8 @@ export class DMNEngine {
       selected: false
     });
 
-    // Charge - for melee units when enemies are in range
-    if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= 12) {
+    // Charge - for melee units when enemies are in range (not if transport with passengers)
+    if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= 12 && !isTransport) {
       options.push({
         action: 'Charge',
         score: this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState),
@@ -173,6 +187,11 @@ export class DMNEngine {
     }
     
     return threatLevel;
+  }
+
+  scoreDisembarkAction(unit, gameState, owner) {
+    // Always disembark to take actions
+    return 1.0;
   }
 
   scoreHoldAction(unit, gameState, nearestEnemy, strategicState) {
@@ -366,6 +385,22 @@ export class DMNEngine {
     return objectives.reduce((nearest, obj) => {
       const dist = this.getDistance(unit, obj);
       return dist < this.getDistance(unit, nearest) ? obj : nearest;
+    });
+  }
+
+  findNearestTransport(unit, gameState, owner) {
+    const transports = gameState.units.filter(u => 
+      u.owner === owner && 
+      u.special_rules?.includes('Transport') &&
+      u.current_models > 0 &&
+      !u.embarked_in
+    );
+    
+    if (transports.length === 0) return null;
+    
+    return transports.reduce((nearest, transport) => {
+      const dist = this.getDistance(unit, transport);
+      return !nearest || dist < this.getDistance(unit, nearest) ? transport : nearest;
     });
   }
 }
