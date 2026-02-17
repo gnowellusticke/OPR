@@ -331,6 +331,18 @@ export class DMNEngine {
     // Prioritize threats - units with high quality/firepower
     if (enemy.quality <= 3) score += 0.2;
     if (enemy.weapons?.some(w => w.range > 18 && w.attacks >= 3)) score += 0.2;
+
+    // DEADLY units prioritize TOUGH units
+    const hasDeadly = unit.weapons?.some(w => w.special_rules?.includes('Deadly'));
+    if (hasDeadly && enemy.special_rules?.includes('Tough')) {
+      score += 0.5;
+    }
+
+    // BLAST units prioritize units with many models
+    const hasBlast = unit.weapons?.some(w => w.special_rules?.includes('Blast'));
+    if (hasBlast && enemy.current_models >= 5) {
+      score += 0.4;
+    }
     
     return score;
   }
