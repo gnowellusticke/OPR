@@ -21,7 +21,7 @@ export default function Battle() {
   const [currentDecision, setCurrentDecision] = useState(null);
   const [currentCombat, setCurrentCombat] = useState(null);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1000); // ms between actions
+  const [speed, setSpeed] = useState(1000);
   
   const [bpmn] = useState(new BPMNEngine());
   const [dmn] = useState(new DMNEngine());
@@ -56,7 +56,6 @@ export default function Battle() {
       const armyA = await base44.entities.ArmyList.get(battleData.army_a_id);
       const armyB = await base44.entities.ArmyList.get(battleData.army_b_id);
 
-      // Load learning data for both agents
       await dmn.loadLearningData(battleData.army_a_id);
       await dmn.loadLearningData(battleData.army_b_id);
 
@@ -69,7 +68,6 @@ export default function Battle() {
         setEvents(battleData.event_log || []);
       }
 
-      // Store army names for display
       battleData.armyAName = armyA.name;
       battleData.armyBName = armyB.name;
     } catch (err) {
@@ -78,13 +76,8 @@ export default function Battle() {
   };
 
   const initializeBattle = async (battleData, armyA, armyB) => {
-    // Generate terrain
     const terrain = generateTerrain();
-    
-    // Generate objectives
     const objectives = generateObjectives();
-    
-    // Deploy units
     const units = deployArmies(armyA, armyB);
     
     const initialState = {
@@ -106,7 +99,6 @@ export default function Battle() {
     }];
     setEvents(log);
     
-    // Update battle
     await base44.entities.Battle.update(battleData.id, {
       status: 'in_progress',
       current_round: 1,
@@ -136,10 +128,7 @@ export default function Battle() {
         width: 6 + Math.random() * 6,
         height: 6 + Math.random() * 6
       };
-      
-      if (!checkOverlap(newTerrain, terrain)) {
-        terrain.push(newTerrain);
-      }
+      if (!checkOverlap(newTerrain, terrain)) terrain.push(newTerrain);
       attempts++;
     }
     
@@ -147,13 +136,10 @@ export default function Battle() {
   };
 
   const generateObjectives = () => {
-    const count = Math.floor(Math.random() * 3) + 3; // D3+2
+    const count = Math.floor(Math.random() * 3) + 3;
     const objectives = [];
-    const MIN_DISTANCE = 9; // At least 9 inches apart
+    const MIN_DISTANCE = 9;
     const MAX_ATTEMPTS = 100;
-    
-    // Deployment zones: 0-12" (bottom) and 36-48" (top)
-    // Objectives must be in the middle zone: y between 15-33"
     
     while (objectives.length < count) {
       let validPosition = false;
@@ -161,31 +147,22 @@ export default function Battle() {
       
       while (!validPosition && attempts < MAX_ATTEMPTS) {
         const newObj = {
-          x: Math.random() * 54 + 9, // Between 9-63"
-          y: Math.random() * 18 + 15, // Between 15-33" (outside deployment zones)
+          x: Math.random() * 54 + 9,
+          y: Math.random() * 18 + 15,
           controlled_by: null
         };
-        
-        // Check if at least 9" away from all existing objectives
         const tooClose = objectives.some(existing => {
           const dx = newObj.x - existing.x;
           const dy = newObj.y - existing.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          return distance < MIN_DISTANCE;
+          return Math.sqrt(dx * dx + dy * dy) < MIN_DISTANCE;
         });
-        
         if (!tooClose) {
           objectives.push(newObj);
           validPosition = true;
         }
-        
         attempts++;
       }
-      
-      // If we couldn't place this objective after many attempts, break to avoid infinite loop
-      if (attempts >= MAX_ATTEMPTS) {
-        break;
-      }
+      if (attempts >= MAX_ATTEMPTS) break;
     }
     
     return objectives;
@@ -195,14 +172,13 @@ export default function Battle() {
     const units = [];
     let idCounter = 0;
     
-    // Deploy Army A (bottom 12" deployment zone: y: 0-12)
     armyA.units.forEach((unit, idx) => {
       units.push({
         ...unit,
         id: `a_${idCounter++}`,
         owner: 'agent_a',
         x: (idx * 12) % 60 + 6,
-        y: 6 + (Math.floor(idx / 5) * 3), // Spread within 12" zone
+        y: 6 + (Math.floor(idx / 5) * 3),
         current_models: unit.models,
         total_models: unit.models,
         status: 'normal',
@@ -211,14 +187,13 @@ export default function Battle() {
       });
     });
     
-    // Deploy Army B (top 12" deployment zone: y: 36-48)
     armyB.units.forEach((unit, idx) => {
       units.push({
         ...unit,
         id: `b_${idCounter++}`,
         owner: 'agent_b',
         x: (idx * 12) % 60 + 6,
-        y: 42 - (Math.floor(idx / 5) * 3), // Spread within 12" zone from top
+        y: 42 - (Math.floor(idx / 5) * 3),
         current_models: unit.models,
         total_models: unit.models,
         status: 'normal',
@@ -233,7 +208,6 @@ export default function Battle() {
   const processNextAction = async () => {
     if (!gameState || !battle) return;
 
-    // Check if round is complete
     const activeUnits = gameState.units.filter(u => 
       u.current_models > 0 && !gameState.units_activated?.includes(u.id)
     );
@@ -243,11 +217,9 @@ export default function Battle() {
       return;
     }
 
-    // Get next unit to activate from current agent
     const agentUnits = activeUnits.filter(u => u.owner === gameState.active_agent);
     
     if (agentUnits.length === 0) {
-      // Current agent has no units left, switch to other agent
       const newState = {
         ...gameState,
         active_agent: gameState.active_agent === 'agent_a' ? 'agent_b' : 'agent_a'
@@ -263,7 +235,6 @@ export default function Battle() {
   const activateUnit = async (unit) => {
     setActiveUnit(unit);
     
-    // DMN: Evaluate action options
     const options = dmn.evaluateActionOptions(unit, gameState, unit.owner);
     const selectedAction = options.find(o => o.selected).action;
     
@@ -275,11 +246,8 @@ export default function Battle() {
     });
     
     await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Execute action
     await executeAction(unit, selectedAction);
     
-    // Mark as activated and switch to other agent for alternating activations
     const newState = {
       ...gameState,
       units_activated: [...(gameState.units_activated || []), unit.id],
@@ -292,13 +260,11 @@ export default function Battle() {
   const executeAction = async (unit, action) => {
     const newEvents = [...events];
     
-    // Track action for learning
     const tracking = { ...actionTracking };
     tracking[unit.owner][action] = (tracking[unit.owner][action] || 0) + 1;
     setActionTracking(tracking);
     
     if (action === 'Hold') {
-      // Can shoot, recover from shaken
       if (unit.status === 'shaken') {
         unit.status = 'normal';
         newEvents.push({
@@ -308,28 +274,20 @@ export default function Battle() {
           timestamp: new Date().toLocaleTimeString()
         });
       }
-      
       await attemptShooting(unit, newEvents);
       
     } else if (action === 'Advance') {
-        // Move toward nearest objective
-        const target = dmn.findNearestObjective(unit, gameState.objectives);
-        if (target) {
-          const result = rules.executeMovement(unit, action, target, gameState.terrain);
-          newEvents.push({
-            round: gameState.current_round,
-            type: 'movement',
-            message: `${unit.name} advanced ${result.distance.toFixed(1)}" toward objective`,
-            timestamp: new Date().toLocaleTimeString()
-          });
-        }
-
-        // Relentless: Can shoot after advancing
-        if (unit.special_rules?.includes('Relentless')) {
-          await attemptShooting(unit, newEvents);
-        } else {
-          await attemptShooting(unit, newEvents);
-        }
+      const target = dmn.findNearestObjective(unit, gameState.objectives);
+      if (target) {
+        const result = rules.executeMovement(unit, action, target, gameState.terrain);
+        newEvents.push({
+          round: gameState.current_round,
+          type: 'movement',
+          message: `${unit.name} advanced ${result.distance.toFixed(1)}" toward objective`,
+          timestamp: new Date().toLocaleTimeString()
+        });
+      }
+      await attemptShooting(unit, newEvents);
       
     } else if (action === 'Rush') {
       const target = dmn.findNearestObjective(unit, gameState.objectives);
@@ -377,7 +335,8 @@ export default function Battle() {
           if (dist <= weapon.range) {
             const result = rules.resolveShooting(unit, target, weapon, gameState.terrain);
             
-            target.current_models -= result.models_killed;
+            // Apply wounds to remove models
+            target.current_models = Math.max(0, target.current_models - result.wounds);
             
             setCurrentCombat({
               type: 'shooting',
@@ -387,14 +346,14 @@ export default function Battle() {
               hit_rolls: result.hit_rolls,
               hits: result.hits,
               defense_rolls: result.defense_rolls,
-              wounds: result.wounds,
-              result: `${result.models_killed} models killed`
+              saves: result.saves,
+              result: `${result.hits} hits, ${result.saves} saves`
             });
             
             newEvents.push({
               round: gameState.current_round,
               type: 'combat',
-              message: `${unit.name} shot at ${target.name} with ${weapon.name}: ${result.hits} hits, ${result.wounds} wounds, ${result.models_killed} killed`,
+              message: `${unit.name} shot at ${target.name} with ${weapon.name}: ${result.hits} hits, ${result.saves} saves`,
               timestamp: new Date().toLocaleTimeString()
             });
             
@@ -410,10 +369,16 @@ export default function Battle() {
   const resolveMelee = async (attacker, defender, newEvents) => {
     const result = rules.resolveMelee(attacker, defender, gameState);
     
-    defender.current_models -= result.attacker_wounds;
-    attacker.current_models -= result.defender_wounds;
+    defender.current_models = Math.max(0, defender.current_models - result.attacker_wounds);
+    attacker.current_models = Math.max(0, attacker.current_models - result.defender_wounds);
     
-    // Morale check for loser
+    newEvents.push({
+      round: gameState.current_round,
+      type: 'combat',
+      message: `Melee: ${attacker.name} vs ${defender.name} — ${result.attacker_wounds} wounds dealt, ${result.defender_wounds} wounds taken`,
+      timestamp: new Date().toLocaleTimeString()
+    });
+    
     const loser = result.winner === attacker ? defender : attacker;
     if (loser.current_models > 0) {
       const moraleResult = rules.checkMorale(loser, 'melee_loss');
@@ -443,7 +408,6 @@ export default function Battle() {
       active_agent: 'agent_a'
     };
     
-    // Clear fatigue
     newState.units.forEach(u => {
       u.fatigued = false;
       u.just_charged = false;
@@ -463,7 +427,6 @@ export default function Battle() {
   const endBattle = async () => {
     const aScore = gameState.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const bScore = gameState.objectives.filter(o => o.controlled_by === 'agent_b').length;
-    
     const winner = aScore > bScore ? 'agent_a' : bScore > aScore ? 'agent_b' : 'draw';
     
     await base44.entities.Battle.update(battle.id, {
@@ -473,7 +436,6 @@ export default function Battle() {
       event_log: events
     });
     
-    // Save learning data for both armies
     const aUnits = gameState.units.filter(u => u.owner === 'agent_a' && u.current_models > 0).length;
     const bUnits = gameState.units.filter(u => u.owner === 'agent_b' && u.current_models > 0).length;
     

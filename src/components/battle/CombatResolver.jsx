@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Swords, Crosshair, Shield, Skull } from "lucide-react";
+import { Swords, Crosshair, Shield } from "lucide-react";
 
 export default function CombatResolver({ combatEvent }) {
   const renderDiceRolls = (rolls) => {
@@ -74,13 +74,13 @@ export default function CombatResolver({ combatEvent }) {
             <div>
               <div className="text-xs text-slate-400 mb-1 flex items-center gap-1">
                 <Shield className="w-3 h-3" />
-                Defense Rolls (D{combatEvent.defender?.defense}+)
+                Save Rolls (D{combatEvent.defender?.defense}+)
               </div>
               {renderDiceRolls(combatEvent.defense_rolls)}
             </div>
-            <div className="text-red-400 text-sm font-bold flex items-center gap-1">
-              <Skull className="w-4 h-4" />
-              {combatEvent.wounds || 0} Wounds
+            <div className="text-blue-400 text-sm font-bold flex items-center gap-1">
+              <Shield className="w-4 h-4" />
+              {combatEvent.saves || 0} Saves
             </div>
           </div>
         </div>
