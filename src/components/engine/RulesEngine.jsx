@@ -12,9 +12,6 @@ export class RulesEngine {
   }
 
   getUnitTransportSize(unit) {
-    // Heroes with Tough(6) or less take 1 space
-    // Non-heroes with Tough(3) or less take 1 space
-    // Non-heroes with Tough(3+) take 3 spaces
     const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
     const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
     const isHero = unit.special_rules?.includes('Hero');
@@ -22,7 +19,7 @@ export class RulesEngine {
     if (isHero && toughValue <= 6) return 1;
     if (!isHero && toughValue <= 3) return 1;
     if (!isHero && toughValue > 3) return 3;
-    return 1; // Default
+    return 1;
   }
 
   canEmbark(unit, transport, gameState) {
@@ -44,7 +41,6 @@ export class RulesEngine {
 
   embark(unit, transport, gameState) {
     if (!this.canEmbark(unit, transport, gameState)) return false;
-    
     unit.embarked_in = transport.id;
     unit.x = transport.x;
     unit.y = transport.y;
@@ -53,15 +49,11 @@ export class RulesEngine {
 
   disembark(unit, transport, gameState) {
     if (unit.embarked_in !== transport.id) return false;
-    
-    // Place within 6" of transport
     const angle = Math.random() * Math.PI * 2;
-    const distance = 3 + Math.random() * 3; // 3-6 inches
-    
+    const distance = 3 + Math.random() * 3;
     unit.x = transport.x + Math.cos(angle) * distance;
     unit.y = transport.y + Math.sin(angle) * distance;
     unit.embarked_in = null;
-    
     return true;
   }
 
@@ -69,7 +61,6 @@ export class RulesEngine {
     const embarked = gameState.units.filter(u => u.embarked_in === transport.id);
     
     embarked.forEach(unit => {
-      // Dangerous terrain test
       const roll = this.dice.roll();
       if (roll <= 1) {
         unit.current_models = Math.max(0, unit.current_models - 1);
@@ -80,17 +71,12 @@ export class RulesEngine {
           timestamp: new Date().toLocaleTimeString()
         });
       }
-      
-      // Immediately Shaken
       unit.status = 'shaken';
-      
-      // Place within 6"
       const angle = Math.random() * Math.PI * 2;
       const distance = Math.random() * 6;
       unit.x = transport.x + Math.cos(angle) * distance;
       unit.y = transport.y + Math.sin(angle) * distance;
       unit.embarked_in = null;
-      
       events.push({
         round: gameState.current_round,
         type: 'transport',
@@ -111,7 +97,6 @@ export class RulesEngine {
       return { success: true, distance };
     }
     
-    // Move as far as possible toward target
     const ratio = moveDistance / distance;
     unit.x = unit.x + (targetPosition.x - unit.x) * ratio;
     unit.y = unit.y + (targetPosition.y - unit.y) * ratio;
@@ -128,33 +113,32 @@ export class RulesEngine {
       case 'Charge': base = 12; break;
     }
     
-    // Apply difficult terrain penalty (unless Strider or Flying)
     if (terrain && !unit.special_rules?.includes('Strider') && !unit.special_rules?.includes('Flying')) {
       const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
       if (unitTerrain && unitTerrain.type === 'difficult') {
-        base = Math.max(0, base - 2); // -2" for difficult terrain
+        base = Math.max(0, base - 2);
       }
     }
     
-    // Apply special rules
     if (unit.special_rules?.includes('Fast')) base += (action === 'Advance' ? 2 : 4);
     if (unit.special_rules?.includes('Slow')) base -= (action === 'Advance' ? 2 : 4);
     
     return Math.max(0, base);
   }
 
-  // Shooting
+  // Shooting - returns hits and saves (OPR terminology)
   resolveShooting(attacker, defender, weapon, terrain) {
     const hits = this.rollToHit(attacker, weapon, defender);
-    const wounds = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
+    const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
     
     return {
       weapon: weapon.name,
       hit_rolls: hits.rolls,
       hits: hits.successes,
-      defense_rolls: wounds.rolls,
-      wounds: wounds.wounds,
-      models_killed: Math.min(wounds.wounds, defender.current_models)
+      defense_rolls: saves.rolls,
+      saves: saves.saves,
+      // wounds = hits that weren't saved, used internally for model removal
+      wounds: saves.wounds
     };
   }
 
@@ -162,7 +146,6 @@ export class RulesEngine {
     const quality = unit.quality || 4;
     let attacks = weapon.attacks || 1;
     
-    // Blast (X): Get +X attacks vs units with 5+ models
     if (weapon.special_rules?.includes('Blast') && target?.current_models >= 5) {
       const blastMatch = weapon.special_rules.match(/Blast\((\d+)\)/);
       const blastBonus = blastMatch ? parseInt(blastMatch[1]) : 3;
@@ -172,49 +155,41 @@ export class RulesEngine {
     const rolls = this.dice.rollQualityTest(quality, attacks);
     let successes = rolls.filter(r => r.success).length;
     
-    // Deadly (X): Unmodified rolls of X+ count as 2 hits
     if (weapon.special_rules?.includes('Deadly')) {
       const deadlyMatch = weapon.special_rules.match(/Deadly\((\d+)\)/);
       const deadlyThreshold = deadlyMatch ? parseInt(deadlyMatch[1]) : 6;
       const deadlyHits = rolls.filter(r => r.value >= deadlyThreshold).length;
-      successes += deadlyHits; // Each deadly roll counts as 2 hits total (1 + 1 extra)
+      successes += deadlyHits;
     }
     
-    return {
-      rolls,
-      successes
-    };
+    return { rolls, successes };
   }
 
   rollDefense(unit, hitCount, weapon, terrain, hitRolls) {
     let defense = unit.defense || 5;
     const ap = weapon.ap || 0;
     
-    // Apply cover bonus
     if (terrain) {
       const coverBonus = this.getCoverBonus(unit, terrain);
       defense += coverBonus;
     }
     
-    // Stealth: +1 defense when being shot at (range > 2)
     if (unit.special_rules?.includes('Stealth') && weapon.range > 2) {
       defense += 1;
     }
     
     const modifiedDefense = Math.min(6, Math.max(2, defense + ap));
-    
     const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
-    let blocks = rolls.filter(r => r.success).length;
+    let saves = rolls.filter(r => r.success).length;
     
-    // Rending: Unmodified 6s on hit rolls auto-wound (ignore defense)
+    // Rending: Unmodified 6s on hit rolls auto-wound (ignore saves)
     let autoWounds = 0;
     if (weapon.special_rules?.includes('Rending') && hitRolls) {
       autoWounds = hitRolls.filter(r => r.value === 6 && r.success).length;
-      // Remove auto-wounds from the defense pool
-      blocks = Math.max(0, blocks - autoWounds);
+      saves = Math.max(0, saves - autoWounds);
     }
     
-    let wounds = hitCount - blocks;
+    let wounds = hitCount - saves;
     
     // Tough (X): Reduce wounds by X (min 1)
     if (unit.special_rules?.includes('Tough') && wounds > 0) {
@@ -232,27 +207,19 @@ export class RulesEngine {
       wounds -= regenSaves;
     }
     
-    return {
-      rolls,
-      wounds
-    };
+    return { rolls, saves, wounds };
   }
 
   // Melee
   resolveMelee(attacker, defender, gameState) {
-    // Attacker strikes
     const attackerResults = this.resolveMeleeStrikes(attacker, defender);
-    
-    // Defender strikes back (if able)
     let defenderResults = null;
     if (!defender.status === 'shaken' && defender.current_models > 0) {
       defenderResults = this.resolveMeleeStrikes(defender, attacker, true);
     }
     
-    // Determine winner
     const attackerWounds = attackerResults.total_wounds;
     const defenderWounds = defenderResults?.total_wounds || 0;
-    
     const winner = attackerWounds > defenderWounds ? attacker : 
                    defenderWounds > attackerWounds ? defender : null;
     
@@ -270,20 +237,17 @@ export class RulesEngine {
     let totalWounds = 0;
     
     attacker.weapons?.forEach(weapon => {
-      if (weapon.range <= 2) { // Melee weapons
-        // Furious: +1 attack on charge
+      if (weapon.range <= 2) {
         let modifiedWeapon = { ...weapon };
         if (attacker.just_charged && attacker.special_rules?.includes('Furious')) {
           modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
         }
-        
         const result = this.resolveShooting(attacker, defender, modifiedWeapon, null);
         results.push(result);
         totalWounds += result.wounds;
       }
     });
     
-    // Apply fatigue if striking back or just charged
     if (isStrikeBack || attacker.just_charged) {
       attacker.fatigued = true;
     }
@@ -293,17 +257,13 @@ export class RulesEngine {
 
   // Morale
   checkMorale(unit, reason = 'wounds') {
-    // Auto-fail if shaken
     if (unit.status === 'shaken') {
       return { passed: false, roll: null, reason: 'Already Shaken' };
     }
-    
-    // Roll quality test
     const quality = unit.quality || 4;
     const roll = this.dice.roll();
     const passed = roll >= quality || roll === 6;
     
-    // Apply Fearless
     if (!passed && unit.special_rules?.includes('Fearless')) {
       const reroll = this.dice.roll();
       if (reroll >= 4) {
@@ -317,14 +277,11 @@ export class RulesEngine {
   applyMoraleResult(unit, passed, reason) {
     if (!passed) {
       const atHalfStrength = unit.current_models <= unit.total_models / 2;
-      
       if (reason === 'melee_loss' && atHalfStrength) {
-        // Rout - unit is destroyed
         unit.current_models = 0;
         unit.status = 'routed';
         return 'routed';
       } else {
-        // Shaken
         unit.status = 'shaken';
         return 'shaken';
       }
@@ -338,7 +295,6 @@ export class RulesEngine {
       const unitsNear = gameState.units.filter(u => 
         this.calculateDistance(u, obj) <= 3 && u.current_models > 0 && !u.embarked_in
       );
-      
       const agentANear = unitsNear.filter(u => u.owner === 'agent_a' && u.status !== 'shaken').length > 0;
       const agentBNear = unitsNear.filter(u => u.owner === 'agent_b' && u.status !== 'shaken').length > 0;
       
@@ -349,7 +305,6 @@ export class RulesEngine {
       } else if (agentANear && agentBNear) {
         obj.controlled_by = 'contested';
       }
-      // If no one is near, it stays with whoever controlled it
     });
   }
 
@@ -361,9 +316,7 @@ export class RulesEngine {
   }
 
   checkLineOfSight(from, to, terrain) {
-    // Simplified LOS - check if terrain blocks
-    // In a full implementation, this would do ray-casting
-    return true; // For now, always true
+    return true;
   }
 
   getTerrainAtPosition(x, y, terrain) {
@@ -377,7 +330,7 @@ export class RulesEngine {
   getCoverBonus(unit, terrain) {
     const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
     if (unitTerrain && unitTerrain.type === 'cover') {
-      return 1; // +1 Defense for cover
+      return 1;
     }
     return 0;
   }
