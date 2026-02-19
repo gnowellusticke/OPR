@@ -559,9 +559,10 @@ export default function Battle() {
     });
     
     battleLogger?.logBattleEnd({ winner, finalScore: { agent_a: aScore, agent_b: bScore } });
-    const fullJsonLog = battleLogger?.getFullLog(winner, { agent_a: aScore, agent_b: bScore });
+    const log = battleLogger?.getFullLog(winner, { agent_a: aScore, agent_b: bScore });
+    setFullJsonLog(log);
     console.log('=== BATTLE JSON LOG ===');
-    console.log(JSON.stringify(fullJsonLog, null, 2));
+    console.log(JSON.stringify(log, null, 2));
 
     setBattle({ ...battle, status: 'completed', winner });
     setPlaying(false);
