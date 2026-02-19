@@ -272,42 +272,70 @@ export default function Battle() {
     const tracking = { ...actionTracking };
     tracking[unit.owner][action] = (tracking[unit.owner][action] || 0) + 1;
     setActionTracking(tracking);
-    
+
+    const round = gameState.current_round;
+    const dmnOptions = dmn.evaluateActionOptions(unit, gameState, unit.owner);
+    const topOption = dmnOptions.sort((a, b) => b.score - a.score)[0];
+    const dmnReason = topOption ? `${topOption.action} scored highest (${topOption.score.toFixed(2)})` : action;
+
+    // Teleport: use instead of normal move if available and beneficial
+    if (unit.special_rules?.includes('Teleport') && (action === 'Advance' || action === 'Rush')) {
+      const teleported = rules.executeTeleport(unit, gameState);
+      if (teleported) {
+        const zone = rules.getZone(unit.x, unit.y);
+        newEvents.push({
+          round,
+          type: 'ability',
+          message: `${unit.name} used Teleport to redeploy`,
+          timestamp: new Date().toLocaleTimeString()
+        });
+        battleLogger?.logAbility({ round, unit, ability: 'Teleport', details: { zone } });
+        await attemptShooting(unit, newEvents, dmnReason);
+        setEvents(newEvents);
+        rules.updateObjectives(gameState);
+        return;
+      }
+    }
+
     if (action === 'Hold') {
       if (unit.status === 'shaken') {
         unit.status = 'normal';
         newEvents.push({
-          round: gameState.current_round,
+          round,
           type: 'morale',
           message: `${unit.name} recovered from Shaken status`,
           timestamp: new Date().toLocaleTimeString()
         });
       }
-      await attemptShooting(unit, newEvents);
+      await attemptShooting(unit, newEvents, dmnReason);
       
     } else if (action === 'Advance') {
       const target = dmn.findNearestObjective(unit, gameState.objectives);
       if (target) {
         const result = rules.executeMovement(unit, action, target, gameState.terrain);
+        const zone = rules.getZone(unit.x, unit.y);
         newEvents.push({
-          round: gameState.current_round,
+          round,
           type: 'movement',
           message: `${unit.name} advanced ${result.distance.toFixed(1)}" toward objective`,
           timestamp: new Date().toLocaleTimeString()
         });
+        battleLogger?.logMove({ round, actingUnit: unit, action, distance: result.distance, zone, dmnReason });
       }
-      await attemptShooting(unit, newEvents);
+      await attemptShooting(unit, newEvents, dmnReason);
       
     } else if (action === 'Rush') {
       const target = dmn.findNearestObjective(unit, gameState.objectives);
       if (target) {
         const result = rules.executeMovement(unit, action, target, gameState.terrain);
+        const zone = rules.getZone(unit.x, unit.y);
         newEvents.push({
-          round: gameState.current_round,
+          round,
           type: 'movement',
           message: `${unit.name} rushed ${result.distance.toFixed(1)}" toward objective`,
           timestamp: new Date().toLocaleTimeString()
         });
+        battleLogger?.logMove({ round, actingUnit: unit, action, distance: result.distance, zone, dmnReason });
       }
       
     } else if (action === 'Charge') {
@@ -317,15 +345,15 @@ export default function Battle() {
       if (target) {
         unit.just_charged = true;
         rules.executeMovement(unit, action, target, gameState.terrain);
-        
+        const zone = rules.getZone(unit.x, unit.y);
         newEvents.push({
-          round: gameState.current_round,
+          round,
           type: 'movement',
           message: `${unit.name} charged ${target.name}!`,
           timestamp: new Date().toLocaleTimeString()
         });
-        
-        await resolveMelee(unit, target, newEvents);
+        battleLogger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason });
+        await resolveMelee(unit, target, newEvents, dmnReason);
       }
     }
     
