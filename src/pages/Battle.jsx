@@ -32,6 +32,7 @@ export default function Battle() {
   const [battleLogger, setBattleLogger] = useState(null);
   const [armyAData, setArmyAData] = useState(null);
   const [armyBData, setArmyBData] = useState(null);
+  const [fullJsonLog, setFullJsonLog] = useState(null);
 
   useEffect(() => {
     loadBattle();
