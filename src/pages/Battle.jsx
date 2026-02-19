@@ -598,24 +598,43 @@ export default function Battle() {
         </Button>
         
         <div className="flex gap-2">
-          <Button
-            onClick={() => setPlaying(!playing)}
-            disabled={battle.status === 'completed'}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            {playing ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-            {playing ? 'Pause' : 'Play'}
-          </Button>
-          
-          <Button
-            variant="outline"
-            onClick={() => window.location.reload()}
-            className="border-slate-600 text-slate-300"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Reset
-          </Button>
-        </div>
+              <Button
+                onClick={() => setPlaying(!playing)}
+                disabled={battle.status === 'completed'}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {playing ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                {playing ? 'Pause' : 'Play'}
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={() => window.location.reload()}
+                className="border-slate-600 text-slate-300"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset
+              </Button>
+
+              {fullJsonLog && (
+                <Button
+                  variant="outline"
+                  className="border-green-600 text-green-400 hover:bg-green-900/20"
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify(fullJsonLog, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `battle-log-${battle.id}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Log
+                </Button>
+              )}
+            </div>
       </div>
 
       {/* Main Layout */}
