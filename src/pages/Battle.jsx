@@ -662,7 +662,20 @@ export default function Battle() {
         {/* Right Sidebar */}
         <div className="lg:col-span-3 space-y-4">
           <CombatResolver combatEvent={currentCombat} />
-          <ActionLog events={events} />
+          {fullJsonLog ? (
+            <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 flex flex-col" style={{ maxHeight: '500px' }}>
+              <div className="text-slate-300 text-xs font-semibold mb-2">Battle JSON Log (copy below)</div>
+              <textarea
+                readOnly
+                className="flex-1 bg-slate-800 text-green-300 text-xs font-mono rounded p-2 resize-none outline-none border border-slate-600"
+                style={{ minHeight: '420px' }}
+                value={JSON.stringify(fullJsonLog, null, 2)}
+                onFocus={e => e.target.select()}
+              />
+            </div>
+          ) : (
+            <ActionLog events={events} />
+          )}
         </div>
       </div>
     </div>
