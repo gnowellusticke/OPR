@@ -361,20 +361,20 @@ export default function Battle() {
     rules.updateObjectives(gameState);
   };
 
-  const attemptShooting = async (unit, newEvents) => {
+  const attemptShooting = async (unit, newEvents, dmnReason) => {
     const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
     const target = dmn.selectTarget(unit, enemies);
+    const round = gameState.current_round;
     
     if (target && unit.weapons) {
       for (const weapon of unit.weapons) {
         if (weapon.range > 2) {
           const dist = rules.calculateDistance(unit, target);
           if (dist <= weapon.range) {
-            const result = rules.resolveShooting(unit, target, weapon, gameState.terrain);
-            
-            // Apply wounds to remove models
-            target.current_models = Math.max(0, target.current_models - result.wounds);
-            
+            const result = rules.resolveShooting(unit, target, weapon, gameState.terrain, gameState);
+            const woundsDealt = result.wounds;
+            target.current_models = Math.max(0, target.current_models - woundsDealt);
+
             setCurrentCombat({
               type: 'shooting',
               attacker: unit,
@@ -388,11 +388,38 @@ export default function Battle() {
             });
             
             newEvents.push({
-              round: gameState.current_round,
+              round,
               type: 'combat',
               message: `${unit.name} shot at ${target.name} with ${weapon.name}: ${result.hits} hits, ${result.saves} saves`,
               timestamp: new Date().toLocaleTimeString()
             });
+
+            battleLogger?.logShoot({
+              round,
+              actingUnit: unit,
+              targetUnit: target,
+              weapon: weapon.name,
+              zone: rules.getZone(unit.x, unit.y),
+              rangeDist: dist,
+              rollResults: { attacks: weapon.attacks || 1, hits: result.hits, saves: result.saves, wounds_dealt: woundsDealt },
+              gameState,
+              dmnReason
+            });
+            
+            // Morale check if target drops to/below half strength
+            if (target.current_models > 0 && target.current_models <= target.total_models / 2) {
+              const moraleResult = rules.checkMorale(target, 'wounds');
+              if (!moraleResult.passed) {
+                const outcome = rules.applyMoraleResult(target, false, 'wounds');
+                newEvents.push({
+                  round,
+                  type: 'morale',
+                  message: `${target.name} morale check failed — ${outcome}`,
+                  timestamp: new Date().toLocaleTimeString()
+                });
+                battleLogger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll });
+              }
+            }
             
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
