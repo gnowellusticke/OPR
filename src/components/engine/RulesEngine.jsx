@@ -15,7 +15,6 @@ export class RulesEngine {
     const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
     const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
     const isHero = unit.special_rules?.includes('Hero');
-    
     if (isHero && toughValue <= 6) return 1;
     if (!isHero && toughValue <= 3) return 1;
     if (!isHero && toughValue > 3) return 3;
@@ -26,11 +25,9 @@ export class RulesEngine {
     if (!transport.special_rules?.includes('Transport')) return false;
     if (unit.embarked_in) return false;
     if (this.calculateDistance(unit, transport) > 1) return false;
-    
     const capacity = this.getTransportCapacity(transport);
     const currentLoad = this.getTransportCurrentLoad(transport, gameState);
     const unitSize = this.getUnitTransportSize(unit);
-    
     return currentLoad + unitSize <= capacity;
   }
 
@@ -59,30 +56,18 @@ export class RulesEngine {
 
   handleTransportDestruction(transport, gameState, events) {
     const embarked = gameState.units.filter(u => u.embarked_in === transport.id);
-    
     embarked.forEach(unit => {
       const roll = this.dice.roll();
       if (roll <= 1) {
         unit.current_models = Math.max(0, unit.current_models - 1);
-        events.push({
-          round: gameState.current_round,
-          type: 'transport',
-          message: `${unit.name} lost 1 model from transport destruction`,
-          timestamp: new Date().toLocaleTimeString()
-        });
+        events.push({ round: gameState.current_round, type: 'transport', message: `${unit.name} lost 1 model from transport destruction`, timestamp: new Date().toLocaleTimeString() });
       }
       unit.status = 'shaken';
       const angle = Math.random() * Math.PI * 2;
-      const distance = Math.random() * 6;
-      unit.x = transport.x + Math.cos(angle) * distance;
-      unit.y = transport.y + Math.sin(angle) * distance;
+      unit.x = transport.x + Math.cos(angle) * Math.random() * 6;
+      unit.y = transport.y + Math.sin(angle) * Math.random() * 6;
       unit.embarked_in = null;
-      events.push({
-        round: gameState.current_round,
-        type: 'transport',
-        message: `${unit.name} disembarked from destroyed transport and is Shaken`,
-        timestamp: new Date().toLocaleTimeString()
-      });
+      events.push({ round: gameState.current_round, type: 'transport', message: `${unit.name} disembarked from destroyed transport and is Shaken`, timestamp: new Date().toLocaleTimeString() });
     });
   }
 
@@ -90,18 +75,36 @@ export class RulesEngine {
   executeMovement(unit, action, targetPosition, terrain) {
     const moveDistance = this.getMoveDistance(unit, action, terrain);
     const distance = this.calculateDistance(unit, targetPosition);
-    
     if (distance <= moveDistance) {
       unit.x = targetPosition.x;
       unit.y = targetPosition.y;
       return { success: true, distance };
     }
-    
     const ratio = moveDistance / distance;
     unit.x = unit.x + (targetPosition.x - unit.x) * ratio;
     unit.y = unit.y + (targetPosition.y - unit.y) * ratio;
-    
     return { success: true, distance: moveDistance };
+  }
+
+  // Teleport: redeploy anywhere outside 9" of all enemies
+  executeTeleport(unit, gameState) {
+    const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
+    let attempts = 0;
+    while (attempts < 50) {
+      const x = Math.random() * 66 + 3;
+      const y = Math.random() * 42 + 3;
+      const tooClose = enemies.some(e => {
+        const dx = e.x - x; const dy = e.y - y;
+        return Math.sqrt(dx * dx + dy * dy) < 9;
+      });
+      if (!tooClose) {
+        unit.x = x;
+        unit.y = y;
+        return true;
+      }
+      attempts++;
+    }
+    return false;
   }
 
   getMoveDistance(unit, action, terrain) {
@@ -112,117 +115,141 @@ export class RulesEngine {
       case 'Rush': base = 12; break;
       case 'Charge': base = 12; break;
     }
-    
     if (terrain && !unit.special_rules?.includes('Strider') && !unit.special_rules?.includes('Flying')) {
       const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
-      if (unitTerrain && unitTerrain.type === 'difficult') {
-        base = Math.max(0, base - 2);
-      }
+      if (unitTerrain && unitTerrain.type === 'difficult') base = Math.max(0, base - 2);
     }
-    
     if (unit.special_rules?.includes('Fast')) base += (action === 'Advance' ? 2 : 4);
     if (unit.special_rules?.includes('Slow')) base -= (action === 'Advance' ? 2 : 4);
-    
     return Math.max(0, base);
   }
 
-  // Shooting - returns hits and saves (OPR terminology)
-  resolveShooting(attacker, defender, weapon, terrain) {
-    const hits = this.rollToHit(attacker, weapon, defender);
+  // Check if any friendly unit within 6" has Stealth Aura
+  hasStealth(unit, gameState) {
+    if (unit.special_rules?.includes('Stealth')) return true;
+    if (!gameState) return false;
+    return gameState.units.some(u =>
+      u.owner === unit.owner &&
+      u.id !== unit.id &&
+      u.current_models > 0 &&
+      u.special_rules?.includes('Stealth Aura') &&
+      this.calculateDistance(unit, u) <= 6
+    );
+  }
+
+  // Shooting
+  resolveShooting(attacker, defender, weapon, terrain, gameState) {
+    const hits = this.rollToHit(attacker, weapon, defender, gameState);
     const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
-    
     return {
       weapon: weapon.name,
       hit_rolls: hits.rolls,
       hits: hits.successes,
       defense_rolls: saves.rolls,
       saves: saves.saves,
-      // wounds = hits that weren't saved, used internally for model removal
       wounds: saves.wounds
     };
   }
 
-  rollToHit(unit, weapon, target) {
-    const quality = unit.quality || 4;
+  rollToHit(unit, weapon, target, gameState) {
+    let quality = unit.quality || 4;
+
+    // Shaken: -1 to Quality (higher number = harder to hit)
+    if (unit.status === 'shaken') quality = Math.min(6, quality + 1);
+
+    // Machine-Fog on target: +1 to quality needed to hit
+    if (target?.special_rules?.includes('Machine-Fog')) quality = Math.min(6, quality + 1);
+
+    // Stealth on target (direct or via Stealth Aura): +1 to quality needed
+    if (target && this.hasStealth(target, gameState) && weapon.range > 2) quality = Math.min(6, quality + 1);
+
     let attacks = weapon.attacks || 1;
-    
-    if (weapon.special_rules?.includes('Blast') && target?.current_models >= 5) {
+
+    // FIX: Blast(X) — X attacks as auto-hits, no quality roll needed
+    if (weapon.special_rules?.includes('Blast')) {
       const blastMatch = weapon.special_rules.match(/Blast\((\d+)\)/);
-      const blastBonus = blastMatch ? parseInt(blastMatch[1]) : 3;
-      attacks += blastBonus;
+      const blastCount = blastMatch ? parseInt(blastMatch[1]) : 3;
+      // Blast attacks are auto-hits regardless of model count
+      const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
+      // Also roll base weapon attacks normally
+      const normalRolls = this.dice.rollQualityTest(quality, attacks);
+      const normalHits = normalRolls.filter(r => r.success).length;
+      const allRolls = [...normalRolls, ...autoHitRolls];
+      let successes = normalHits + blastCount;
+      if (weapon.special_rules?.includes('Deadly')) {
+        const deadlyMatch = weapon.special_rules.match(/Deadly\((\d+)\)/);
+        const deadlyThreshold = deadlyMatch ? parseInt(deadlyMatch[1]) : 6;
+        successes += normalRolls.filter(r => r.value >= deadlyThreshold).length;
+      }
+      return { rolls: allRolls, successes };
     }
-    
+
     const rolls = this.dice.rollQualityTest(quality, attacks);
     let successes = rolls.filter(r => r.success).length;
-    
+
     if (weapon.special_rules?.includes('Deadly')) {
       const deadlyMatch = weapon.special_rules.match(/Deadly\((\d+)\)/);
       const deadlyThreshold = deadlyMatch ? parseInt(deadlyMatch[1]) : 6;
-      const deadlyHits = rolls.filter(r => r.value >= deadlyThreshold).length;
-      successes += deadlyHits;
+      successes += rolls.filter(r => r.value >= deadlyThreshold).length;
     }
-    
+
     return { rolls, successes };
   }
 
   rollDefense(unit, hitCount, weapon, terrain, hitRolls) {
     let defense = unit.defense || 5;
+    // FIX: AP reduces defence save (makes it harder to save = higher number needed)
     const ap = weapon.ap || 0;
-    
+
     if (terrain) {
       const coverBonus = this.getCoverBonus(unit, terrain);
-      defense += coverBonus;
+      defense -= coverBonus; // cover reduces the target number needed (easier to save)
     }
-    
-    if (unit.special_rules?.includes('Stealth') && weapon.range > 2) {
-      defense += 1;
-    }
-    
+
+    // AP worsens defence (raises threshold)
     const modifiedDefense = Math.min(6, Math.max(2, defense + ap));
     const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
     let saves = rolls.filter(r => r.success).length;
-    
-    // Rending: Unmodified 6s on hit rolls auto-wound (ignore saves)
+
+    // Rending: Unmodified 6s on hit rolls auto-wound (bypass saves)
     let autoWounds = 0;
     if (weapon.special_rules?.includes('Rending') && hitRolls) {
-      autoWounds = hitRolls.filter(r => r.value === 6 && r.success).length;
+      autoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length;
       saves = Math.max(0, saves - autoWounds);
     }
-    
+
     let wounds = hitCount - saves;
-    
-    // Tough (X): Reduce wounds by X (min 1)
-    if (unit.special_rules?.includes('Tough') && wounds > 0) {
-      const toughMatch = unit.special_rules.match(/Tough\((\d+)\)/);
-      const toughReduction = toughMatch ? parseInt(toughMatch[1]) : 3;
-      wounds = Math.max(1, wounds - toughReduction);
-    }
-    
-    // Regeneration: Roll to ignore each wound
-    if (unit.special_rules?.includes('Regeneration') && wounds > 0) {
-      let regenSaves = 0;
-      for (let i = 0; i < wounds; i++) {
-        if (this.dice.roll() >= 5) regenSaves++;
-      }
-      wounds -= regenSaves;
-    }
-    
+
     return { rolls, saves, wounds };
+  }
+
+  // End-of-round regeneration — call this separately from combat
+  applyRegeneration(unit) {
+    if (!unit.special_rules?.includes('Regeneration')) return 0;
+    if (unit.current_models >= unit.total_models) return 0;
+    const missing = unit.total_models - unit.current_models;
+    let recovered = 0;
+    for (let i = 0; i < missing; i++) {
+      if (this.dice.roll() >= 5) recovered++;
+    }
+    unit.current_models = Math.min(unit.total_models, unit.current_models + recovered);
+    return recovered;
   }
 
   // Melee
   resolveMelee(attacker, defender, gameState) {
-    const attackerResults = this.resolveMeleeStrikes(attacker, defender);
+    const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
+    // FIX: correct operator precedence — check defender.status !== 'shaken'
     let defenderResults = null;
-    if (!defender.status === 'shaken' && defender.current_models > 0) {
-      defenderResults = this.resolveMeleeStrikes(defender, attacker, true);
+    if (defender.status !== 'shaken' && defender.current_models > 0) {
+      defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
     }
-    
+
     const attackerWounds = attackerResults.total_wounds;
     const defenderWounds = defenderResults?.total_wounds || 0;
-    const winner = attackerWounds > defenderWounds ? attacker : 
+    const winner = attackerWounds > defenderWounds ? attacker :
                    defenderWounds > attackerWounds ? defender : null;
-    
+
     return {
       attacker_results: attackerResults,
       defender_results: defenderResults,
@@ -232,26 +259,29 @@ export class RulesEngine {
     };
   }
 
-  resolveMeleeStrikes(attacker, defender, isStrikeBack = false) {
+  resolveMeleeStrikes(attacker, defender, isStrikeBack = false, gameState = null) {
     const results = [];
     let totalWounds = 0;
-    
-    attacker.weapons?.forEach(weapon => {
-      if (weapon.range <= 2) {
-        let modifiedWeapon = { ...weapon };
-        if (attacker.just_charged && attacker.special_rules?.includes('Furious')) {
-          modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
-        }
-        const result = this.resolveShooting(attacker, defender, modifiedWeapon, null);
-        results.push(result);
-        totalWounds += result.wounds;
+
+    const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
+
+    // If no melee weapons defined, use a default attack
+    const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'CCW', range: 1, attacks: 1, ap: 0 }];
+
+    weaponsToUse.forEach(weapon => {
+      let modifiedWeapon = { ...weapon };
+      if (attacker.just_charged && attacker.special_rules?.includes('Furious')) {
+        modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
       }
+      const result = this.resolveShooting(attacker, defender, modifiedWeapon, null, gameState);
+      results.push(result);
+      totalWounds += result.wounds;
     });
-    
+
     if (isStrikeBack || attacker.just_charged) {
       attacker.fatigued = true;
     }
-    
+
     return { results, total_wounds: totalWounds };
   }
 
@@ -262,15 +292,15 @@ export class RulesEngine {
     }
     const quality = unit.quality || 4;
     const roll = this.dice.roll();
-    const passed = roll >= quality || roll === 6;
-    
+    const passed = roll >= quality;
+
     if (!passed && unit.special_rules?.includes('Fearless')) {
       const reroll = this.dice.roll();
       if (reroll >= 4) {
         return { passed: true, roll, reroll, reason: 'Fearless reroll' };
       }
     }
-    
+
     return { passed, roll, reason };
   }
 
@@ -292,19 +322,14 @@ export class RulesEngine {
   // Objectives
   updateObjectives(gameState) {
     gameState.objectives?.forEach(obj => {
-      const unitsNear = gameState.units.filter(u => 
+      const unitsNear = gameState.units.filter(u =>
         this.calculateDistance(u, obj) <= 3 && u.current_models > 0 && !u.embarked_in
       );
       const agentANear = unitsNear.filter(u => u.owner === 'agent_a' && u.status !== 'shaken').length > 0;
       const agentBNear = unitsNear.filter(u => u.owner === 'agent_b' && u.status !== 'shaken').length > 0;
-      
-      if (agentANear && !agentBNear) {
-        obj.controlled_by = 'agent_a';
-      } else if (agentBNear && !agentANear) {
-        obj.controlled_by = 'agent_b';
-      } else if (agentANear && agentBNear) {
-        obj.controlled_by = 'contested';
-      }
+      if (agentANear && !agentBNear) obj.controlled_by = 'agent_a';
+      else if (agentBNear && !agentANear) obj.controlled_by = 'agent_b';
+      else if (agentANear && agentBNear) obj.controlled_by = 'contested';
     });
   }
 
@@ -315,23 +340,28 @@ export class RulesEngine {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  checkLineOfSight(from, to, terrain) {
-    return true;
-  }
+  checkLineOfSight(from, to, terrain) { return true; }
 
   getTerrainAtPosition(x, y, terrain) {
     if (!terrain) return null;
-    return terrain.find(t => 
-      x >= t.x && x <= t.x + t.width &&
-      y >= t.y && y <= t.y + t.height
-    );
+    return terrain.find(t => x >= t.x && x <= t.x + t.width && y >= t.y && y <= t.y + t.height);
   }
 
   getCoverBonus(unit, terrain) {
     const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
-    if (unitTerrain && unitTerrain.type === 'cover') {
-      return 1;
-    }
-    return 0;
+    return (unitTerrain && unitTerrain.type === 'cover') ? 1 : 0;
+  }
+
+  // Zone helper for JSON log
+  getZone(x, y) {
+    const col = x < 24 ? 'left' : x < 48 ? 'centre' : 'right';
+    const row = y < 16 ? 'north' : y < 32 ? 'centre' : 'south';
+    return row === 'centre' && col === 'centre' ? 'centre' : `${row}-${col}`;
+  }
+
+  getRangeBracket(dist) {
+    if (dist <= 12) return 'close';
+    if (dist <= 24) return 'mid';
+    return 'long';
   }
 }
