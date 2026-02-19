@@ -84,7 +84,7 @@ export default function Battle() {
     }
   };
 
-  const initializeBattle = async (battleData, armyA, armyB) => {
+  const initializeBattle = async (battleData, armyA, armyB, logger) => {
     const terrain = generateTerrain();
     const objectives = generateObjectives();
     const units = deployArmies(armyA, armyB);
