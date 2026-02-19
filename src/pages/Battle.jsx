@@ -63,10 +63,15 @@ export default function Battle() {
       await dmn.loadLearningData(battleData.army_a_id);
       await dmn.loadLearningData(battleData.army_b_id);
 
+      setArmyAData(armyA);
+      setArmyBData(armyB);
       setBattle(battleData);
+
+      const logger = new BattleLogger(battleData.id, armyA, armyB);
+      setBattleLogger(logger);
       
       if (battleData.status === 'setup') {
-        await initializeBattle(battleData, armyA, armyB);
+        await initializeBattle(battleData, armyA, armyB, logger);
       } else {
         setGameState(battleData.game_state);
         setEvents(battleData.event_log || []);
