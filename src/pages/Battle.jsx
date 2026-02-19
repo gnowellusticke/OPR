@@ -430,30 +430,40 @@ export default function Battle() {
     setCurrentCombat(null);
   };
 
-  const resolveMelee = async (attacker, defender, newEvents) => {
+  const resolveMelee = async (attacker, defender, newEvents, dmnReason) => {
     const result = rules.resolveMelee(attacker, defender, gameState);
+    const round = gameState.current_round;
     
     defender.current_models = Math.max(0, defender.current_models - result.attacker_wounds);
     attacker.current_models = Math.max(0, attacker.current_models - result.defender_wounds);
     
     newEvents.push({
-      round: gameState.current_round,
+      round,
       type: 'combat',
       message: `Melee: ${attacker.name} vs ${defender.name} — ${result.attacker_wounds} wounds dealt, ${result.defender_wounds} wounds taken`,
       timestamp: new Date().toLocaleTimeString()
     });
+
+    battleLogger?.logMelee({
+      round,
+      actingUnit: attacker,
+      targetUnit: defender,
+      rollResults: { attacks: null, hits: null, saves: null, wounds_dealt: result.attacker_wounds, wounds_taken: result.defender_wounds },
+      gameState,
+      dmnReason
+    });
     
-    const loser = result.winner === attacker ? defender : attacker;
-    if (loser.current_models > 0) {
+    const loser = result.winner === attacker ? defender : (result.winner === defender ? attacker : null);
+    if (loser && loser.current_models > 0) {
       const moraleResult = rules.checkMorale(loser, 'melee_loss');
       const outcome = rules.applyMoraleResult(loser, moraleResult.passed, 'melee_loss');
-      
       newEvents.push({
-        round: gameState.current_round,
+        round,
         type: 'morale',
         message: `${loser.name} ${outcome === 'routed' ? 'routed!' : outcome === 'shaken' ? 'is Shaken' : 'passed morale'}`,
         timestamp: new Date().toLocaleTimeString()
       });
+      battleLogger?.logMorale({ round, unit: loser, outcome, roll: moraleResult.roll });
     }
   };
 
