@@ -486,10 +486,36 @@ export default function Battle() {
       u.fatigued = false;
       u.just_charged = false;
     });
+
+    // Regeneration at end of round
+    const regenEvents = [];
+    newState.units.forEach(u => {
+      if (u.current_models > 0 && u.special_rules?.includes('Regeneration')) {
+        const recovered = rules.applyRegeneration(u);
+        if (recovered > 0) {
+          regenEvents.push({
+            round: gameState.current_round,
+            type: 'regen',
+            message: `${u.name} regenerated ${recovered} wound(s)`,
+            timestamp: new Date().toLocaleTimeString()
+          });
+          battleLogger?.logRegeneration({ round: gameState.current_round, unit: u, recovered });
+        }
+      }
+    });
+
+    // Round summary for JSON log
+    const aScore = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
+    const bScore = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
+    battleLogger?.logRoundSummary({
+      round: gameState.current_round,
+      objectives: newState.objectives,
+      score: { agent_a: aScore, agent_b: bScore }
+    });
     
     setGameState(newState);
     
-    const newEvents = [...events, {
+    const newEvents = [...events, ...regenEvents, {
       round: newRound,
       type: 'round',
       message: `--- Round ${newRound} begins ---`,
