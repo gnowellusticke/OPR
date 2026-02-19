@@ -29,6 +29,9 @@ export default function Battle() {
   const [cmmn] = useState(new CMMNEngine());
   const [rules] = useState(new RulesEngine());
   const [actionTracking, setActionTracking] = useState({ agent_a: {}, agent_b: {} });
+  const [battleLogger, setBattleLogger] = useState(null);
+  const [armyAData, setArmyAData] = useState(null);
+  const [armyBData, setArmyBData] = useState(null);
 
   useEffect(() => {
     loadBattle();
