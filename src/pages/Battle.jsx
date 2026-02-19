@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Home } from "lucide-react";
+import { Play, Pause, RotateCcw, Home, Download } from "lucide-react";
 import BattlefieldView from '../components/battle/BattlefieldView';
 import GameStatePanel from '../components/battle/GameStatePanel';
 import ActionLog from '../components/battle/ActionLog';
