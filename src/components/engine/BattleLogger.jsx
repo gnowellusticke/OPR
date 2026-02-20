@@ -59,7 +59,7 @@ export class BattleLogger {
     });
   }
 
-  logMelee({ round, actingUnit, targetUnit, rollResults, gameState, dmnReason }) {
+  logMelee({ round, actingUnit, targetUnit, weaponName, rollResults, gameState, dmnReason }) {
     const isFirstBlood = !this.firstBloodDealt && rollResults.wounds_dealt > 0;
     if (isFirstBlood) this.firstBloodDealt = true;
 
@@ -78,7 +78,7 @@ export class BattleLogger {
       event_type: 'melee',
       acting_unit: actingUnit.name,
       target_unit: targetUnit.name,
-      weapon_used: 'melee',
+      weapon_used: weaponName || 'CCW',
       zone: null,
       range_bracket: 'close',
       roll_results: rollResults,
@@ -95,13 +95,13 @@ export class BattleLogger {
     });
   }
 
-  logMove({ round, actingUnit, action, distance, zone, dmnReason }) {
+  logMove({ round, actingUnit, action, distance, zone, dmnReason, chargeTarget }) {
     this.events.push({
       round,
       timestamp: this._timestamp(),
       event_type: action === 'Charge' ? 'charge' : action === 'Rush' ? 'advance' : 'move',
       acting_unit: actingUnit.name,
-      target_unit: null,
+      target_unit: chargeTarget || null,
       weapon_used: null,
       zone,
       range_bracket: null,
@@ -112,7 +112,7 @@ export class BattleLogger {
     });
   }
 
-  logMorale({ round, unit, outcome, roll }) {
+  logMorale({ round, unit, outcome, roll, qualityTarget }) {
     if (outcome === 'shaken' && !this.roundShaken.includes(unit.name)) {
       this.roundShaken.push(unit.name);
     }
@@ -125,7 +125,7 @@ export class BattleLogger {
       weapon_used: null,
       zone: null,
       range_bracket: null,
-      roll_results: { roll, outcome },
+      roll_results: { roll: roll ?? null, quality_target: qualityTarget ?? (unit.quality || 4), outcome },
       unit_state_after: { acting_unit: this._unitState(unit) },
       dmn_reason: 'morale check triggered',
       flags: {
