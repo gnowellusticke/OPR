@@ -274,6 +274,9 @@ export class RulesEngine {
         modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
       }
       const result = this.resolveShooting(attacker, defender, modifiedWeapon, null, gameState);
+      // Expose hits/saves directly on each result for the logger
+      result.hits = result.hits ?? 0;
+      result.saves = result.saves ?? 0;
       results.push(result);
       totalWounds += result.wounds;
     });
