@@ -178,19 +178,38 @@ export default function Battle() {
     return objectives;
   };
 
+  // Bug 1 & 8 fix: compute correct wound pool for each unit
+  const computeWounds = (unit) => {
+    const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
+    const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
+    const isHero = unit.special_rules?.includes('Hero');
+
+    if (isHero) {
+      // Hero joined to a squad: squad models × 1 + Hero's Tough(X) bonus
+      const squadModels = unit.models - 1; // subtract the hero itself
+      const heroTough = toughValue || 1;
+      return Math.max(toughValue || 1, squadModels > 0 ? squadModels + heroTough : heroTough);
+    }
+    // Regular Tough(X) unit: X wounds
+    if (toughValue > 0) return toughValue;
+    // Standard infantry: 1 wound per model
+    return unit.models;
+  };
+
   const deployArmies = (armyA, armyB) => {
     const units = [];
     let idCounter = 0;
     
     armyA.units.forEach((unit, idx) => {
+      const maxWounds = computeWounds(unit);
       units.push({
         ...unit,
         id: `a_${idCounter++}`,
         owner: 'agent_a',
         x: (idx * 12) % 60 + 6,
         y: 6 + (Math.floor(idx / 5) * 3),
-        current_models: unit.models,
-        total_models: unit.models,
+        current_models: maxWounds,
+        total_models: maxWounds,
         status: 'normal',
         fatigued: false,
         just_charged: false
@@ -198,14 +217,15 @@ export default function Battle() {
     });
     
     armyB.units.forEach((unit, idx) => {
+      const maxWounds = computeWounds(unit);
       units.push({
         ...unit,
         id: `b_${idCounter++}`,
         owner: 'agent_b',
         x: (idx * 12) % 60 + 6,
         y: 42 - (Math.floor(idx / 5) * 3),
-        current_models: unit.models,
-        total_models: unit.models,
+        current_models: maxWounds,
+        total_models: maxWounds,
         status: 'normal',
         fatigued: false,
         just_charged: false
@@ -353,7 +373,8 @@ export default function Battle() {
           message: `${unit.name} charged ${target.name}!`,
           timestamp: new Date().toLocaleTimeString()
         });
-        battleLogger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason });
+        // Bug 3 fix: pass target name to logMove for charge events
+        battleLogger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason, chargeTarget: target.name });
         await resolveMelee(unit, target, newEvents, dmnReason);
       }
     }
@@ -363,18 +384,32 @@ export default function Battle() {
   };
 
   const attemptShooting = async (unit, newEvents, dmnReason) => {
-    const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
-    const target = dmn.selectTarget(unit, enemies);
+    // Bug 6 fix: always re-check living enemies per weapon, not once at start
     const round = gameState.current_round;
     
-    if (target && unit.weapons) {
+    if (unit.weapons) {
       for (const weapon of unit.weapons) {
         if (weapon.range > 2) {
+          // Bug 6 fix: re-fetch living enemies for each weapon fire so destroyed units are excluded
+          const liveEnemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
+          const target = dmn.selectTarget(unit, liveEnemies);
+          if (!target) continue;
+
           const dist = rules.calculateDistance(unit, target);
           if (dist <= weapon.range) {
             const result = rules.resolveShooting(unit, target, weapon, gameState.terrain, gameState);
             const woundsDealt = result.wounds;
             target.current_models = Math.max(0, target.current_models - woundsDealt);
+
+            // Bug 4 fix: build shoot-specific DMN reason
+            const scoredEnemies = liveEnemies.map(e => ({ enemy: e, score: dmn.scoreTarget(unit, e) }));
+            scoredEnemies.sort((a, b) => b.score - a.score);
+            const topScore = scoredEnemies[0]?.score.toFixed(2);
+            const shootDmnReason = target.current_models <= 0
+              ? `Eliminated weakest target (${topScore})`
+              : target.current_models <= target.total_models * 0.5
+              ? `Weakest target available (${topScore})`
+              : `Highest threat score in range (${topScore})`;
 
             setCurrentCombat({
               type: 'shooting',
@@ -404,7 +439,7 @@ export default function Battle() {
               rangeDist: dist,
               rollResults: { attacks: weapon.attacks || 1, hits: result.hits, saves: result.saves, wounds_dealt: woundsDealt },
               gameState,
-              dmnReason
+              dmnReason: shootDmnReason
             });
             
             // Morale check if target drops to/below half strength
@@ -418,7 +453,8 @@ export default function Battle() {
                   message: `${target.name} morale check failed — ${outcome}`,
                   timestamp: new Date().toLocaleTimeString()
                 });
-                battleLogger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll });
+                // Bug 5 fix: pass quality_target alongside roll
+                battleLogger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll, qualityTarget: target.quality || 4 });
               }
             }
             
@@ -445,11 +481,28 @@ export default function Battle() {
       timestamp: new Date().toLocaleTimeString()
     });
 
+    // Bug 2 & 7 fix: pass full roll breakdown and primary melee weapon name
+    const attackerMeleeWeapon = attacker.weapons?.filter(w => w.range <= 2).sort((a, b) => (b.ap || 0) - (a.ap || 0) || (b.attacks || 1) - (a.attacks || 1))[0];
+    const defenderMeleeWeapon = defender.weapons?.filter(w => w.range <= 2).sort((a, b) => (b.ap || 0) - (a.ap || 0) || (b.attacks || 1) - (a.attacks || 1))[0];
+    const aRes = result.attacker_results?.results?.[0];
+    const dRes = result.defender_results?.results?.[0];
     battleLogger?.logMelee({
       round,
       actingUnit: attacker,
       targetUnit: defender,
-      rollResults: { attacks: null, hits: null, saves: null, wounds_dealt: result.attacker_wounds, wounds_taken: result.defender_wounds },
+      weaponName: attackerMeleeWeapon?.name || 'CCW',
+      rollResults: {
+        attacker_attacks: aRes ? (attackerMeleeWeapon?.attacks || 1) : null,
+        attacker_hits: aRes?.hits ?? null,
+        attacker_saves_forced: aRes?.hits ?? null,
+        defender_saves_made: aRes?.saves ?? null,
+        wounds_dealt: result.attacker_wounds,
+        defender_attacks: dRes ? (defenderMeleeWeapon?.attacks || 1) : null,
+        defender_hits: dRes?.hits ?? null,
+        defender_saves_forced: dRes?.hits ?? null,
+        attacker_saves_made: dRes?.saves ?? null,
+        wounds_taken: result.defender_wounds
+      },
       gameState,
       dmnReason
     });
@@ -464,7 +517,8 @@ export default function Battle() {
         message: `${loser.name} ${outcome === 'routed' ? 'routed!' : outcome === 'shaken' ? 'is Shaken' : 'passed morale'}`,
         timestamp: new Date().toLocaleTimeString()
       });
-      battleLogger?.logMorale({ round, unit: loser, outcome, roll: moraleResult.roll });
+      // Bug 5 fix: pass quality_target
+      battleLogger?.logMorale({ round, unit: loser, outcome, roll: moraleResult.roll, qualityTarget: loser.quality || 4 });
     }
   };
 
