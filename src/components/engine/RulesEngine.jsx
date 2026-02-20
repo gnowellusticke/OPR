@@ -223,17 +223,20 @@ export class RulesEngine {
     return { rolls, saves, wounds };
   }
 
-  // End-of-round regeneration — call this separately from combat
+  // End-of-round regeneration — returns { recovered, rolls } for logging
   applyRegeneration(unit) {
-    if (!unit.special_rules?.includes('Regeneration')) return 0;
-    if (unit.current_models >= unit.total_models) return 0;
+    if (!unit.special_rules?.includes('Regeneration')) return { recovered: 0, rolls: [] };
+    if (unit.current_models >= unit.total_models) return { recovered: 0, rolls: [] };
     const missing = unit.total_models - unit.current_models;
     let recovered = 0;
+    const rolls = [];
     for (let i = 0; i < missing; i++) {
-      if (this.dice.roll() >= 5) recovered++;
+      const r = this.dice.roll();
+      rolls.push(r);
+      if (r >= 5) recovered++;
     }
     unit.current_models = Math.min(unit.total_models, unit.current_models + recovered);
-    return recovered;
+    return { recovered, rolls };
   }
 
   // Melee
