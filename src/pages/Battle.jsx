@@ -178,19 +178,23 @@ export default function Battle() {
     return objectives;
   };
 
-  // Bug 1 & 8 fix: compute correct wound pool for each unit
+  // Compute correct wound pool for each unit (Bug 1, 9)
   const computeWounds = (unit) => {
     const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
     const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
-    const isHero = unit.special_rules?.includes('Hero');
+    const isHero = unit.special_rules?.toLowerCase().includes('hero');
 
-    if (isHero) {
-      // Hero joined to a squad: squad models × 1 + Hero's Tough(X) bonus
-      const squadModels = unit.models - 1; // subtract the hero itself
-      const heroTough = toughValue || 1;
-      return Math.max(toughValue || 1, squadModels > 0 ? squadModels + heroTough : heroTough);
+    if (isHero && toughValue > 0) {
+      // Hero with Tough(X) joined to a squad: (squad models - 1 non-hero) × 1 + hero Tough(X)
+      // unit.models includes both the hero and squad members
+      const squadModels = Math.max(0, unit.models - 1);
+      return squadModels + toughValue;
     }
-    // Regular Tough(X) unit: X wounds
+    if (isHero) {
+      // Hero without explicit Tough: just counts as 1 wound but may be joined to squad
+      return unit.models;
+    }
+    // Regular Tough(X) unit — X is the unit's total wound pool (e.g. tank with Tough(12))
     if (toughValue > 0) return toughValue;
     // Standard infantry: 1 wound per model
     return unit.models;
@@ -238,8 +242,9 @@ export default function Battle() {
   const processNextAction = async () => {
     if (!gameState || !battle) return;
 
+    // Bug 2 fix: guard — skip any unit that has been destroyed (current_models <= 0)
     const activeUnits = gameState.units.filter(u => 
-      u.current_models > 0 && !gameState.units_activated?.includes(u.id)
+      u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed' && !gameState.units_activated?.includes(u.id)
     );
     
     if (activeUnits.length === 0) {
@@ -481,10 +486,11 @@ export default function Battle() {
       timestamp: new Date().toLocaleTimeString()
     });
 
-    // Bug 2 & 7 fix: pass full roll breakdown and primary melee weapon name
+    // Bug 4 & 7 fix: capture full roll breakdown and specific weapon name
     const attackerMeleeWeapon = attacker.weapons?.filter(w => w.range <= 2).sort((a, b) => (b.ap || 0) - (a.ap || 0) || (b.attacks || 1) - (a.attacks || 1))[0];
     const defenderMeleeWeapon = defender.weapons?.filter(w => w.range <= 2).sort((a, b) => (b.ap || 0) - (a.ap || 0) || (b.attacks || 1) - (a.attacks || 1))[0];
-    const aRes = result.attacker_results?.results?.[0];
+    // resolveShooting returns: { hits (successes), saves, wounds }
+    const aRes = result.attacker_results?.results?.[0]; // first weapon result
     const dRes = result.defender_results?.results?.[0];
     battleLogger?.logMelee({
       round,
@@ -492,15 +498,15 @@ export default function Battle() {
       targetUnit: defender,
       weaponName: attackerMeleeWeapon?.name || 'CCW',
       rollResults: {
-        attacker_attacks: aRes ? (attackerMeleeWeapon?.attacks || 1) : null,
-        attacker_hits: aRes?.hits ?? null,
-        attacker_saves_forced: aRes?.hits ?? null,
-        defender_saves_made: aRes?.saves ?? null,
+        attacker_attacks: attackerMeleeWeapon?.attacks || 1,
+        attacker_hits: aRes?.hits ?? 0,
+        attacker_saves_forced: aRes?.hits ?? 0,
+        defender_saves_made: aRes?.saves ?? 0,
         wounds_dealt: result.attacker_wounds,
-        defender_attacks: dRes ? (defenderMeleeWeapon?.attacks || 1) : null,
-        defender_hits: dRes?.hits ?? null,
-        defender_saves_forced: dRes?.hits ?? null,
-        attacker_saves_made: dRes?.saves ?? null,
+        defender_attacks: defenderMeleeWeapon?.attacks || 1,
+        defender_hits: dRes?.hits ?? 0,
+        defender_saves_forced: dRes?.hits ?? 0,
+        attacker_saves_made: dRes?.saves ?? 0,
         wounds_taken: result.defender_wounds
       },
       gameState,
@@ -540,21 +546,28 @@ export default function Battle() {
     newState.units.forEach(u => {
       u.fatigued = false;
       u.just_charged = false;
+      // Bug 3 fix: only clear Shaken status, NEVER reset wounds
+      if (u.status === 'shaken') u.status = 'normal';
+      // Ensure destroyed units stay destroyed
+      if (u.current_models <= 0) u.status = 'destroyed';
     });
 
-    // Regeneration at end of round
+    // Bug 8 fix: Regeneration — roll for every Tough unit alive with wounds missing, log each roll
     const regenEvents = [];
     newState.units.forEach(u => {
       if (u.current_models > 0 && u.special_rules?.includes('Regeneration')) {
-        const recovered = rules.applyRegeneration(u);
-        if (recovered > 0) {
+        const { recovered, rolls } = rules.applyRegeneration(u);
+        // Always log regen attempt (even if 0 recovered) so the roll is visible
+        rolls.forEach(roll => {
           regenEvents.push({
             round: gameState.current_round,
             type: 'regen',
-            message: `${u.name} regenerated ${recovered} wound(s)`,
+            message: `${u.name} Regeneration roll: ${roll} — ${roll >= 5 ? 'recovered 1 wound' : 'no recovery'}`,
             timestamp: new Date().toLocaleTimeString()
           });
-          battleLogger?.logRegeneration({ round: gameState.current_round, unit: u, recovered });
+        });
+        if (recovered > 0) {
+          battleLogger?.logRegeneration({ round: gameState.current_round, unit: u, recovered, rolls });
         }
       }
     });
