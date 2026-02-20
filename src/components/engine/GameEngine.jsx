@@ -276,10 +276,15 @@ export class DMNEngine {
 
   scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState) {
     let score = 0.6;
-    
+
     // Bonus for melee-focused units
     const hasMelee = unit.weapons?.some(w => w.range <= 2);
     if (hasMelee) score += 0.4;
+
+    // Bug 9 fix: heavily penalise weak melee profiles (CCW A1, no AP)
+    const meleeWeapons = unit.weapons?.filter(w => w.range <= 2) || [];
+    const onlyCCW = meleeWeapons.length === 0 || (meleeWeapons.length === 1 && (meleeWeapons[0].attacks || 1) <= 1 && (meleeWeapons[0].ap || 0) === 0);
+    if (onlyCCW) score -= 0.6; // screening/shooting units should not charge
     
     // Consider unit strength vs enemy
     const strengthRatio = unit.current_models / (nearestEnemy.current_models || 1);
