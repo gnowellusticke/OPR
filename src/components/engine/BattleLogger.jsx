@@ -171,6 +171,9 @@ export class BattleLogger {
 
     const specialRules = rollResults.special_rules_applied || [];
 
+    // Bug 5 fix: Separate AI score from rules narrative
+    const { internal_score, ...cleanRollResults } = rollResults;
+
     this.events.push({
       round,
       timestamp: this._timestamp(),
@@ -180,12 +183,13 @@ export class BattleLogger {
       weapon_used: weaponName || 'Fists',
       zone: null,
       range_bracket: 'close',
-      roll_results: { ...rollResults, special_rules_applied: specialRules },
+      roll_results: { ...cleanRollResults, special_rules_applied: specialRules },
       unit_state_after: {
         acting_unit: this._unitState(actingUnit),
         target_unit: this._unitState(targetUnit)
       },
       dmn_reason: dmnReason || 'charge target',
+      internal_score: internal_score,
       flags: {
         turning_point: isTurningPoint,
         first_blood: isFirstBlood,
