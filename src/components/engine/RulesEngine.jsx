@@ -3,6 +3,16 @@ import { DiceRoller } from './GameEngine';
 export class RulesEngine {
   constructor() {
     this.dice = new DiceRoller();
+    this.limitedWeaponsUsed = new Map(); // Track Limited(1) weapons: weaponId -> used count
+  }
+
+  trackLimitedWeapon(weapon, unitId) {
+    if (!weapon.special_rules?.includes('Limited')) return false;
+    const key = `${unitId}_${weapon.name}`;
+    const used = this.limitedWeaponsUsed.get(key) || 0;
+    if (used > 0) return true; // already used
+    this.limitedWeaponsUsed.set(key, 1);
+    return false;
   }
 
   // Transport Management
@@ -178,6 +188,19 @@ export class RulesEngine {
 
   // Shooting
   resolveShooting(attacker, defender, weapon, terrain, gameState) {
+  // Limited: may only be used once per game
+  if (this.trackLimitedWeapon(weapon, attacker.id)) {
+    return {
+      weapon: weapon.name,
+      hit_rolls: [],
+      hits: 0,
+      defense_rolls: [],
+      saves: 0,
+      wounds: 0,
+      specialRulesApplied: [{ rule: 'Limited', value: null, effect: 'weapon already used once this game' }]
+    };
+  }
+
   const hits = this.rollToHit(attacker, weapon, defender, gameState);
   const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
   const specialRulesApplied = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
@@ -195,6 +218,12 @@ export class RulesEngine {
   rollToHit(unit, weapon, target, gameState) {
   let quality = unit.quality || 4;
   const specialRulesApplied = [];
+
+  // Thrust: +1 to hit when charging (and +1 AP, handled in melee)
+  if (unit.just_charged && weapon.special_rules?.includes('Thrust')) {
+  quality = Math.max(2, quality - 1);
+  specialRulesApplied.push({ rule: 'Thrust', value: null, effect: 'quality -1 (easier) on charge' });
+  }
 
   // Shaken: -1 to Quality (higher number = harder to hit)
   if (unit.status === 'shaken') {
@@ -220,7 +249,7 @@ export class RulesEngine {
   specialRulesApplied.push({ rule: 'Indirect', value: null, effect: 'quality +1 after moving' });
   }
 
-  // Artillery: +1 to hit at range > 9"
+  // Artillery: +1 to hit at range > 9" (lower quality = better)
   if (weapon.special_rules?.includes('Artillery') && this.calculateDistance(unit, target) > 9) {
   quality = Math.max(2, quality - 1);
   specialRulesApplied.push({ rule: 'Artillery', value: null, effect: 'quality -1 at 9"+ range' });
@@ -484,6 +513,31 @@ export class RulesEngine {
   }
 
   return { passed, roll, reason, specialRulesApplied };
+  }
+
+  // Counter: defender strikes first when charged, charging unit gets -1 Impact per model with Counter
+  applyCounterToCharger(charger, defender) {
+    let penalty = 0;
+    const counterModels = (defender.current_models || 0);
+    if (defender.special_rules?.includes('Counter')) {
+      penalty = counterModels;
+    }
+    return penalty;
+  }
+
+  // Caster(X): manages spell tokens and casting
+  getCasterTokens(unit) {
+    const casterMatch = unit.special_rules?.match(/Caster\((\d+)\)/);
+    return casterMatch ? parseInt(casterMatch[1]) : 0;
+  }
+
+  canCast(unit, spellValue, currentTokens) {
+    return currentTokens >= spellValue;
+  }
+
+  // Takedown: pick individual model as target (treated as unit of 1)
+  canUseTakedown(unit, weapon) {
+    return weapon.special_rules?.includes('Takedown');
   }
 
   applyMoraleResult(unit, passed, reason) {
