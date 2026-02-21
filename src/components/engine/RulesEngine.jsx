@@ -278,13 +278,43 @@ export class RulesEngine {
   let attacks = weapon.attacks || 1;
 
   // Blast(X) — X automatic hits, no quality roll
-  const blastCheckStr = weapon.special_rules || '';
-  const blastCheckMatch = blastCheckStr.match(/Blast\((\d+)\)/);
-  if (blastCheckMatch || blastCheckStr.includes('Blast')) {
-  const blastCount = blastCheckMatch ? parseInt(blastCheckMatch[1]) : 3;
-  const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
-  specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
-  return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
+  // Bug 1 fix: Check weapon.blast field, special_rules array, and weapon name
+  let blastCount = null;
+
+  // Check weapon.blast field first
+  if (weapon.blast === true && weapon.blast_x) {
+    blastCount = weapon.blast_x;
+  }
+
+  // Check special_rules array
+  if (!blastCount && Array.isArray(weapon.special_rules)) {
+    for (const sr of weapon.special_rules) {
+      const srStr = typeof sr === 'string' ? sr : (sr.rule || '');
+      const match = srStr.match(/Blast\((\d+)\)/i);
+      if (match) {
+        blastCount = parseInt(match[1]);
+        break;
+      }
+    }
+  }
+
+  // Check special_rules string
+  if (!blastCount && weapon.special_rules && typeof weapon.special_rules === 'string') {
+    const match = weapon.special_rules.match(/Blast\((\d+)\)/i);
+    if (match) blastCount = parseInt(match[1]);
+  }
+
+  // Check weapon name
+  if (!blastCount) {
+    const nameMatch = (weapon.name || '').match(/Blast[\s\-]?(\d+)/i);
+    if (nameMatch) blastCount = parseInt(nameMatch[1]);
+  }
+
+  // If Blast found, use it
+  if (blastCount) {
+    const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
+    specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
+    return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
   }
 
   const rolls = this.dice.rollQualityTest(quality, attacks);
