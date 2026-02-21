@@ -246,6 +246,8 @@ export class DMNEngine {
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 3) {
       score += 0.3;
       if (strategicState.myObjectives < strategicState.enemyObjectives) score += 0.4;
+      // Extra bonus if the objective is uncontested or enemy-controlled
+      if (nearestObjective.controlled_by !== unit.owner) score += 0.2;
     }
     
     // Bonus if enemies are at medium range (good for shoot-and-advance units)
@@ -265,6 +267,8 @@ export class DMNEngine {
     // High bonus for getting to objectives quickly
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 12) {
       score += 0.4;
+      // Extra bonus if the objective is uncontested or enemy-controlled
+      if (nearestObjective.controlled_by !== unit.owner) score += 0.3;
     }
     
     // Penalty if unit has shooting weapons (can't shoot after rush)
