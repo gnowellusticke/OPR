@@ -711,7 +711,7 @@ export default function Battle() {
   logger?.logDestruction({ round, unit: attacker, cause: `melee with ${defender.name}` });
   }
 
-    // Morale on loser
+    // Morale on loser — based on Fear-adjusted wound comparison
     const loser = result.winner === attacker ? defender : (result.winner === defender ? attacker : null);
     if (loser && loser.current_models > 0 && loser.status === 'normal') {
       const moraleResult = rules.checkMorale(loser, 'melee_loss');

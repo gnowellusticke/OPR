@@ -379,17 +379,20 @@ export class RulesEngine {
     defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
     }
 
-    let attackerWounds = attackerResults.total_wounds;
-    let defenderWounds = defenderResults?.total_wounds || 0;
+    // Bug 5 fix: Calculate real wounds ONLY from dice, Fear only affects comparison
+    let attackerRealWounds = attackerResults.total_wounds;
+    let defenderRealWounds = defenderResults?.total_wounds || 0;
 
-    // Apply Fear(X) bonuses
+    // Apply Fear(X) bonuses ONLY to the melee resolution comparison, not to actual wounds
     const attackerFearBonus = attackerResults.results?.[0]?.fearBonus || 0;
     const defenderFearBonus = defenderResults?.results?.[0]?.fearBonus || 0;
-    attackerWounds += attackerFearBonus;
-    defenderWounds += defenderFearBonus;
+    
+    // For winner determination: use Fear-adjusted wounds
+    const attackerWoundsForComparison = attackerRealWounds + attackerFearBonus;
+    const defenderWoundsForComparison = defenderRealWounds + defenderFearBonus;
 
-    const winner = attackerWounds > defenderWounds ? attacker :
-                   defenderWounds > attackerWounds ? defender : null;
+    const winner = attackerWoundsForComparison > defenderWoundsForComparison ? attacker :
+                   defenderWoundsForComparison > attackerWoundsForComparison ? defender : null;
 
     // Build full bidirectional roll_results for the logger
     const aRes = attackerResults.results?.[0] || {};
@@ -408,12 +411,19 @@ export class RulesEngine {
     attacker_hits: aRes.hits ?? 0,
     attacker_saves_forced: attackerSavesForced,
     defender_saves_made: aRes.saves ?? 0,
-    wounds_dealt: attackerWounds,
+    wounds_dealt: attackerRealWounds,
     defender_attacks: dRes ? (dRes.attacks || 1) : 0,
     defender_hits: dRes ? (dRes.hits ?? 0) : 0,
     defender_saves_forced: defenderSavesForced,
     attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
-    wounds_taken: defenderWounds,
+    wounds_taken: defenderRealWounds,
+    melee_resolution: {
+      attacker_wounds_for_comparison: attackerWoundsForComparison,
+      fear_bonus_attacker: attackerFearBonus,
+      defender_wounds_for_comparison: defenderWoundsForComparison,
+      fear_bonus_defender: defenderFearBonus,
+      winner: winner?.name || 'tie'
+    },
     special_rules_applied: specialRulesApplied
     };
 
@@ -421,8 +431,8 @@ export class RulesEngine {
     attacker_results: attackerResults,
     defender_results: defenderResults,
     winner,
-    attacker_wounds: attackerWounds,
-    defender_wounds: defenderWounds,
+    attacker_wounds: attackerRealWounds,
+    defender_wounds: defenderRealWounds,
     rollResults
     };
   }
