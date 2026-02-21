@@ -162,16 +162,19 @@ export default function Battle() {
   };
 
   const generateObjectives = () => {
-    const objectives = [];
-    const count = Math.floor(Math.random() * 3) + 3;
-    while (objectives.length < count) {
-      for (let a = 0; a < 100; a++) {
-        const o = { x: Math.random() * 54 + 9, y: Math.random() * 18 + 15, controlled_by: null };
-        if (!objectives.some(e => Math.hypot(o.x - e.x, o.y - e.y) < 9)) { objectives.push(o); break; }
-      }
-      if (objectives.length < count && objectives.length === objectives.length) break; // safety
-    }
-    return objectives;
+    // Bug 5 fix: 5 fixed canonical positions across the board (one per zone)
+    const canonicalPositions = [
+      { x: 12, y: 24 },  // left-centre
+      { x: 36, y: 12 },  // centre-north
+      { x: 36, y: 36 },  // centre
+      { x: 36, y: 50 },  // centre-south (adjusted for 48" height)
+      { x: 60, y: 24 }   // right-centre
+    ];
+
+    // Shuffle and pick 3-5 objectives
+    const shuffled = [...canonicalPositions].sort(() => Math.random() - 0.5);
+    const count = Math.floor(Math.random() * 3) + 3; // 3-5 objectives
+    return shuffled.slice(0, count).map(pos => ({ ...pos, controlled_by: null }));
   };
 
   // ─── DEPLOY ──────────────────────────────────────────────────────────────────
