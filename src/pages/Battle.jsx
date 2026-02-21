@@ -651,7 +651,7 @@ export default function Battle() {
       const moraleResult = rules.checkMorale(loser, 'melee_loss');
       const outcome = rules.applyMoraleResult(loser, moraleResult.passed, 'melee_loss');
       evs.push({ round, type: 'morale', message: `${loser.name} ${outcome} after melee loss (roll: ${moraleResult.roll})`, timestamp: new Date().toLocaleTimeString() });
-      logger?.logMorale({ round, unit: loser, outcome, roll: moraleResult.roll, qualityTarget: loser.quality || 4 });
+      logger?.logMorale({ round, unit: loser, outcome, roll: moraleResult.roll, qualityTarget: loser.quality || 4, specialRulesApplied: moraleResult.specialRulesApplied || [] });
     }
 
     return defender.current_models <= 0; // returns true if target was killed (for Overrun)
