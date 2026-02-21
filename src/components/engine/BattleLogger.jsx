@@ -8,6 +8,11 @@ export class BattleLogger {
     this.firstBloodDealt = false;
     this.roundDestroyed = [];
     this.roundShaken = [];
+    this.battleConfig = { scoring_mode: 'per_round', advance_rules: [] };
+  }
+
+  setBattleConfig(config) {
+    this.battleConfig = { ...this.battleConfig, ...config };
   }
 
   _unitState(unit) {
@@ -99,7 +104,7 @@ export class BattleLogger {
     this.events.push({
       round,
       timestamp: this._timestamp(),
-      event_type: action === 'Charge' ? 'charge' : action === 'Rush' ? 'advance' : 'move',
+      event_type: action === 'Charge' ? 'charge' : 'move',
       acting_unit: actingUnit.name,
       target_unit: chargeTarget || null,
       weapon_used: null,
@@ -155,7 +160,7 @@ export class BattleLogger {
     });
   }
 
-  logRegeneration({ round, unit, recovered, roll }) {
+  logRegeneration({ round, unit, recovered, roll, ruleName }) {
     this.events.push({
       round,
       timestamp: this._timestamp(),
@@ -165,10 +170,9 @@ export class BattleLogger {
       weapon_used: null,
       zone: null,
       range_bracket: null,
-      // Bug 2: single roll value, not array
       roll_results: { roll: roll ?? null, wounds_recovered: recovered, outcome: recovered > 0 ? 'recovered' : 'no recovery' },
       unit_state_after: { acting_unit: this._unitState(unit) },
-      dmn_reason: 'end of round regeneration',
+      dmn_reason: `end of round ${ruleName || 'Regeneration'}`,
       flags: { turning_point: false, first_blood: false, unit_destroyed: false }
     });
   }
@@ -247,6 +251,8 @@ export class BattleLogger {
     return {
       battle_id: this.battleId,
       date: new Date().toISOString().split('T')[0],
+      battle_config: this.battleConfig,
+      advance_rules: this.battleConfig.advance_rules,
       agent_a: { faction: this.armyA?.faction || 'Unknown', list_points: this.armyA?.total_points || 0 },
       agent_b: { faction: this.armyB?.faction || 'Unknown', list_points: this.armyB?.total_points || 0 },
       winner: winner === 'agent_a' ? 'Agent A' : winner === 'agent_b' ? 'Agent B' : 'Draw',
