@@ -11,6 +11,74 @@ export class BattleLogger {
     this.battleConfig = { scoring_mode: 'per_round', advance_rules: [] };
   }
 
+  // ─── DEPLOYMENT ───────────────────────────────────────────────────────────
+
+  logCoinToss({ winner, choice, reason, firstActivation }) {
+    this.events.push({
+      round: 0,
+      timestamp: this._timestamp(),
+      event_type: 'coin_toss',
+      acting_unit: null,
+      target_unit: null,
+      weapon_used: null,
+      zone: null,
+      range_bracket: null,
+      roll_results: { roll: Math.random() > 0.5 ? 'heads' : 'tails', winner, choice, reason },
+      unit_state_after: {},
+      dmn_reason: reason,
+      flags: { turning_point: false, first_blood: false, unit_destroyed: false, first_activation: firstActivation }
+    });
+  }
+
+  logDeploy({ unit, zone, deploymentType, reserveRule, dmnReason, specialRulesApplied }) {
+    this.events.push({
+      round: 0,
+      timestamp: this._timestamp(),
+      event_type: 'deploy',
+      acting_unit: unit.name,
+      target_unit: null,
+      weapon_used: null,
+      zone: zone || 'unknown',
+      range_bracket: null,
+      roll_results: {
+        deployment_type: deploymentType || 'standard',
+        ...(reserveRule ? { reserve_rule: reserveRule } : {}),
+        special_rules_applied: specialRulesApplied || []
+      },
+      unit_state_after: {
+        acting_unit: {
+          wounds_remaining: unit.current_models,
+          max_wounds: unit.total_models,
+          status: unit.status || 'normal'
+        }
+      },
+      dmn_reason: dmnReason || 'standard deployment',
+      flags: { turning_point: false, first_blood: false, unit_destroyed: false }
+    });
+  }
+
+  logDeploymentSummary({ agentADeployed, agentBDeployed, reserves, firstActivation, dmnReason }) {
+    this.events.push({
+      round: 0,
+      timestamp: this._timestamp(),
+      event_type: 'deployment_summary',
+      acting_unit: null,
+      target_unit: null,
+      weapon_used: null,
+      zone: null,
+      range_bracket: null,
+      roll_results: {
+        agent_a_deployed: agentADeployed,
+        agent_b_deployed: agentBDeployed,
+        reserves,
+        first_activation: firstActivation
+      },
+      unit_state_after: {},
+      dmn_reason: dmnReason || '',
+      flags: { turning_point: false, first_blood: false, unit_destroyed: false }
+    });
+  }
+
   setBattleConfig(config) {
     this.battleConfig = { ...this.battleConfig, ...config };
   }
