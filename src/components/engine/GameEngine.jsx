@@ -507,6 +507,12 @@ export class DMNEngine {
     score += Math.max(0, 20 - friendlyDist) * 0.4;
   }
 
+  // Bug 2b fix: hard penalty for using an already-occupied zone
+  const candidateZoneCol = cand.col === 'left' ? 'left' : cand.col === 'right' ? 'right' : 'centre';
+  const candidateZoneRow = isAgentA ? 'south' : 'north';
+  const candidateZone = `${candidateZoneRow}-${candidateZoneCol}`;
+  if (usedZones.has(candidateZone)) score -= 50;
+
   // Spread bonus: penalise piling into same column as too many friendlies
   const sameColFriendlies = deployedFriendlies.filter(f => Math.abs(f.x - cx) < 12).length;
   score -= sameColFriendlies * 8;
