@@ -206,9 +206,11 @@ export class RulesEngine {
   let attacks = weapon.attacks || 1;
 
   // Blast(X) — X automatic hits, no quality roll
-  if (weapon.special_rules?.includes('Blast')) {
-  const blastMatch = weapon.special_rules.match(/Blast\((\d+)\)/);
-  const blastCount = blastMatch ? parseInt(blastMatch[1]) : 3;
+  // Check both weapon.special_rules string AND weapon name convention
+  const blastCheckStr = weapon.special_rules || '';
+  const blastCheckMatch = blastCheckStr.match(/Blast\((\d+)\)/);
+  if (blastCheckMatch || blastCheckStr.includes('Blast')) {
+  const blastCount = blastCheckMatch ? parseInt(blastCheckMatch[1]) : 3;
   const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
   specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
   return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied };
