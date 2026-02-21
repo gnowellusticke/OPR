@@ -914,31 +914,29 @@ export default function Battle() {
     const evs = [...evRef.current];
 
     rules.updateObjectives(gs);
-    const isCumulative = gs.advance_rules?.cumulativeScoring;
+    const isProgressiveScoring = gs.advance_rules?.progressiveScoring === true;
     const roundA = gs.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const roundB = gs.objectives.filter(o => o.controlled_by === 'agent_b').length;
 
-    // Bug 7 fix: Final score calculation — per-round sums all rounds, cumulative uses last cumulative total
+    // Bug 9 fix: Final score calculation — standard vs progressive
     let aScore, bScore;
-    if (isCumulative) {
-      // Cumulative: running total already includes R1-R3; add R4
-      aScore = (gs.cumulative_score?.agent_a || 0) + roundA;
-      bScore = (gs.cumulative_score?.agent_b || 0) + roundB;
-    } else {
-      // Bug 6 fix: Per-round mode accumulates scores from all rounds
-      // For per-round mode, sum only the per-round component (agent_a, agent_b from round summary)
+    if (isProgressiveScoring) {
+      // Progressive: accumulate all round scores
       aScore = 0;
       bScore = 0;
       evRef.current.forEach(ev => {
-        if (ev.event_type === 'round_summary') {
-          // Per-round scores are stored directly as agent_a, agent_b
-          aScore += ev.score?.agent_a || 0;
-          bScore += ev.score?.agent_b || 0;
+        if (ev.event_type === 'round_summary' && ev.score) {
+          aScore += ev.score.agent_a || 0;
+          bScore += ev.score.agent_b || 0;
         }
       });
-      // Add this final round (Round 5, after R4) to the total
+      // Add final round
       aScore += roundA;
       bScore += roundB;
+    } else {
+      // Standard: only final round (after R4) counts
+      aScore = roundA;
+      bScore = roundB;
     }
     const winner = aScore > bScore ? 'agent_a' : bScore > aScore ? 'agent_b' : 'draw';
 
