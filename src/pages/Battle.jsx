@@ -253,9 +253,12 @@ export default function Battle() {
   const processNextAction = async () => {
     if (!gameState || !battle) return;
 
-    // Bug 2 fix: guard — skip any unit that has been destroyed (current_models <= 0)
-    const activeUnits = gameState.units.filter(u => 
-      u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed' && !gameState.units_activated?.includes(u.id)
+    // Bug 6: each unit may only activate once — use units_activated as the single source of truth
+    const activeUnits = gameState.units.filter(u =>
+      u.current_models > 0 &&
+      u.status !== 'destroyed' &&
+      u.status !== 'routed' &&
+      !gameState.units_activated?.includes(u.id)
     );
     
     if (activeUnits.length === 0) {
@@ -281,50 +284,52 @@ export default function Battle() {
   const activateUnit = async (unit) => {
     setActiveUnit(unit);
 
-    // Bug 4: Shaken recovery roll at the START of activation, before anything else
+    // Bug 4 & Bug 2: Shaken recovery roll at START of activation using live unit state from gameState
+    // Always read unit state from gameState.units (single source of truth — Bug 2)
+    const liveUnit = gameState.units.find(u => u.id === unit.id) || unit;
+
     let canShootOrCharge = true;
-    if (unit.status === 'shaken') {
-      const quality = unit.quality || 4;
-      const roll = rules.dice.roll();
+    if (liveUnit.status === 'shaken') {
+      const quality = liveUnit.quality || 4;
+      const roll = rules.dice.roll(); // always a real integer 1-6
       const recovered = roll >= quality;
       const outcome = recovered ? 'recovered' : 'failed';
-      const newEvents = [...events];
       const round = gameState.current_round;
       if (recovered) {
-        unit.status = 'normal';
+        liveUnit.status = 'normal';
       } else {
-        canShootOrCharge = false; // stays shaken — can only move
+        canShootOrCharge = false;
       }
-      newEvents.push({
+      const recoveryEvents = [...events, {
         round,
         type: 'morale',
-        message: `${unit.name} Shaken recovery roll: ${roll} (need ${quality}+) — ${outcome}`,
+        message: `${liveUnit.name} Shaken recovery roll: ${roll} (need ${quality}+) — ${outcome}`,
         timestamp: new Date().toLocaleTimeString()
-      });
-      battleLogger?.logMorale({ round, unit, outcome, roll, qualityTarget: quality, dmnReason: 'shaken recovery check' });
-      setEvents(newEvents);
+      }];
+      battleLogger?.logMorale({ round, unit: liveUnit, outcome, roll, qualityTarget: quality, dmnReason: 'shaken recovery check' });
+      setEvents(recoveryEvents);
     }
     
-    const options = dmn.evaluateActionOptions(unit, gameState, unit.owner);
-    // If still shaken (failed recovery), force a non-combat action
-    let selectedAction = options.find(o => o.selected).action;
+    const options = dmn.evaluateActionOptions(liveUnit, gameState, liveUnit.owner);
+    let selectedAction = options.find(o => o.selected)?.action || 'Hold';
     if (!canShootOrCharge && (selectedAction === 'Charge' || selectedAction === 'Hold')) {
-      selectedAction = 'Advance'; // can only move
+      selectedAction = 'Advance';
     }
     
     setCurrentDecision({
-      unit,
+      unit: liveUnit,
       options,
       dmn_phase: 'Action Selection',
-      reasoning: `Unit at (${unit.x.toFixed(0)}, ${unit.y.toFixed(0)}) selected ${selectedAction} based on tactical evaluation.`
+      reasoning: `Unit at (${liveUnit.x.toFixed(0)}, ${liveUnit.y.toFixed(0)}) selected ${selectedAction} based on tactical evaluation.`
     });
     
     await new Promise(resolve => setTimeout(resolve, 500));
-    await executeAction(unit, selectedAction, canShootOrCharge);
+    await executeAction(liveUnit, selectedAction, canShootOrCharge);
     
+    // Bug 6: mark activated immediately after execution — single activation per round
     const newState = {
       ...gameState,
-      units_activated: [...(gameState.units_activated || []), unit.id],
+      units_activated: [...(gameState.units_activated || []), liveUnit.id],
       active_agent: gameState.active_agent === 'agent_a' ? 'agent_b' : 'agent_a'
     };
     setGameState(newState);
@@ -523,15 +528,21 @@ export default function Battle() {
               dmnReason: shootDmnReason
             });
             
-            // Morale check if target drops to/below half strength (but not already destroyed)
-            if (target.current_models > 0 && target.current_models <= target.total_models / 2) {
+            // Bugs 3 & 8: only trigger morale if unit is 'normal' status (not already shaken)
+            // and only when first crossing the half-wounds threshold
+            if (
+              target.current_models > 0 &&
+              target.status === 'normal' &&
+              target.current_models <= target.total_models / 2
+            ) {
               const moraleResult = rules.checkMorale(target, 'wounds');
+              // moraleResult.roll is always a real integer from checkMorale
               if (!moraleResult.passed) {
                 const outcome = rules.applyMoraleResult(target, false, 'wounds');
                 newEvents.push({
                   round,
                   type: 'morale',
-                  message: `${target.name} morale check failed — ${outcome}`,
+                  message: `${target.name} morale check failed — ${outcome} (roll: ${moraleResult.roll})`,
                   timestamp: new Date().toLocaleTimeString()
                 });
                 battleLogger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll, qualityTarget: target.quality || 4 });
@@ -601,17 +612,17 @@ export default function Battle() {
       dmnReason
     });
     
+    // Bugs 3 & 8: only check morale on melee loser if it's not already shaken/destroyed
     const loser = result.winner === attacker ? defender : (result.winner === defender ? attacker : null);
-    if (loser && loser.current_models > 0) {
+    if (loser && loser.current_models > 0 && loser.status === 'normal') {
       const moraleResult = rules.checkMorale(loser, 'melee_loss');
       const outcome = rules.applyMoraleResult(loser, moraleResult.passed, 'melee_loss');
       newEvents.push({
         round,
         type: 'morale',
-        message: `${loser.name} ${outcome === 'routed' ? 'routed!' : outcome === 'shaken' ? 'is Shaken' : 'passed morale'}`,
+        message: `${loser.name} ${outcome === 'routed' ? 'routed!' : outcome === 'shaken' ? 'is Shaken' : 'passed morale'} (roll: ${moraleResult.roll})`,
         timestamp: new Date().toLocaleTimeString()
       });
-      // Bug 5 fix: pass quality_target
       battleLogger?.logMorale({ round, unit: loser, outcome, roll: moraleResult.roll, qualityTarget: loser.quality || 4 });
     }
   };
@@ -631,12 +642,22 @@ export default function Battle() {
       active_agent: 'agent_a'
     };
     
+    // Bug 5: validate — any unit that was alive last round but now has no wounds and no destruction
+    // event should be force-logged as destroyed
+    const prevAlive = gameState.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
+    prevAlive.forEach(u => {
+      const inNew = newState.units.find(n => n.id === u.id);
+      if (inNew && inNew.current_models <= 0 && inNew.status !== 'destroyed') {
+        inNew.status = 'destroyed';
+        battleLogger?.logDestruction({ round: gameState.current_round, unit: inNew, cause: 'unknown (validated at round end)' });
+      }
+    });
+
     newState.units.forEach(u => {
       u.fatigued = false;
       u.just_charged = false;
-      // Bug 3 fix: only clear Shaken status, NEVER reset wounds
+      // Only clear Shaken, NEVER reset wounds
       if (u.status === 'shaken') u.status = 'normal';
-      // Ensure destroyed units stay destroyed
       if (u.current_models <= 0) u.status = 'destroyed';
     });
 
@@ -657,13 +678,14 @@ export default function Battle() {
       u.rounds_without_offense = u.rounds_without_offense || 0;
     });
 
-    // Round summary for JSON log
+    // Round summary for JSON log (Bug 7: always generate, including final round)
     const aScore = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const bScore = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
     battleLogger?.logRoundSummary({
       round: gameState.current_round,
       objectives: newState.objectives,
-      score: { agent_a: aScore, agent_b: bScore }
+      score: { agent_a: aScore, agent_b: bScore },
+      units: newState.units
     });
     
     setGameState(newState);
@@ -710,6 +732,13 @@ export default function Battle() {
       successful_actions: actionTracking.agent_b
     });
     
+    // Bug 7: generate final round summary before battle_end
+    battleLogger?.logRoundSummary({
+      round: 4,
+      objectives: gameState.objectives,
+      score: { agent_a: aScore, agent_b: bScore },
+      units: gameState.units
+    });
     battleLogger?.logBattleEnd({ winner, finalScore: { agent_a: aScore, agent_b: bScore } });
     const log = battleLogger?.getFullLog(winner, { agent_a: aScore, agent_b: bScore });
     setFullJsonLog(log);
