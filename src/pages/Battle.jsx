@@ -608,6 +608,10 @@ export default function Battle() {
       const target = dmn.selectTarget(unit, liveEnemies);
       if (!target) continue;
 
+      // Bug 7 fix: Skip destroyed targets entirely
+      const liveTarget = gs.units.find(u => u.id === target.id);
+      if (!liveTarget || liveTarget.current_models <= 0 || liveTarget.status === 'destroyed') continue;
+
       const dist = rules.calculateDistance(unit, target);
       if (dist > weapon.range) continue;
 
