@@ -768,7 +768,8 @@ export default function Battle() {
       advance_rules: activeRuleKeys,   // top-level array of all enabled rule keys
     });
 
-    logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: aScore, agent_b: bScore } });
+    // Bug 8 fix: always include mode in final round summary score
+    logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: aScore, agent_b: bScore, mode: isCumulative ? 'cumulative' : 'per_round' } });
     logger?.logBattleEnd({ winner, finalScore: { agent_a: aScore, agent_b: bScore } });
 
     const log = logger?.getFullLog(winner, { agent_a: aScore, agent_b: bScore });
