@@ -354,16 +354,16 @@ export default function Battle() {
     const rules = rulesRef.current;
     const logger = loggerRef.current;
 
-    // ── Shaken recovery ──────────────────────────────────────────────────────
+    // ── Shaken recovery (Bug 5 fix: always logged before any other action) ──
     let canAct = true;
     if (liveUnit.status === 'shaken') {
-      const quality = liveUnit.quality || 4;
-      const roll = rules.dice.roll();
-      const recovered = roll >= quality;
-      if (recovered) liveUnit.status = 'normal';
-      else canAct = false;
-      evs.push({ round, type: 'morale', message: `${liveUnit.name} Shaken recovery: ${roll} vs ${quality}+ — ${recovered ? 'recovered' : 'still shaken'}`, timestamp: new Date().toLocaleTimeString() });
-      logger?.logMorale({ round, unit: liveUnit, outcome: recovered ? 'recovered' : 'failed', roll, qualityTarget: quality, dmnReason: 'shaken recovery' });
+    const quality = liveUnit.quality || 4;
+    const roll = rules.dice.roll();
+    const recovered = roll >= quality;
+    if (recovered) liveUnit.status = 'normal';
+    else canAct = false;
+    evs.push({ round, type: 'morale', message: `${liveUnit.name} Shaken recovery: rolled ${roll} vs ${quality}+ — ${recovered ? 'recovered' : 'still shaken, cannot charge or shoot'}`, timestamp: new Date().toLocaleTimeString() });
+    logger?.logMorale({ round, unit: liveUnit, outcome: recovered ? 'recovered' : 'still_shaken', roll, qualityTarget: quality, dmnReason: 'shaken recovery check' });
     }
 
     // ── Heroic Action (Advance Rule) ──────────────────────────────────────────
