@@ -410,6 +410,146 @@ export class DMNEngine {
     });
   }
 
+  // ─── DEPLOYMENT DMN ──────────────────────────────────────────────────────
+
+  /**
+  * Decide the best deployment zone and coordinates for a unit.
+  * Returns { x, y, zone, dmnReason, specialRulesApplied }
+  */
+  decideDeployment(unit, isAgentA, deployedEnemies, deployedFriendlies, objectives, terrain) {
+  const isReserve = unit.special_rules?.includes('Ambush') ||
+                  unit.special_rules?.includes('Teleport') ||
+                  unit.special_rules?.includes('Infiltrate');
+  // Scout deploys mid-table — handled separately in deployArmies; here treat as standard
+  if (isReserve) {
+  return { x: unit.x, y: unit.y, zone: 'reserve', dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`, specialRulesApplied: [{ rule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve', value: null, effect: 'deployed to reserve, not on table' }] };
+  }
+
+  const meleeWeapons = (unit.weapons || []).filter(w => w.range <= 2);
+  const rangedWeapons = (unit.weapons || []).filter(w => w.range > 2);
+  const hasLongRange = rangedWeapons.some(w => w.range >= 24);
+  const hasIndirect = rangedWeapons.some(w => w.special_rules?.includes('Indirect'));
+  const isMeleePrimary = meleeWeapons.length > 0 && meleeWeapons.length >= rangedWeapons.length;
+  const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
+  const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
+  const isHeavy = toughValue >= 6;
+  const isFast = unit.special_rules?.includes('Fast');
+  const isScreener = !isHeavy && !isMeleePrimary && (unit.total_models <= 3 || unit.special_rules?.includes('Scout'));
+
+  // Deployment band: agent_a deploys in y=3..16, agent_b in y=32..45
+  const yMin = isAgentA ? 3 : 32;
+  const yMax = isAgentA ? 16 : 45;
+  const yCentre = (yMin + yMax) / 2;
+
+  // Score candidate positions (sample a grid of x positions across 3 columns)
+  const candidates = [
+  { col: 'left',   x: 10 + Math.random() * 8,  label: 'left flank' },
+  { col: 'centre', x: 30 + Math.random() * 12, label: 'centre' },
+  { col: 'right',  x: 52 + Math.random() * 8,  label: 'right flank' },
+  ];
+
+  let bestScore = -Infinity;
+  let best = candidates[0];
+
+  for (const cand of candidates) {
+  const cx = cand.x;
+  const cy = yCentre;
+  let score = 0;
+
+  // Objective proximity bonus for objective-seekers
+  if (objectives?.length > 0) {
+    const nearestObj = objectives.reduce((n, o) => {
+      const d = Math.hypot(cx - o.x, cy - o.y);
+      return d < Math.hypot(cx - n.x, cy - n.y) ? o : n;
+    });
+    const objDist = Math.hypot(cx - nearestObj.x, cy - nearestObj.y);
+    if (isFast) score += Math.max(0, 40 - objDist) * 0.8;
+    else if (!isMeleePrimary && !isHeavy) score += Math.max(0, 30 - objDist) * 0.5;
+  }
+
+  // Heavy melee: deploy close to likely enemy deployment zone
+  if (isMeleePrimary && deployedEnemies.length > 0) {
+    const nearestEnemy = deployedEnemies.reduce((n, e) => {
+      const d = Math.hypot(cx - e.x, cy - e.y);
+      return d < Math.hypot(cx - n.x, cy - n.y) ? e : n;
+    });
+    const enemyDist = Math.hypot(cx - nearestEnemy.x, cy - nearestEnemy.y);
+    score += Math.max(0, 60 - enemyDist) * 0.6;
+  }
+
+  // Long-range fire support: prefer centre for maximum arc
+  if (hasLongRange && !hasIndirect) {
+    if (cand.col === 'centre') score += 20;
+  }
+
+  // Indirect: deprioritise centre (hide behind flanks)
+  if (hasIndirect) {
+    if (cand.col !== 'centre') score += 15;
+  }
+
+  // Heavy vehicles: anchor a flank
+  if (isHeavy && !isMeleePrimary) {
+    if (cand.col !== 'centre') score += 18;
+  }
+
+  // Screeners: deploy in front of heavies/key assets
+  if (isScreener && deployedFriendlies.length > 0) {
+    const nearestFriendly = deployedFriendlies.reduce((n, f) => {
+      const d = Math.hypot(cx - f.x, cy - f.y);
+      return d < Math.hypot(cx - n.x, cy - n.y) ? f : n;
+    });
+    const friendlyDist = Math.hypot(cx - nearestFriendly.x, cy - nearestFriendly.y);
+    score += Math.max(0, 20 - friendlyDist) * 0.4;
+  }
+
+  // Spread bonus: penalise piling into same column as too many friendlies
+  const sameColFriendlies = deployedFriendlies.filter(f => Math.abs(f.x - cx) < 12).length;
+  score -= sameColFriendlies * 8;
+
+  // Reactive: avoid columns with concentrated dangerous enemies
+  if (deployedEnemies.length > 0) {
+    const nearbyEnemies = deployedEnemies.filter(e => Math.abs(e.x - cx) < 14);
+    const bigThreats = nearbyEnemies.filter(e => {
+      const t = e.special_rules?.match(/Tough\((\d+)\)/);
+      return t && parseInt(t[1]) >= 6;
+    });
+    // Fragile units avoid big threats
+    if (!isHeavy && !isMeleePrimary) score -= bigThreats.length * 10;
+  }
+
+  if (score > bestScore) { bestScore = score; best = cand; }
+  }
+
+  const finalX = Math.max(4, Math.min(68, best.x));
+  const finalY = yMin + Math.random() * (yMax - yMin);
+  const colLabel = best.col === 'left' ? 'left' : best.col === 'right' ? 'right' : 'centre';
+  const rowLabel = isAgentA ? 'south' : 'north';
+  const zone = `${rowLabel}-${colLabel}`;
+
+  // Build human-readable reason
+  let reason = '';
+  if (isHeavy && !isMeleePrimary) reason = `Tough(${toughValue}) vehicle anchoring ${best.label} near objective, threatening approach lanes`;
+  else if (isMeleePrimary && deployedEnemies.length > 0) reason = `Melee-primary unit — deployed ${best.label} to close on enemy cluster quickly`;
+  else if (hasIndirect) reason = `Indirect weapon — deployed ${best.label} rear, no LOS required`;
+  else if (hasLongRange) reason = `Long-range fire support — deployed ${best.label} for maximum coverage`;
+  else if (isFast && objectives?.length > 0) reason = `Fast unit prioritising nearest objective — deployed forward-${best.label} for Round 1 cap`;
+  else if (isScreener) reason = `Light screen unit — deployed ${best.label} to absorb early charges`;
+  else reason = `Standard infantry — deployed ${best.label} balancing objective proximity and spread`;
+
+  // Reactive note
+  if (deployedEnemies.length > 0) {
+  const nearbyThreats = deployedEnemies.filter(e => {
+    const t = e.special_rules?.match(/Tough\((\d+)\)/);
+    return t && parseInt(t[1]) >= 6 && Math.abs(e.x - finalX) > 20;
+  });
+  if (!isHeavy && nearbyThreats.length > 0) {
+    reason += ` — reacting to ${nearbyThreats[0].name} placement, avoiding their flank`;
+  }
+  }
+
+  return { x: finalX, y: finalY, zone, dmnReason: reason, specialRulesApplied: [] };
+  }
+
   findNearestTransport(unit, gameState, owner) {
     const transports = gameState.units.filter(u => 
       u.owner === owner && 
