@@ -537,12 +537,14 @@ export class DMNEngine {
   const rowLabel = isAgentA ? 'south' : 'north';
   const zone = `${rowLabel}-${colLabel}`;
 
-  // Build human-readable reason
+  // Bug 2 fix: build reason based on actual classification
   let reason = '';
   if (isHeavy && !isMeleePrimary) reason = `Tough(${toughValue}) vehicle anchoring ${best.label} near objective, threatening approach lanes`;
-  else if (isMeleePrimary && deployedEnemies.length > 0) reason = `Melee-primary unit — deployed ${best.label} to close on enemy cluster quickly`;
+  else if (isMeleePrimary && rangedWeapons.length === 0) reason = `Melee-only unit — deployed ${best.label} to close on enemy cluster quickly`;
+  else if (isMeleePrimary && deployedEnemies.length > 0) reason = `Melee-primary unit (melee attacks ${bestMeleeAttacks} ≥ ranged ${bestRangedAttacks}) — deployed ${best.label} to close on enemy`;
   else if (hasIndirect) reason = `Indirect weapon — deployed ${best.label} rear, no LOS required`;
-  else if (hasLongRange) reason = `Long-range fire support — deployed ${best.label} for maximum coverage`;
+  else if (hasLongRange && !isMeleePrimary) reason = `Ranged fire support (${Math.max(...rangedWeapons.map(w => w.range))}" range) — deployed ${best.label} for maximum arc coverage`;
+  else if (rangedWeapons.length > 0 && !isMeleePrimary) reason = `Ranged unit (best ranged attacks ${bestRangedAttacks} > melee ${bestMeleeAttacks}) — deployed ${best.label} for fire support`;
   else if (isFast && objectives?.length > 0) reason = `Fast unit prioritising nearest objective — deployed forward-${best.label} for Round 1 cap`;
   else if (isScreener) reason = `Light screen unit — deployed ${best.label} to absorb early charges`;
   else reason = `Standard infantry — deployed ${best.label} balancing objective proximity and spread`;
