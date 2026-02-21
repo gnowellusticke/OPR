@@ -494,17 +494,21 @@ export class DMNEngine {
 
   findNearestEnemy(unit, enemies) {
     if (!enemies || enemies.length === 0) return null;
+    if (enemies.length === 1) return enemies[0];
     return enemies.reduce((nearest, enemy) => {
       const dist = this.getDistance(unit, enemy);
-      return dist < this.getDistance(unit, nearest) ? enemy : nearest;
+      const nearestDist = this.getDistance(unit, nearest);
+      return dist < nearestDist ? enemy : nearest;
     });
   }
 
   findNearestObjective(unit, objectives) {
     if (!objectives || objectives.length === 0) return null;
+    if (objectives.length === 1) return objectives[0];
     return objectives.reduce((nearest, obj) => {
       const dist = this.getDistance(unit, obj);
-      return dist < this.getDistance(unit, nearest) ? obj : nearest;
+      const nearestDist = this.getDistance(unit, nearest);
+      return dist < nearestDist ? obj : nearest;
     });
   }
 
