@@ -162,19 +162,17 @@ export default function Battle() {
   };
 
   const generateObjectives = () => {
-    // Bug 5 fix: 5 fixed canonical positions across the board (one per zone)
+    // Bug 7 fix: 5 fixed canonical positions across the board with guaranteed distinct coordinates
     const canonicalPositions = [
       { x: 12, y: 24 },  // left-centre
-      { x: 36, y: 12 },  // centre-north
+      { x: 36, y: 10 },  // centre-north
       { x: 36, y: 36 },  // centre
-      { x: 36, y: 50 },  // centre-south (adjusted for 48" height)
+      { x: 36, y: 46 },  // centre-south
       { x: 60, y: 24 }   // right-centre
     ];
 
-    // Shuffle and pick 3-5 objectives
-    const shuffled = [...canonicalPositions].sort(() => Math.random() - 0.5);
-    const count = Math.floor(Math.random() * 3) + 3; // 3-5 objectives
-    return shuffled.slice(0, count).map(pos => ({ ...pos, controlled_by: null }));
+    // Always generate all 5 objectives at canonical positions (no shuffling)
+    return canonicalPositions.map(pos => ({ ...pos, id: `obj_${canonicalPositions.indexOf(pos) + 1}`, controlled_by: null }));
   };
 
   // ─── DEPLOY ──────────────────────────────────────────────────────────────────
