@@ -226,11 +226,12 @@ export default function Battle() {
 
     const activated = gs.units_activated || [];
 
-    // All living units not yet activated this round
+    // All living units not yet activated this round (exclude units still in reserve)
     const remaining = gs.units.filter(u =>
       u.current_models > 0 &&
       u.status !== 'destroyed' && u.status !== 'routed' &&
-      !activated.includes(u.id)
+      !activated.includes(u.id) &&
+      !u.is_in_reserve
     );
 
     if (remaining.length === 0) {
@@ -577,6 +578,18 @@ export default function Battle() {
     notActivated.forEach(u => {
       evs.push({ round: gs.current_round, type: 'warning', message: `⚠ SCHEDULING: ${u.name} (${u.owner}) had no activation in round ${gs.current_round}`, timestamp: new Date().toLocaleTimeString() });
       loggerRef.current?.logAbility({ round: gs.current_round, unit: u, ability: 'scheduling_warning', details: { reason: 'no_activation_this_round' } });
+    });
+
+    // Deploy Ambush units from reserve at the start of each new round
+    const rules = rulesRef.current;
+    gs.units.forEach(u => {
+      if (u.is_in_reserve && u.current_models > 0) {
+        const deployed = rules.deployAmbush(u, gs);
+        if (deployed) {
+          evs.push({ round: newRound, type: 'ability', message: `${u.name} deploys from Ambush!`, timestamp: new Date().toLocaleTimeString() });
+          loggerRef.current?.logAbility({ round: newRound, unit: u, ability: 'Ambush', details: { x: u.x.toFixed(1), y: u.y.toFixed(1) } });
+        }
+      }
     });
 
     const newState = {
