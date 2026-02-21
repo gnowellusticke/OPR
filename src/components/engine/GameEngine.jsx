@@ -541,17 +541,6 @@ export class DMNEngine {
   const isFast = unit.special_rules?.includes('Fast');
   const isScreener = !isHeavy && !isMeleePrimary && (unit.total_models <= 3 || unit.special_rules?.includes('Scout'));
 
-  // Bug 2 fix: classify by highest-Attack weapon to distinguish fire support from melee
-  const bestMeleeAttacks = meleeWeapons.reduce((max, w) => Math.max(max, w.attacks || 1), 0);
-  const bestRangedAttacks = rangedWeapons.reduce((max, w) => Math.max(max, w.attacks || 1), 0);
-  // A unit is melee-primary only if its best melee weapon out-attacks its best ranged weapon
-  const isMeleePrimary = meleeWeapons.length > 0 && (rangedWeapons.length === 0 || bestMeleeAttacks >= bestRangedAttacks);
-  const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
-  const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
-  const isHeavy = toughValue >= 6;
-  const isFast = unit.special_rules?.includes('Fast');
-  const isScreener = !isHeavy && !isMeleePrimary && (unit.total_models <= 3 || unit.special_rules?.includes('Scout'));
-
   // Deployment band: agent_a deploys in y=3..16, agent_b in y=32..45
   const yMin = isAgentA ? 3 : 32;
   const yMax = isAgentA ? 16 : 45;
