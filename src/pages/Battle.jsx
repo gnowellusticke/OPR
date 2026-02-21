@@ -143,14 +143,14 @@ export default function Battle() {
   };
 
   const generateObjectives = () => {
+    // Bug 6 fix: always generate exactly 5 objectives
     const objectives = [];
-    const count = Math.floor(Math.random() * 3) + 3;
-    while (objectives.length < count) {
-      for (let a = 0; a < 100; a++) {
-        const o = { x: Math.random() * 54 + 9, y: Math.random() * 18 + 15, controlled_by: null };
-        if (!objectives.some(e => Math.hypot(o.x - e.x, o.y - e.y) < 9)) { objectives.push(o); break; }
-      }
-      if (objectives.length < count && objectives.length === objectives.length) break; // safety
+    const target = 5;
+    let attempts = 0;
+    while (objectives.length < target && attempts < 500) {
+      attempts++;
+      const o = { x: Math.random() * 54 + 9, y: Math.random() * 18 + 15, controlled_by: null };
+      if (!objectives.some(e => Math.hypot(o.x - e.x, o.y - e.y) < 9)) objectives.push(o);
     }
     return objectives;
   };
@@ -722,19 +722,22 @@ export default function Battle() {
       active_agent: 'agent_a',
     };
 
-    // Reset per-round flags — NEVER clear shaken here (only morale recovery rolls can do that)
+    // Reset per-round flags only — do NOT clear shaken here; shaken clears via recovery roll at activation start
     newState.units = newState.units.map(u => ({
       ...u,
       fatigued: false, just_charged: false,
       status: u.current_models <= 0 ? 'destroyed' : u.status,
     }));
 
-    // Regeneration / Self-Repair / Repair
+    // Regeneration / Self-Repair / Repair — heals wounds only, never changes status
     const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
     newState.units.forEach(u => {
       const rule = REGEN_RULES.find(r => u.special_rules?.includes(r));
       if (u.current_models > 0 && rule && u.current_models < u.total_models) {
+        const statusBefore = u.status; // Bug 3 guard: capture before
         const { recovered, roll } = rules.applyRegeneration(u);
+        // Enforce: regen must never change status
+        if (u.status !== statusBefore) u.status = statusBefore;
         evs.push({ round: gs.current_round, type: 'regen', message: `${u.name} ${rule}: roll ${roll} — ${recovered ? 'recovered 1 wound' : 'no recovery'}`, timestamp: new Date().toLocaleTimeString() });
         logger?.logRegeneration({ round: gs.current_round, unit: u, recovered, roll, ruleName: rule });
       }
