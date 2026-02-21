@@ -317,10 +317,45 @@ export default function Battle() {
       });
     } else {
       const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain, myUsedZones);
-      unit.x = decision.x;
-      unit.y = decision.y;
+
+      // Bug 9 fix: enforce max 2 units per zone at deployment time
+      const zoneCol = decision.x < 24 ? 'left' : decision.x < 48 ? 'centre' : 'right';
+      const zoneRow = isAgentA ? 'south' : 'north';
+      const decidedZone = `${zoneRow}-${zoneCol}`;
+      const unitsInZone = myDeployed.filter(u => {
+        const fCol = u.x < 24 ? 'left' : u.x < 48 ? 'centre' : 'right';
+        const fRow = isAgentA ? 'south' : 'north';
+        return `${fRow}-${fCol}` === decidedZone;
+      }).length;
+
+      // If zone is full (2+ units), find next preferred zone
+      let finalX = decision.x, finalY = decision.y, finalZone = decidedZone;
+      if (unitsInZone >= 2) {
+        const zones = [
+          { col: 'left', x: 12 },
+          { col: 'centre', x: 36 },
+          { col: 'right', x: 60 }
+        ];
+        for (const zone of zones) {
+          const testZone = `${zoneRow}-${zone.col}`;
+          const count = myDeployed.filter(u => {
+            const fCol = u.x < 24 ? 'left' : u.x < 48 ? 'centre' : 'right';
+            const fRow = isAgentA ? 'south' : 'north';
+            return `${fRow}-${fCol}` === testZone;
+          }).length;
+          if (count < 2) {
+            finalX = zone.x + (Math.random() - 0.5) * 8;
+            finalY = isAgentA ? (3 + Math.random() * 13) : (32 + Math.random() * 13);
+            finalZone = testZone;
+            break;
+          }
+        }
+      }
+
+      unit.x = finalX;
+      unit.y = finalY;
       myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
-      myUsedZones.add(decision.zone);
+      myUsedZones.add(finalZone);
       (isAgentA ? summaryDeployed.agent_a : summaryDeployed.agent_b).push(unit.name);
       logger?.logDeploy({
         unit,
