@@ -880,9 +880,10 @@ export default function Battle() {
       advance_rules: activeRuleKeys,   // top-level array of all enabled rule keys
     });
 
-    // Bug 1 fix: final_score = sum of all per-round scores or cumulative total
-    logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: isCumulative ? aScore : roundA, agent_b: isCumulative ? bScore : roundB, mode: isCumulative ? 'cumulative' : 'per_round' } });
-    logger?.logBattleEnd({ winner, finalScore: { agent_a: aScore, agent_b: bScore } });
+    // Bug 4 fix: final_score must be cumulative total across all rounds, not just last round
+    const finalScore = { agent_a: aScore, agent_b: bScore };
+    logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: aScore, agent_b: bScore, mode: isCumulative ? 'cumulative' : 'per_round' } });
+    logger?.logBattleEnd({ winner, finalScore });
 
     const log = logger?.getFullLog(winner, { agent_a: aScore, agent_b: bScore });
     setFullJsonLog(log);
