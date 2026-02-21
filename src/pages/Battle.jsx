@@ -282,9 +282,18 @@ export default function Battle() {
       return;
     }
 
+    // Bug 1: when one side is exhausted, immediately activate all remaining units from the other side
+    // rather than bouncing the active_agent flag (which causes skip-round offsets)
     const agentUnits = activeUnits.filter(u => u.owner === gameState.active_agent);
+    const otherAgentUnits = activeUnits.filter(u => u.owner !== gameState.active_agent);
     
+    if (agentUnits.length === 0 && otherAgentUnits.length === 0) {
+      await endRound();
+      return;
+    }
+
     if (agentUnits.length === 0) {
+      // Switch directly to the other agent so they drain out too
       const newState = {
         ...gameState,
         active_agent: gameState.active_agent === 'agent_a' ? 'agent_b' : 'agent_a'
