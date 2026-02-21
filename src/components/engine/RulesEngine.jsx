@@ -381,12 +381,13 @@ export class RulesEngine {
   if (renderingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${renderingAutoWounds} natural 6s bypass saves` });
   }
 
+  // Bug 1 + 2 fix: Calculate wounds_dealt LOCKED from dice
+  // wounds_dealt = (normal_hits - saves) × damage_x + bane_procs (which bypass saves)
   let unsavedWounds = Math.max(0, hitCount - saves);
   unsavedWounds = Math.min(unsavedWounds, hitCount);
-  // Apply Damage(X) multiplier to unsaved wounds
   let wounds = unsavedWounds * damageValue + baneProcs;
 
-  return { rolls, saves, wounds, baneProcs, specialRulesApplied };
+  return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, specialRulesApplied };
   }
 
   // End-of-round regeneration/self-repair — unified for Regeneration, Self-Repair and Repair.
