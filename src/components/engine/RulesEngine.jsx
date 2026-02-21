@@ -445,6 +445,9 @@ export class RulesEngine {
       const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
       const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
 
+      // Bug 2 fix: Multi-model units strike once per model
+      const currentModelCount = Math.ceil(attacker.current_models / Math.max(attacker.tough_per_model, 1));
+
       weaponsToUse.forEach(weapon => {
       let modifiedWeapon = { ...weapon };
       const weaponSpecialRules = [];
@@ -470,10 +473,15 @@ export class RulesEngine {
       weaponSpecialRules.push({ rule: 'Impact', value: impactDice, effect: `${impactHits} extra hits from Impact(${impactDice})` });
       }
 
-      const result = this.resolveShooting(attacker, defender, modifiedWeapon, null, gameState);
+      // Bug 2 fix: scale attacks by model count
+      const baseAttacks = modifiedWeapon.attacks || 1;
+      const scaledAttacks = baseAttacks * Math.max(currentModelCount, 1);
+      const scaledWeapon = { ...modifiedWeapon, attacks: scaledAttacks };
+
+      const result = this.resolveShooting(attacker, defender, scaledWeapon, null, gameState);
       result.hits = result.hits ?? 0;
       result.saves = result.saves ?? 0;
-      result.attacks = modifiedWeapon.attacks || 1;
+      result.attacks = scaledAttacks;
 
       // Fear(X): attacker counts as dealing +X wounds when checking who won melee
       if (attacker.special_rules?.includes('Fear')) {
