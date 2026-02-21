@@ -309,14 +309,26 @@ export class BattleLogger {
       event_type: 'round_summary',
       round,
       timestamp: this._timestamp(),
-      objectives: {},
+      objectives: {
+        objective_1: null,
+        objective_2: null,
+        objective_3: null,
+        objective_4: null,
+        objective_5: null
+      },
       score,
       units_destroyed_this_round: [...this.roundDestroyed],
       units_shaken_this_round: [...this.roundShaken]
     };
-    objectives.forEach((obj, idx) => {
-      summary.objectives[`objective_${idx + 1}`] = obj.controlled_by || 'uncontrolled';
-    });
+    // Populate all 5 objectives regardless of how many exist in gameState
+    for (let i = 0; i < Math.min(objectives.length, 5); i++) {
+      const obj = objectives[i];
+      summary.objectives[`objective_${i + 1}`] = obj.controlled_by || 'uncontrolled';
+    }
+    // Fill any remaining slots as uncontrolled if fewer than 5 objectives generated
+    for (let i = objectives.length; i < 5; i++) {
+      summary.objectives[`objective_${i + 1}`] = 'uncontrolled';
+    }
     this.events.push(summary);
     // Reset per-round tracking
     this.roundDestroyed = [];
