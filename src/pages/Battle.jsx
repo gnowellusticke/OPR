@@ -716,11 +716,13 @@ export default function Battle() {
       }
     });
 
+    // Bug 7 fix: alternate starting agent each round to prevent same-agent starvation
+    const startingAgent = gs.current_round % 2 === 0 ? 'agent_a' : 'agent_b';
     const newState = {
       ...gs,
       current_round: newRound,
       units_activated: [],
-      active_agent: 'agent_a',
+      active_agent: startingAgent,
     };
 
     // Reset per-round flags only — do NOT clear shaken here; shaken clears via recovery roll at activation start
