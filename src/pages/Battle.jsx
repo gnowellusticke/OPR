@@ -911,7 +911,10 @@ export default function Battle() {
   if (!battle || !gameState) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-white text-lg">Loading battle...</div>
+        <div className="text-center">
+          <div className="text-white text-lg mb-4">Loading battle...</div>
+          <div className="text-slate-400 text-sm">{loadingStatus}</div>
+        </div>
       </div>
     );
   }
