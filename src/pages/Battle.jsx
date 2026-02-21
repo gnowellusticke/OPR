@@ -393,11 +393,13 @@ export default function Battle() {
     // (handled inside executeAction after melee kill)
 
     // ── Mark activated, flip agent ────────────────────────────────────────────
+    // Bug 6 fix: clear just_charged so the unit is NOT excluded from next round
+    liveUnit.just_charged = false;
     const nextAgent = liveUnit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
     const updatedGs = {
-      ...gsRef.current, // use ref — executeAction may have mutated it
-      units_activated: [...(gsRef.current.units_activated || []), liveUnit.id],
-      active_agent: nextAgent,
+    ...gsRef.current,
+    units_activated: [...(gsRef.current.units_activated || []), liveUnit.id],
+    active_agent: nextAgent,
     };
     commitState(updatedGs, evRef.current);
     setActiveUnit(null);
