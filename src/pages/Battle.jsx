@@ -22,6 +22,7 @@ export default function Battle() {
   const [currentCombat, setCurrentCombat] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [fullJsonLog, setFullJsonLog] = useState(null);
+  const [loadingStatus, setLoadingStatus] = useState("Initializing...");
 
   // Engines (stable refs, never recreated)
   const dmnRef = useRef(new DMNEngine());
