@@ -581,7 +581,6 @@ export default function Battle() {
     });
 
     // Deploy Ambush units from reserve at the start of each new round
-    const rules = rulesRef.current;
     gs.units.forEach(u => {
       if (u.is_in_reserve && u.current_models > 0) {
         const deployed = rules.deployAmbush(u, gs);
