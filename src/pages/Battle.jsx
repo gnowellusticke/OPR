@@ -895,16 +895,18 @@ export default function Battle() {
       aScore = (gs.cumulative_score?.agent_a || 0) + roundA;
       bScore = (gs.cumulative_score?.agent_b || 0) + roundB;
     } else {
-      // Per-round: sum all round summaries from the event log (including this round)
+      // Bug 6 fix: Per-round mode accumulates scores from all rounds
+      // For per-round mode, sum only the per-round component (agent_a, agent_b from round summary)
       aScore = 0;
       bScore = 0;
       evRef.current.forEach(ev => {
         if (ev.event_type === 'round_summary') {
+          // Per-round scores are stored directly as agent_a, agent_b
           aScore += ev.score?.agent_a || 0;
           bScore += ev.score?.agent_b || 0;
         }
       });
-      // Add this final round's score to the total
+      // Add this final round (Round 5, after R4) to the total
       aScore += roundA;
       bScore += roundB;
     }
