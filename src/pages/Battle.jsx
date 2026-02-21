@@ -185,36 +185,110 @@ export default function Battle() {
   };
 
   const deployArmies = (armyA, armyB, advRules) => {
-    let id = 0;
-    const build = (army, owner, yFn) => army.units.map((unit, idx) => {
-      const maxWounds = computeWounds(unit);
-      const isScout = unit.special_rules?.includes('Scout') && advRules?.scoutingDeployment;
-      const baseX = (idx * 12) % 60 + 6;
-      const baseY = yFn(idx);
-      // Scouting Deployment: scouts redeploy to mid-table (12"+ from deployment zones)
-      const scoutX = isScout ? Math.random() * 40 + 16 : baseX;
-      const scoutY = isScout ? Math.random() * 12 + 20 : baseY;
-      // ranged_weapons: pre-filtered list for convenience; shooting also checks unit.weapons
-      const ranged_weapons = (unit.weapons || []).filter(w => (w.range ?? 2) > 2);
-      console.log(`[DEPLOY] ${name} weapons:`, JSON.stringify(unit.weapons), '→ ranged:', ranged_weapons.length);
-      const isAmbush = unit.special_rules?.includes('Ambush');
-      return {
-        ...unit,
-        id: `${owner === 'agent_a' ? 'a' : 'b'}_${id++}`,
-        owner, x: scoutX, y: scoutY,
-        current_models: maxWounds, total_models: maxWounds,
-        status: 'normal', fatigued: false, just_charged: false, rounds_without_offense: 0,
-        melee_weapon_name: resolveMeleeWeaponName(unit),
-        ranged_weapons,          // ordered list, immutable for the whole battle
-        heroic_action_used: false,
-        is_scout: isScout,
-        is_in_reserve: isAmbush,  // Ambush units start off the table
-      };
-    });
+  let id = 0;
+  const build = (army, owner) => army.units.map((unit) => {
+  const maxWounds = computeWounds(unit);
+  const isAmbush = unit.special_rules?.includes('Ambush') || unit.special_rules?.includes('Teleport') || unit.special_rules?.includes('Infiltrate');
+  const isScout = unit.special_rules?.includes('Scout') && advRules?.scoutingDeployment;
+  const ranged_weapons = (unit.weapons || []).filter(w => (w.range ?? 2) > 2);
+  // Placeholder positions — real positions set during alternating deployment phase
+  return {
+  ...unit,
+  id: `${owner === 'agent_a' ? 'a' : 'b'}_${id++}`,
+  owner,
+  x: owner === 'agent_a' ? 10 : 60,
+  y: owner === 'agent_a' ? 10 : 38,
+  current_models: maxWounds, total_models: maxWounds,
+  status: 'normal', fatigued: false, just_charged: false, rounds_without_offense: 0,
+  melee_weapon_name: resolveMeleeWeaponName(unit),
+  ranged_weapons,
+  heroic_action_used: false,
+  is_scout: isScout,
+  is_in_reserve: isAmbush,
+  };
+  });
 
-    const aUnits = build(armyA, 'agent_a', idx => 6 + Math.floor(idx / 5) * 3);
-    const bUnits = build(armyB, 'agent_b', idx => 42 - Math.floor(idx / 5) * 3);
-    return [...disambiguateUnitNames(aUnits), ...disambiguateUnitNames(bUnits)];
+  const aUnits = disambiguateUnitNames(build(armyA, 'agent_a'));
+  const bUnits = disambiguateUnitNames(build(armyB, 'agent_b'));
+  return [...aUnits, ...bUnits];
+  };
+
+  // Alternating deployment phase — one unit per agent per turn, with DMN placement decisions
+  const runDeploymentPhase = (units, objectives, terrain, logger) => {
+  const dmn = dmnRef.current;
+
+  // Coin toss
+  const tossWinner = Math.random() > 0.5 ? 'agent_a' : 'agent_b';
+  const tossLoser = tossWinner === 'agent_a' ? 'agent_b' : 'agent_a';
+  // Winner almost always deploys second (activates first R1) unless majority are reserve units
+  const winnerReserveCount = units.filter(u => u.owner === tossWinner && u.is_in_reserve).length;
+  const winnerTotal = units.filter(u => u.owner === tossWinner).length;
+  const preferDeployFirst = winnerReserveCount / Math.max(winnerTotal, 1) > 0.5;
+  const winnerChoice = preferDeployFirst ? 'deploy_first' : 'deploy_second';
+  const deployFirst = winnerChoice === 'deploy_first' ? tossWinner : tossLoser;
+  const deploySecond = deployFirst === tossWinner ? tossLoser : tossWinner;
+  const firstActivation = deploySecond; // who finishes deploying last activates first
+
+  logger?.logCoinToss({
+  winner: tossWinner,
+  choice: winnerChoice,
+  reason: `${tossWinner} wins toss and chooses to ${winnerChoice === 'deploy_second' ? 'deploy second, activating first in Round 1' : 'deploy first for faster board control'}`,
+  firstActivation
+  });
+
+  // Separate and interleave: deployFirst's units then deploySecond's, alternating
+  const queueA = units.filter(u => u.owner === deployFirst);
+  const queueB = units.filter(u => u.owner === deploySecond);
+  const order = [];
+  const maxLen = Math.max(queueA.length, queueB.length);
+  for (let i = 0; i < maxLen; i++) {
+  if (i < queueA.length) order.push(queueA[i]);
+  if (i < queueB.length) order.push(queueB[i]);
+  }
+
+  const deployedByOwner = { agent_a: [], agent_b: [] };
+  const summaryDeployed = { agent_a: [], agent_b: [], reserves: [] };
+
+  for (const unit of order) {
+  const isAgentA = unit.owner === 'agent_a';
+  const myDeployed = deployedByOwner[unit.owner];
+  const enemyDeployed = deployedByOwner[unit.owner === 'agent_a' ? 'agent_b' : 'agent_a'];
+
+  if (unit.is_in_reserve) {
+  summaryDeployed.reserves.push(unit.name);
+  logger?.logDeploy({
+    unit,
+    zone: 'reserve',
+    deploymentType: 'reserve',
+    reserveRule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve',
+    dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`,
+    specialRulesApplied: []
+  });
+  } else {
+  const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain);
+  unit.x = decision.x;
+  unit.y = decision.y;
+  myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
+  (isAgentA ? summaryDeployed.agent_a : summaryDeployed.agent_b).push(unit.name);
+  logger?.logDeploy({
+    unit,
+    zone: decision.zone,
+    deploymentType: 'standard',
+    dmnReason: decision.dmnReason,
+    specialRulesApplied: decision.specialRulesApplied
+  });
+  }
+  }
+
+  logger?.logDeploymentSummary({
+  agentADeployed: summaryDeployed.agent_a,
+  agentBDeployed: summaryDeployed.agent_b,
+  reserves: summaryDeployed.reserves,
+  firstActivation,
+  dmnReason: `${tossWinner} won coin toss and chose to ${winnerChoice}, making ${firstActivation} first to activate in Round 1`
+  });
+
+  return { firstActivation };
   };
 
   // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
