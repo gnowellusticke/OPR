@@ -511,9 +511,12 @@ export default function Battle() {
   if (rangedWeapons.length === 0) return false;
 
   for (const weapon of rangedWeapons) {
-      // Re-query live enemies before each weapon so mid-activation kills are respected
+      // Re-query live enemies before each weapon — never target a destroyed unit
       const liveEnemies = gs.units.filter(u =>
-        u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed'
+      u.owner !== unit.owner &&
+      u.current_models > 0 &&
+      u.status !== 'destroyed' &&
+      u.status !== 'routed'
       );
       if (liveEnemies.length === 0) break;
 
