@@ -386,41 +386,56 @@ export class RulesEngine {
   specialRulesApplied.push({ rule: 'Damage', value: damageValue, effect: `each unsaved wound deals ${damageValue} damage` });
   }
 
-  // Deadly(X): only applies to melee weapons with the rule (not to all melee)
-  const deadlyMatch = weapon.special_rules?.match(/Deadly\((\d+)\)/);
-  const deadlyMultiplier = deadlyMatch ? parseInt(deadlyMatch[1]) : 1;
-  if (deadlyMatch) {
-  specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `unsaved wounds multiplied by ${deadlyMultiplier}` });
+  // Deadly(X): only applies if weapon explicitly has the rule
+  let deadlyMultiplier = 1;
+  if (weapon.special_rules) {
+    const weaponRulesStr = Array.isArray(weapon.special_rules) 
+      ? weapon.special_rules.join(' ') 
+      : (typeof weapon.special_rules === 'string' ? weapon.special_rules : '');
+    const deadlyMatch = weaponRulesStr.match(/Deadly\((\d+)\)/i);
+    if (deadlyMatch) {
+      deadlyMultiplier = parseInt(deadlyMatch[1]);
+      specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `unsaved wounds multiplied by ${deadlyMultiplier}` });
+    }
   }
 
   // Unstoppable: ignores negative AP modifiers
   let effectiveAp = ap;
-  if (weapon.special_rules?.includes('Unstoppable') && ap < 0) {
-  effectiveAp = 0;
-  specialRulesApplied.push({ rule: 'Unstoppable', value: null, effect: 'ignores negative AP modifiers' });
+  if (weapon.special_rules && 
+      (Array.isArray(weapon.special_rules) ? weapon.special_rules.includes('Unstoppable') : weapon.special_rules.includes('Unstoppable'))) {
+    if (ap < 0) {
+      effectiveAp = 0;
+      specialRulesApplied.push({ rule: 'Unstoppable', value: null, effect: 'ignores negative AP modifiers' });
+    }
   }
 
+  // Bug 3 fix: AP is applied to defense modifier, not to saved hits
+  // Modified defense = base defense - AP (AP reduces how hard it is to save)
   if (effectiveAp > 0) {
-  specialRulesApplied.push({ rule: 'AP', value: effectiveAp, effect: `enemy saves reduced by ${effectiveAp}` });
+    specialRulesApplied.push({ rule: 'AP', value: effectiveAp, effect: `defense reduced by ${effectiveAp}` });
   }
 
-  const modifiedDefense = Math.min(6, Math.max(2, defense + effectiveAp));
+  const modifiedDefense = Math.min(6, Math.max(2, defense - effectiveAp));
   const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
   let saves = rolls.filter(r => r.success).length;
 
   // Rending: Unmodified 6s on hit rolls auto-wound (bypass saves)
   let renderingAutoWounds = 0;
-  if (weapon.special_rules?.includes('Rending') && hitRolls) {
-  renderingAutoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto && r.baneProc !== true).length;
-  saves = Math.max(0, saves - renderingAutoWounds);
-  if (renderingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${renderingAutoWounds} natural 6s bypass saves` });
+  if (weapon.special_rules && hitRolls) {
+    const hasRending = Array.isArray(weapon.special_rules) 
+      ? weapon.special_rules.includes('Rending')
+      : weapon.special_rules.includes('Rending');
+    if (hasRending) {
+      renderingAutoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto && r.baneProc !== true).length;
+      saves = Math.max(0, saves - renderingAutoWounds);
+      if (renderingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${renderingAutoWounds} natural 6s bypass saves` });
+    }
   }
 
-  // Bug 3 fix: Calculate wounds_dealt LOCKED from dice
-  // wounds_dealt = (normal_hits - saves) × damage_x × deadly_multiplier + bane_procs
-  let unsavedWounds = Math.max(0, hitCount - saves);
-  unsavedWounds = Math.min(unsavedWounds, hitCount);
-  let wounds = unsavedWounds * damageValue * deadlyMultiplier + baneProcs;
+  // Bug 2 fix: Calculate wounds ONLY from unsaved hits, apply multipliers only once
+  // wounds = (hits_not_saved) × deadly_multiplier + bane_procs
+  const unsavedWounds = Math.max(0, hitCount - saves);
+  const wounds = unsavedWounds * deadlyMultiplier + baneProcs;
 
   return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, deadlyMultiplier, specialRulesApplied };
   }
@@ -453,9 +468,18 @@ export class RulesEngine {
      let attackerRealWounds = attackerResults.total_wounds;
      let defenderRealWounds = defenderResults?.total_wounds || 0;
 
-     // Bug 3 fix: Apply Fear(X) ONLY to the comparison, AFTER wounds are locked
-     const attackerFearBonus = attackerResults.results?.[0]?.fearBonus || 0;
-     const defenderFearBonus = defenderResults?.results?.[0]?.fearBonus || 0;
+     // Bug 1 fix: Apply Fear(X) ONLY if unit actually has Fear rule
+     let attackerFearBonus = 0;
+     if (attacker.special_rules?.includes('Fear')) {
+       const fearMatch = attacker.special_rules.match(/Fear\((\d+)\)/);
+       attackerFearBonus = fearMatch ? parseInt(fearMatch[1]) : 0;
+     }
+
+     let defenderFearBonus = 0;
+     if (defender.special_rules?.includes('Fear')) {
+       const fearMatch = defender.special_rules.match(/Fear\((\d+)\)/);
+       defenderFearBonus = fearMatch ? parseInt(fearMatch[1]) : 0;
+     }
 
      // For winner determination: use Fear-adjusted wounds (for comparison only)
      const attackerWoundsForComparison = attackerRealWounds + attackerFearBonus;
@@ -614,9 +638,10 @@ export class RulesEngine {
   }
   const passed = roll >= quality;
 
+  // Bug 1 fix: Fearless re-roll only applies if unit actually has Fearless rule
   if (!passed && unit.special_rules?.includes('Fearless')) {
   const reroll = this.dice.roll();
-  specialRulesApplied.push({ rule: 'Fearless', value: null, effect: `re-rolled morale, reroll: ${reroll}` });
+  specialRulesApplied.push({ rule: 'Fearless', value: null, effect: `re-rolled on 4+ (re-roll: ${reroll})` });
   if (reroll >= 4) {
   return { passed: true, roll, reroll, reason: 'Fearless reroll', specialRulesApplied };
   }
