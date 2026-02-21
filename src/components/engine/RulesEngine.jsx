@@ -169,11 +169,19 @@ export class RulesEngine {
   resolveShooting(attacker, defender, weapon, terrain, gameState) {
   const hits = this.rollToHit(attacker, weapon, defender, gameState);
   const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
-  const specialRulesApplied = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
+  // Bug 4 fix: deduplicate special_rules_applied by rule name — one entry per rule per event
+  const rawRules = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
+  const seen = new Set();
+  const specialRulesApplied = rawRules.filter(r => {
+    if (seen.has(r.rule)) return false;
+    seen.add(r.rule);
+    return true;
+  });
   return {
   weapon: weapon.name,
   hit_rolls: hits.rolls,
   hits: hits.successes,
+  saves_forced: hits.successes, // Bug 5: saves_forced = hits (before saves roll)
   defense_rolls: saves.rolls,
   saves: saves.saves,
   wounds: saves.wounds,
