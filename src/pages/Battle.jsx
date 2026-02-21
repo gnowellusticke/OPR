@@ -444,38 +444,35 @@ export default function Battle() {
       unit.rounds_without_offense = (unit.rounds_without_offense || 0) + 1;
 
     } else if (action === 'Charge') {
-    const enemies = gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
-    const target = dmn.selectTarget(unit, enemies);
-    if (target) {
-      unit.just_charged = true;
-      rules.executeMovement(unit, action, target, gs.terrain);
-      const zone = rules.getZone(unit.x, unit.y);
-      evs.push({ round, type: 'movement', message: `${unit.name} charges ${target.name}!`, timestamp: new Date().toLocaleTimeString() });
-      logger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason, chargeTarget: target.name });
-      // Guard: if charger somehow died before melee (should not happen — no overwatch in OPR), skip melee
-      if (unit.current_models <= 0 || unit.status === 'destroyed') {
-        evs.push({ round, type: 'warning', message: `${unit.name} destroyed before melee — skipping combat`, timestamp: new Date().toLocaleTimeString() });
-      } else {
-        // Also guard: target may have been killed by earlier events this activation
-        const liveTarget = gs.units.find(u => u.id === target.id);
-        if (!liveTarget || liveTarget.current_models <= 0) {
-          evs.push({ round, type: 'movement', message: `${unit.name} charge target ${target.name} already destroyed — no melee`, timestamp: new Date().toLocaleTimeString() });
+      const enemies = gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
+      const target = dmn.selectTarget(unit, enemies);
+      if (target) {
+        unit.just_charged = true;
+        rules.executeMovement(unit, action, target, gs.terrain);
+        const zone = rules.getZone(unit.x, unit.y);
+        evs.push({ round, type: 'movement', message: `${unit.name} charges ${target.name}!`, timestamp: new Date().toLocaleTimeString() });
+        logger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason, chargeTarget: target.name });
+        // Guard: no overwatch in OPR — charger should never be dead here, but be safe
+        if (unit.current_models <= 0 || unit.status === 'destroyed') {
+          evs.push({ round, type: 'warning', message: `${unit.name} destroyed before melee — skipping combat`, timestamp: new Date().toLocaleTimeString() });
         } else {
-          const killedTarget = await resolveMelee(unit, liveTarget, gs, evs, dmnReason);
-      unit.rounds_without_offense = 0;
-
-        // Overrun (Advance Rule)
-        if (killedTarget && gs.advance_rules?.overrun) {
-          const dx = (Math.random() - 0.5) * 6;
-          const dy = (Math.random() - 0.5) * 6;
-          unit.x = Math.max(2, Math.min(70, unit.x + dx));
-          unit.y = Math.max(2, Math.min(46, unit.y + dy));
-          evs.push({ round, type: 'ability', message: `${unit.name} Overrun — moved 3" after kill`, timestamp: new Date().toLocaleTimeString() });
-          logger?.logAbility({ round, unit, ability: 'Overrun', details: { dx: dx.toFixed(1), dy: dy.toFixed(1) } });
+          const liveTarget = gs.units.find(u => u.id === target.id);
+          if (!liveTarget || liveTarget.current_models <= 0) {
+            evs.push({ round, type: 'movement', message: `${unit.name} charge target ${target.name} already destroyed — no melee`, timestamp: new Date().toLocaleTimeString() });
+          } else {
+            const killedTarget = await resolveMelee(unit, liveTarget, gs, evs, dmnReason);
+            unit.rounds_without_offense = 0;
+            if (killedTarget && gs.advance_rules?.overrun) {
+              const dx = (Math.random() - 0.5) * 6;
+              const dy = (Math.random() - 0.5) * 6;
+              unit.x = Math.max(2, Math.min(70, unit.x + dx));
+              unit.y = Math.max(2, Math.min(46, unit.y + dy));
+              evs.push({ round, type: 'ability', message: `${unit.name} Overrun — moved 3" after kill`, timestamp: new Date().toLocaleTimeString() });
+              logger?.logAbility({ round, unit, ability: 'Overrun', details: { dx: dx.toFixed(1), dy: dy.toFixed(1) } });
+            }
+          }
         }
-        } // end liveTarget guard
-        } // end charger alive guard
-        } else {
+      } else {
         // No target in range — fall back to rush toward nearest enemy
         const nearest = dmn.findNearestEnemy(unit, enemies);
         if (nearest) {
