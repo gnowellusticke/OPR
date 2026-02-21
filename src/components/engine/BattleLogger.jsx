@@ -31,11 +31,13 @@ export class BattleLogger {
   }
 
   logDeploy({ unit, zone, deploymentType, reserveRule, dmnReason, specialRulesApplied }) {
-    // Bug 4 fix: Include unit profile for verification
+    // Bug 3 & 4 fix: Include full unit profile with unit-level special rules for verification
+    const unitSpecialRules = unit.special_rules || [];
     const unitProfile = {
       quality: unit.quality || 4,
       defense: unit.defense || 5,
-      tough: unit.special_rules?.match(/Tough\((\d+)\)/)?.[1] || null,
+      special_rules: unitSpecialRules,
+      tough: unitSpecialRules.match(/Tough\((\d+)\)/)?.[1] || null,
       models: unit.model_count || 1,
       weapons: (unit.weapons || []).map(w => ({
         name: w.name,
