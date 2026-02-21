@@ -217,6 +217,15 @@ export default function Battle() {
     });
   };
 
+  // Bug 3: resolve best melee weapon name from list, fallback to "Fists"
+  const resolveMeleeWeaponName = (unit) => {
+    const melee = unit.weapons?.filter(w => w.range <= 2) || [];
+    if (melee.length === 0) return 'Fists';
+    // Pick highest AP then highest attacks
+    const best = melee.sort((a, b) => (b.ap || 0) - (a.ap || 0) || (b.attacks || 1) - (a.attacks || 1))[0];
+    return best.name || 'Fists';
+  };
+
   const deployArmies = (armyA, armyB) => {
     let idCounter = 0;
 
@@ -235,6 +244,8 @@ export default function Battle() {
           fatigued: false,
           just_charged: false,
           rounds_without_offense: 0,
+          // Bug 3: store resolved melee weapon name at deploy time
+          melee_weapon_name: resolveMeleeWeaponName(unit),
         };
       });
 
@@ -446,115 +457,101 @@ export default function Battle() {
     rules.updateObjectives(gameState);
   };
 
-  // Returns true if any shot was fired
+  // Bug 6: fire ALL ranged weapons in a single activation, one shoot event per weapon
   const attemptShooting = async (unit, newEvents, dmnReason) => {
     const round = gameState.current_round;
     let shotFired = false;
-    
-    if (unit.weapons) {
-      for (const weapon of unit.weapons) {
-        if (weapon.range > 2) {
-          // Re-fetch living enemies per weapon so destroyed units are excluded
-          const liveEnemies = gameState.units.filter(u =>
-            u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed'
-          );
-          const target = dmn.selectTarget(unit, liveEnemies);
-          if (!target) continue;
 
-          const dist = rules.calculateDistance(unit, target);
-          if (dist <= weapon.range) {
-            const result = rules.resolveShooting(unit, target, weapon, gameState.terrain, gameState);
-            const woundsDealt = result.wounds;
-            target.current_models = Math.max(0, target.current_models - woundsDealt);
-            // Bug 5: mark destroyed immediately
-            if (target.current_models <= 0) target.status = 'destroyed';
-            shotFired = true;
-            unit.rounds_without_offense = 0;
+    const rangedWeapons = unit.weapons?.filter(w => w.range > 2) || [];
+    if (rangedWeapons.length === 0) return false;
 
-            // Bug 1 (shoot log): correct attacks count for Blast weapons
-            const blastMatch = weapon.special_rules?.match(/Blast\((\d+)\)/);
-            const blastCount = blastMatch ? parseInt(blastMatch[1]) : 0;
-            const loggedAttacks = blastCount > 0 ? blastCount : (weapon.attacks || 1);
+    for (const weapon of rangedWeapons) {
+      // Re-fetch living enemies per weapon so mid-activation kills are respected
+      const liveEnemies = gameState.units.filter(u =>
+        u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed'
+      );
+      if (liveEnemies.length === 0) break;
 
-            // Shoot-specific DMN reason
-            const scoredEnemies = liveEnemies.map(e => ({ enemy: e, score: dmn.scoreTarget(unit, e) }));
-            scoredEnemies.sort((a, b) => b.score - a.score);
-            const topScore = scoredEnemies[0]?.score.toFixed(2);
-            const shootDmnReason = target.current_models <= 0
-              ? `Eliminated weakest target (${topScore})`
-              : target.current_models <= target.total_models * 0.5
-              ? `Weakest target available (${topScore})`
-              : `Highest threat score in range (${topScore})`;
+      const target = dmn.selectTarget(unit, liveEnemies);
+      if (!target) continue;
 
-            setCurrentCombat({
-              type: 'shooting',
-              attacker: unit,
-              defender: target,
-              weapon: weapon.name,
-              hit_rolls: result.hit_rolls,
-              hits: result.hits,
-              defense_rolls: result.defense_rolls,
-              saves: result.saves,
-              result: `${result.hits} hits, ${result.saves} saves`
-            });
-            
-            newEvents.push({
-              round,
-              type: 'combat',
-              message: `${unit.name} shot at ${target.name} with ${weapon.name}: ${result.hits} hits, ${result.saves} saves, ${woundsDealt} wounds`,
-              timestamp: new Date().toLocaleTimeString()
-            });
+      const dist = rules.calculateDistance(unit, target);
+      if (dist > weapon.range) continue;
 
-            // Bug 5: log destruction event
-            if (target.current_models <= 0) {
-              newEvents.push({
-                round,
-                type: 'combat',
-                message: `${target.name} was destroyed!`,
-                timestamp: new Date().toLocaleTimeString()
-              });
-              battleLogger?.logDestruction({ round, unit: target, cause: `shooting by ${unit.name}` });
-            }
+      const result = rules.resolveShooting(unit, target, weapon, gameState.terrain, gameState);
+      const woundsDealt = result.wounds;
+      target.current_models = Math.max(0, target.current_models - woundsDealt);
+      if (target.current_models <= 0) target.status = 'destroyed';
+      shotFired = true;
+      unit.rounds_without_offense = 0;
 
-            battleLogger?.logShoot({
-              round,
-              actingUnit: unit,
-              targetUnit: target,
-              weapon: weapon.name,
-              zone: rules.getZone(unit.x, unit.y),
-              rangeDist: dist,
-              rollResults: { attacks: loggedAttacks, hits: result.hits, saves: result.saves, wounds_dealt: woundsDealt },
-              gameState,
-              dmnReason: shootDmnReason
-            });
-            
-            // Bugs 3 & 8: only trigger morale if unit is 'normal' status (not already shaken)
-            // and only when first crossing the half-wounds threshold
-            if (
-              target.current_models > 0 &&
-              target.status === 'normal' &&
-              target.current_models <= target.total_models / 2
-            ) {
-              const moraleResult = rules.checkMorale(target, 'wounds');
-              // moraleResult.roll is always a real integer from checkMorale
-              if (!moraleResult.passed) {
-                const outcome = rules.applyMoraleResult(target, false, 'wounds');
-                newEvents.push({
-                  round,
-                  type: 'morale',
-                  message: `${target.name} morale check failed — ${outcome} (roll: ${moraleResult.roll})`,
-                  timestamp: new Date().toLocaleTimeString()
-                });
-                battleLogger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll, qualityTarget: target.quality || 4 });
-              }
-            }
-            
-            await new Promise(resolve => setTimeout(resolve, 1000));
-          }
+      // Blast(X) — attacks = X auto-hits
+      const blastMatch = weapon.special_rules?.match(/Blast\((\d+)\)/);
+      const blastCount = blastMatch ? parseInt(blastMatch[1]) : 0;
+      const loggedAttacks = blastCount > 0 ? blastCount : (weapon.attacks || 1);
+
+      const scoredEnemies = liveEnemies.map(e => ({ enemy: e, score: dmn.scoreTarget(unit, e) }));
+      scoredEnemies.sort((a, b) => b.score - a.score);
+      const topScore = scoredEnemies[0]?.score.toFixed(2);
+      const shootDmnReason = target.current_models <= 0
+        ? `Eliminated weakest target (${topScore})`
+        : target.current_models <= target.total_models * 0.5
+        ? `Weakest target available (${topScore})`
+        : `Highest threat score in range (${topScore})`;
+
+      setCurrentCombat({
+        type: 'shooting',
+        attacker: unit,
+        defender: target,
+        weapon: weapon.name,
+        hit_rolls: result.hit_rolls,
+        hits: result.hits,
+        defense_rolls: result.defense_rolls,
+        saves: result.saves,
+        result: `${result.hits} hits, ${result.saves} saves`
+      });
+
+      newEvents.push({
+        round,
+        type: 'combat',
+        message: `${unit.name} shot at ${target.name} with ${weapon.name}: ${result.hits} hits, ${result.saves} saves, ${woundsDealt} wounds`,
+        timestamp: new Date().toLocaleTimeString()
+      });
+
+      if (target.current_models <= 0) {
+        newEvents.push({ round, type: 'combat', message: `${target.name} was destroyed!`, timestamp: new Date().toLocaleTimeString() });
+        battleLogger?.logDestruction({ round, unit: target, cause: `shooting by ${unit.name}` });
+      }
+
+      battleLogger?.logShoot({
+        round,
+        actingUnit: unit,
+        targetUnit: target,
+        weapon: weapon.name,
+        zone: rules.getZone(unit.x, unit.y),
+        rangeDist: dist,
+        rollResults: { attacks: loggedAttacks, hits: result.hits, saves: result.saves, wounds_dealt: woundsDealt },
+        gameState,
+        dmnReason: shootDmnReason
+      });
+
+      // Only trigger morale if unit is still alive and normal (Bugs 3 & 8)
+      if (target.current_models > 0 && target.status === 'normal' && target.current_models <= target.total_models / 2) {
+        const moraleResult = rules.checkMorale(target, 'wounds');
+        if (!moraleResult.passed) {
+          const outcome = rules.applyMoraleResult(target, false, 'wounds');
+          newEvents.push({
+            round, type: 'morale',
+            message: `${target.name} morale check failed — ${outcome} (roll: ${moraleResult.roll})`,
+            timestamp: new Date().toLocaleTimeString()
+          });
+          battleLogger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll, qualityTarget: target.quality || 4 });
         }
       }
+
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
-    
+
     setCurrentCombat(null);
     return shotFired;
   };
@@ -595,7 +592,7 @@ export default function Battle() {
       round,
       actingUnit: attacker,
       targetUnit: defender,
-      weaponName: attackerMeleeWeapon?.name || 'CCW',
+      weaponName: attackerMeleeWeapon?.name || attacker.melee_weapon_name || 'Fists',
       rollResults: {
         attacker_attacks: attackerMeleeWeapon?.attacks || 1,
         attacker_hits: aRes?.hits ?? 0,
@@ -661,20 +658,24 @@ export default function Battle() {
       if (u.current_models <= 0) u.status = 'destroyed';
     });
 
-    // Bug 2 & 8: Regeneration — single roll per unit per round (not one per wound missing)
+    // Bug 7 (Prompt 6): check synonyms for wound-recovery rules (Regeneration, Self-Repair, Repair)
+    const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
+    const getRegenRuleName = (unit) => REGEN_RULES.find(r => unit.special_rules?.includes(r));
+
     const regenEvents = [];
     newState.units.forEach(u => {
-      if (u.current_models > 0 && u.special_rules?.includes('Regeneration') && u.current_models < u.total_models) {
+      const regenRule = getRegenRuleName(u);
+      if (u.current_models > 0 && regenRule && u.current_models < u.total_models) {
         const { recovered, roll } = rules.applyRegeneration(u);
         regenEvents.push({
           round: gameState.current_round,
           type: 'regen',
-          message: `${u.name} Regeneration roll: ${roll} — ${recovered ? 'recovered 1 wound' : 'no recovery'}`,
+          message: `${u.name} ${regenRule} roll: ${roll} — ${recovered ? 'recovered 1 wound' : 'no recovery'}`,
           timestamp: new Date().toLocaleTimeString()
         });
-        battleLogger?.logRegeneration({ round: gameState.current_round, unit: u, recovered, roll });
+        battleLogger?.logRegeneration({ round: gameState.current_round, unit: u, recovered, roll, ruleName: regenRule });
       }
-      // Bug 6: reset offense counter at round boundary
+      // Reset offense counter at round boundary
       u.rounds_without_offense = u.rounds_without_offense || 0;
     });
 
@@ -732,7 +733,7 @@ export default function Battle() {
       successful_actions: actionTracking.agent_b
     });
     
-    // Bug 7: generate final round summary before battle_end
+    // Bug 7 (Prompt 5): generate final round summary before battle_end
     battleLogger?.logRoundSummary({
       round: 4,
       objectives: gameState.objectives,
