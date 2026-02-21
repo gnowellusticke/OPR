@@ -72,11 +72,16 @@ export default function Battle() {
     const id = params.get('id');
     if (!id) { navigate('/Home'); return; }
 
-    const battleData = await base44.entities.Battle.get(id);
-    const armyA = await base44.entities.ArmyList.get(battleData.army_a_id);
-    const armyB = await base44.entities.ArmyList.get(battleData.army_b_id);
+    try {
+      setLoadingStatus("Fetching battle data...");
+      const battleData = await base44.entities.Battle.get(id);
+      
+      setLoadingStatus("Loading armies...");
+      const armyA = await base44.entities.ArmyList.get(battleData.army_a_id);
+      const armyB = await base44.entities.ArmyList.get(battleData.army_b_id);
 
-    await dmnRef.current.loadLearningData(battleData.army_a_id);
+      setLoadingStatus("Analyzing army performance...");
+      await dmnRef.current.loadLearningData(battleData.army_a_id);
 
     const logger = new BattleLogger(battleData.id, armyA, armyB);
     loggerRef.current = logger;
