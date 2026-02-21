@@ -387,7 +387,8 @@ export default function Battle() {
     // ── DMN action selection ──────────────────────────────────────────────────
     const options = dmn.evaluateActionOptions(liveUnit, gs, liveUnit.owner);
     let selectedAction = options.find(o => o.selected)?.action || 'Hold';
-    if (!canAct && (selectedAction === 'Charge')) selectedAction = 'Advance';
+    // Bug 6 fix: shaken unit may only move (no Charge, no Hold+Shoot, no Advance+Shoot)
+    if (!canAct && (selectedAction === 'Charge' || selectedAction === 'Hold')) selectedAction = 'Advance';
 
     setCurrentDecision({
       unit: liveUnit, options, dmn_phase: 'Action Selection',
