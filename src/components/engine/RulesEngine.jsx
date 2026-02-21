@@ -305,32 +305,40 @@ export class RulesEngine {
   }
 
   resolveMeleeStrikes(attacker, defender, isStrikeBack = false, gameState = null) {
-    const results = [];
-    let totalWounds = 0;
+  const results = [];
+  let totalWounds = 0;
+  const allSpecialRules = [];
 
-    const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
+  const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
+  const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
 
-    // If no melee weapons defined, use a default attack
-    const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'CCW', range: 1, attacks: 1, ap: 0 }];
+  weaponsToUse.forEach(weapon => {
+  let modifiedWeapon = { ...weapon };
+  const weaponSpecialRules = [];
 
-    weaponsToUse.forEach(weapon => {
-      let modifiedWeapon = { ...weapon };
-      if (attacker.just_charged && attacker.special_rules?.includes('Furious')) {
-        modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
-      }
-      const result = this.resolveShooting(attacker, defender, modifiedWeapon, null, gameState);
-      // Expose hits/saves directly on each result for the logger
-      result.hits = result.hits ?? 0;
-      result.saves = result.saves ?? 0;
-      results.push(result);
-      totalWounds += result.wounds;
-    });
+  if (attacker.just_charged && attacker.special_rules?.includes('Furious')) {
+  modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
+  weaponSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack on charge' });
+  }
 
-    if (isStrikeBack || attacker.just_charged) {
-      attacker.fatigued = true;
-    }
+  const result = this.resolveShooting(attacker, defender, modifiedWeapon, null, gameState);
+  result.hits = result.hits ?? 0;
+  result.saves = result.saves ?? 0;
+  result.attacks = modifiedWeapon.attacks || 1;
 
-    return { results, total_wounds: totalWounds };
+  // Merge any special rules from this weapon's resolution
+  const combined = [...weaponSpecialRules, ...(result.specialRulesApplied || [])];
+  result.specialRulesApplied = combined;
+  allSpecialRules.push(...combined);
+  results.push(result);
+  totalWounds += result.wounds;
+  });
+
+  if (isStrikeBack || attacker.just_charged) {
+  attacker.fatigued = true;
+  }
+
+  return { results, total_wounds: totalWounds, specialRulesApplied: allSpecialRules };
   }
 
   // Morale — never called on already-shaken units (callers must guard), but defensively roll anyway
