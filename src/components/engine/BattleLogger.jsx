@@ -97,9 +97,10 @@ export class BattleLogger {
   }
 
   logShoot({ round, actingUnit, targetUnit, weapon, zone, rangeDist, rollResults, gameState, dmnReason }) {
-    const isFirstBlood = !this.firstBloodDealt && rollResults.wounds_dealt > 0;
+    const isFirstBlood = !this.firstBloodDealt && (rollResults.wounds_dealt > 0);
     if (isFirstBlood) this.firstBloodDealt = true;
 
+    // unit_destroyed flag belongs on the event that causes death, not after
     const unitDestroyed = targetUnit.current_models <= 0;
     if (unitDestroyed && !this.roundDestroyed.includes(targetUnit.name)) {
       this.roundDestroyed.push(targetUnit.name);
@@ -108,6 +109,9 @@ export class BattleLogger {
     const toughMatch = targetUnit.special_rules?.match(/Tough\((\d+)\)/);
     const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
     const isTurningPoint = unitDestroyed && (toughValue >= 6 || targetUnit.status === 'shaken');
+
+    // Build special_rules_applied audit trail
+    const specialRules = rollResults.special_rules_applied || [];
 
     this.events.push({
       round,
@@ -118,7 +122,7 @@ export class BattleLogger {
       weapon_used: weapon,
       zone: zone || 'centre',
       range_bracket: this._rangeBracket(rangeDist),
-      roll_results: rollResults,
+      roll_results: { ...rollResults, special_rules_applied: specialRules },
       unit_state_after: {
         acting_unit: this._unitState(actingUnit),
         target_unit: this._unitState(targetUnit)
