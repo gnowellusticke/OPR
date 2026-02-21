@@ -217,78 +217,86 @@ export default function Battle() {
   };
 
   // Alternating deployment phase — one unit per agent per turn, with DMN placement decisions
-  const runDeploymentPhase = (units, objectives, terrain, logger) => {
+  // Returns a Promise so we can await staggered timestamps (Bug 1 fix)
+  const runDeploymentPhase = async (units, objectives, terrain, logger) => {
   const dmn = dmnRef.current;
 
   // Coin toss
   const tossWinner = Math.random() > 0.5 ? 'agent_a' : 'agent_b';
   const tossLoser = tossWinner === 'agent_a' ? 'agent_b' : 'agent_a';
-  // Winner almost always deploys second (activates first R1) unless majority are reserve units
   const winnerReserveCount = units.filter(u => u.owner === tossWinner && u.is_in_reserve).length;
   const winnerTotal = units.filter(u => u.owner === tossWinner).length;
   const preferDeployFirst = winnerReserveCount / Math.max(winnerTotal, 1) > 0.5;
   const winnerChoice = preferDeployFirst ? 'deploy_first' : 'deploy_second';
   const deployFirst = winnerChoice === 'deploy_first' ? tossWinner : tossLoser;
   const deploySecond = deployFirst === tossWinner ? tossLoser : tossWinner;
-  const firstActivation = deploySecond; // who finishes deploying last activates first
+  const firstActivation = deploySecond;
 
+  // Bug 1 fix: coin toss fires first, then each deploy is staggered by 1.5s for narrative timestamps
   logger?.logCoinToss({
-  winner: tossWinner,
-  choice: winnerChoice,
-  reason: `${tossWinner} wins toss and chooses to ${winnerChoice === 'deploy_second' ? 'deploy second, activating first in Round 1' : 'deploy first for faster board control'}`,
-  firstActivation
+    winner: tossWinner,
+    choice: winnerChoice,
+    reason: `${tossWinner} wins toss and chooses to ${winnerChoice === 'deploy_second' ? 'deploy second, activating first in Round 1' : 'deploy first for faster board control'}`,
+    firstActivation
   });
+  await new Promise(r => setTimeout(r, 1500));
 
-  // Separate and interleave: deployFirst's units then deploySecond's, alternating
   const queueA = units.filter(u => u.owner === deployFirst);
   const queueB = units.filter(u => u.owner === deploySecond);
   const order = [];
   const maxLen = Math.max(queueA.length, queueB.length);
   for (let i = 0; i < maxLen; i++) {
-  if (i < queueA.length) order.push(queueA[i]);
-  if (i < queueB.length) order.push(queueB[i]);
+    if (i < queueA.length) order.push(queueA[i]);
+    if (i < queueB.length) order.push(queueB[i]);
   }
 
   const deployedByOwner = { agent_a: [], agent_b: [] };
+  // Bug 2b fix: track zones deployed into per owner to prevent stacking
+  const zonesUsedByOwner = { agent_a: new Set(), agent_b: new Set() };
   const summaryDeployed = { agent_a: [], agent_b: [], reserves: [] };
 
   for (const unit of order) {
-  const isAgentA = unit.owner === 'agent_a';
-  const myDeployed = deployedByOwner[unit.owner];
-  const enemyDeployed = deployedByOwner[unit.owner === 'agent_a' ? 'agent_b' : 'agent_a'];
+    const isAgentA = unit.owner === 'agent_a';
+    const myDeployed = deployedByOwner[unit.owner];
+    const enemyDeployed = deployedByOwner[unit.owner === 'agent_a' ? 'agent_b' : 'agent_a'];
+    const myUsedZones = zonesUsedByOwner[unit.owner];
 
-  if (unit.is_in_reserve) {
-  summaryDeployed.reserves.push(unit.name);
-  logger?.logDeploy({
-    unit,
-    zone: 'reserve',
-    deploymentType: 'reserve',
-    reserveRule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve',
-    dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`,
-    specialRulesApplied: []
-  });
-  } else {
-  const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain);
-  unit.x = decision.x;
-  unit.y = decision.y;
-  myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
-  (isAgentA ? summaryDeployed.agent_a : summaryDeployed.agent_b).push(unit.name);
-  logger?.logDeploy({
-    unit,
-    zone: decision.zone,
-    deploymentType: 'standard',
-    dmnReason: decision.dmnReason,
-    specialRulesApplied: decision.specialRulesApplied
-  });
-  }
+    if (unit.is_in_reserve) {
+      summaryDeployed.reserves.push(unit.name);
+      logger?.logDeploy({
+        unit,
+        zone: 'reserve',
+        deploymentType: 'reserve',
+        reserveRule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve',
+        dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`,
+        specialRulesApplied: []
+      });
+    } else {
+      // Bug 2b fix: pass already-used zones so DMN avoids stacking friendlies in same zone
+      const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain, myUsedZones);
+      unit.x = decision.x;
+      unit.y = decision.y;
+      myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
+      myUsedZones.add(decision.zone);
+      (isAgentA ? summaryDeployed.agent_a : summaryDeployed.agent_b).push(unit.name);
+      logger?.logDeploy({
+        unit,
+        zone: decision.zone,
+        deploymentType: 'standard',
+        dmnReason: decision.dmnReason,
+        specialRulesApplied: decision.specialRulesApplied
+      });
+    }
+    // Bug 1 fix: stagger each deploy event by 1.5s
+    await new Promise(r => setTimeout(r, 1500));
   }
 
   logger?.logDeploymentSummary({
-  agentADeployed: summaryDeployed.agent_a,
-  agentBDeployed: summaryDeployed.agent_b,
-  reserves: summaryDeployed.reserves,
-  firstActivation,
-  dmnReason: `${tossWinner} won coin toss and chose to ${winnerChoice}, making ${firstActivation} first to activate in Round 1`
+    agentADeployed: summaryDeployed.agent_a,
+    agentBDeployed: summaryDeployed.agent_b,
+    reserves: summaryDeployed.reserves,
+    firstActivation,
+    dmnReason: `${tossWinner} won coin toss and chose to ${winnerChoice}, making ${firstActivation} first to activate in Round 1`
   });
 
   return { firstActivation };
