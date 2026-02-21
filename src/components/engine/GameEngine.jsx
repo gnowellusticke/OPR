@@ -531,9 +531,7 @@ export class DMNEngine {
   const rangedWeapons = (unit.weapons || []).filter(w => w.range > 2);
   const hasLongRange = rangedWeapons.some(w => w.range >= 24);
   const hasIndirect = rangedWeapons.some(w => w.special_rules?.includes('Indirect'));
-  const isFireSupport = unit.special_rules?.includes('Indirect') || 
-                        /artillery|gun|cannon|mortar|support/i.test(unit.name);
-
+  
   // Bug 2 fix: classify by highest-Attack weapon to distinguish fire support from melee
   const bestMeleeAttacks = meleeWeapons.reduce((max, w) => Math.max(max, w.attacks || 1), 0);
   const bestRangedAttacks = rangedWeapons.reduce((max, w) => Math.max(max, w.attacks || 1), 0);
@@ -544,6 +542,8 @@ export class DMNEngine {
   const isHeavy = toughValue >= 6;
   const isFast = unit.special_rules?.includes('Fast');
   const isScreener = !isHeavy && !isMeleePrimary && (unit.total_models <= 3 || unit.special_rules?.includes('Scout'));
+  const isFireSupport = unit.special_rules?.includes('Indirect') || 
+                        /artillery|gun|cannon|mortar|support/i.test(unit.name);
 
   // Deployment band: agent_a deploys in y=3..16, agent_b in y=32..45
   const yMin = isAgentA ? 3 : 32;
