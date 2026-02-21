@@ -210,7 +210,7 @@ export class BattleLogger {
     if (!this.roundDestroyed.includes(unit.name)) this.roundDestroyed.push(unit.name);
   }
 
-  logMorale({ round, unit, outcome, roll, qualityTarget, dmnReason }) {
+  logMorale({ round, unit, outcome, roll, qualityTarget, dmnReason, specialRulesApplied }) {
     if (outcome === 'shaken' && !this.roundShaken.includes(unit.name)) {
       this.roundShaken.push(unit.name);
     }
@@ -223,7 +223,12 @@ export class BattleLogger {
       weapon_used: null,
       zone: null,
       range_bracket: null,
-      roll_results: { roll: roll ?? null, quality_target: qualityTarget ?? (unit.quality || 4), outcome },
+      roll_results: {
+        roll: roll ?? null,
+        quality_target: qualityTarget ?? (unit.quality || 4),
+        outcome,
+        special_rules_applied: specialRulesApplied || []
+      },
       unit_state_after: { acting_unit: this._unitState(unit) },
       dmn_reason: dmnReason || 'morale check triggered',
       flags: {
