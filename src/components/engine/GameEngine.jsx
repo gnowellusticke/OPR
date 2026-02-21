@@ -423,7 +423,7 @@ export class DMNEngine {
     let score = 0;
 
     // Prefer weakened targets we can finish off
-    const healthRatio = enemy.current_models / enemy.total_models;
+    const healthRatio = enemy.total_models > 0 ? enemy.current_models / enemy.total_models : 1;
     score += (1 - healthRatio) * 0.5;
 
     // Big bonus for nearly destroyed units (finish them off!)
@@ -496,20 +496,22 @@ export class DMNEngine {
     if (!enemies || enemies.length === 0) return null;
     if (enemies.length === 1) return enemies[0];
     return enemies.reduce((nearest, enemy) => {
+      if (!nearest || !nearest.x || !nearest.y || !enemy.x || !enemy.y) return enemy;
       const dist = this.getDistance(unit, enemy);
       const nearestDist = this.getDistance(unit, nearest);
       return dist < nearestDist ? enemy : nearest;
-    });
+    }, enemies[0]);
   }
 
   findNearestObjective(unit, objectives) {
     if (!objectives || objectives.length === 0) return null;
     if (objectives.length === 1) return objectives[0];
     return objectives.reduce((nearest, obj) => {
+      if (!nearest || !nearest.x || !nearest.y || !obj.x || !obj.y) return obj;
       const dist = this.getDistance(unit, obj);
       const nearestDist = this.getDistance(unit, nearest);
       return dist < nearestDist ? obj : nearest;
-    });
+    }, objectives[0]);
   }
 
   // ─── DEPLOYMENT DMN ──────────────────────────────────────────────────────
@@ -569,8 +571,9 @@ export class DMNEngine {
   if (objectives?.length > 0) {
     const nearestObj = objectives.reduce((n, o) => {
       const d = Math.hypot(cx - o.x, cy - o.y);
-      return d < Math.hypot(cx - n.x, cy - n.y) ? o : n;
-    });
+      const nd = Math.hypot(cx - n.x, cy - n.y);
+      return d < nd ? o : n;
+    }, objectives[0]);
     const objDist = Math.hypot(cx - nearestObj.x, cy - nearestObj.y);
     if (isFast) score += Math.max(0, 40 - objDist) * 0.8;
     else if (!isMeleePrimary && !isHeavy) score += Math.max(0, 30 - objDist) * 0.5;
@@ -580,8 +583,9 @@ export class DMNEngine {
   if (isMeleePrimary && deployedEnemies.length > 0) {
     const nearestEnemy = deployedEnemies.reduce((n, e) => {
       const d = Math.hypot(cx - e.x, cy - e.y);
-      return d < Math.hypot(cx - n.x, cy - n.y) ? e : n;
-    });
+      const nd = Math.hypot(cx - n.x, cy - n.y);
+      return d < nd ? e : n;
+    }, deployedEnemies[0]);
     const enemyDist = Math.hypot(cx - nearestEnemy.x, cy - nearestEnemy.y);
     score += Math.max(0, 60 - enemyDist) * 0.6;
   }
@@ -613,8 +617,9 @@ export class DMNEngine {
   if (isScreener && deployedFriendlies.length > 0) {
     const nearestFriendly = deployedFriendlies.reduce((n, f) => {
       const d = Math.hypot(cx - f.x, cy - f.y);
-      return d < Math.hypot(cx - n.x, cy - n.y) ? f : n;
-    });
+      const nd = Math.hypot(cx - n.x, cy - n.y);
+      return d < nd ? f : n;
+    }, deployedFriendlies[0]);
     const friendlyDist = Math.hypot(cx - nearestFriendly.x, cy - nearestFriendly.y);
     score += Math.max(0, 20 - friendlyDist) * 0.4;
   }
@@ -688,13 +693,15 @@ export class DMNEngine {
       u.current_models > 0 &&
       !u.embarked_in
     );
-    
+
     if (transports.length === 0) return null;
-    
+
     return transports.reduce((nearest, transport) => {
+      if (!nearest) return transport;
       const dist = this.getDistance(unit, transport);
-      return !nearest || dist < this.getDistance(unit, nearest) ? transport : nearest;
-    });
+      const nearestDist = this.getDistance(unit, nearest);
+      return dist < nearestDist ? transport : nearest;
+    }, transports[0]);
   }
 }
 
