@@ -103,6 +103,26 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
           minWidth: (BATTLEFIELD_WIDTH / GRID_SIZE) * CELL_SIZE
         }}
       >
+        {/* Deployment Zone Overlays — shown only during deployment */}
+        {gameState?.deployment_in_progress && <>
+          <div className="absolute pointer-events-none" style={{
+            left: 0, top: 0, width: '100%',
+            height: (16 / GRID_SIZE) * CELL_SIZE,
+            backgroundColor: 'rgba(59,130,246,0.12)',
+            borderBottom: '2px dashed rgba(59,130,246,0.5)'
+          }}>
+            <span className="absolute bottom-1 left-2 text-blue-400 text-xs font-bold opacity-80">Agent A Deploy Zone</span>
+          </div>
+          <div className="absolute pointer-events-none" style={{
+            left: 0, bottom: 0, width: '100%',
+            height: (16 / GRID_SIZE) * CELL_SIZE,
+            backgroundColor: 'rgba(239,68,68,0.12)',
+            borderTop: '2px dashed rgba(239,68,68,0.5)'
+          }}>
+            <span className="absolute top-1 left-2 text-red-400 text-xs font-bold opacity-80">Agent B Deploy Zone</span>
+          </div>
+        </>}
+
         {/* Grid overlay */}
         <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%' }}>
           <defs>
