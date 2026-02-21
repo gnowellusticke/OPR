@@ -319,16 +319,30 @@ export class RulesEngine {
   ...(defenderResults?.specialRulesApplied || [])
   ];
 
+  // Bug 5 fix: populate saves_forced fields
+  const attackerSavesForced = aRes.hits ?? 0;
+  const defenderSavesForced = dRes ? (dRes.hits ?? 0) : 0;
+
+  // Bug 4 fix: deduplicate special_rules_applied for melee events too
+  const seenMelee = new Set();
+  const dedupedMeleeRules = specialRulesApplied.filter(r => {
+    if (seenMelee.has(r.rule)) return false;
+    seenMelee.add(r.rule);
+    return true;
+  });
+
   const rollResults = {
   attacker_attacks: aRes.attacks || 1,
   attacker_hits: aRes.hits ?? 0,
+  attacker_saves_forced: attackerSavesForced,
   defender_saves_made: aRes.saves ?? 0,
-  wounds_dealt: attackerWounds,
+  wounds_dealt: Math.min(attackerWounds, Math.max(0, attackerSavesForced - (aRes.saves ?? 0))),
   defender_attacks: dRes ? (dRes.attacks || 1) : 0,
   defender_hits: dRes ? (dRes.hits ?? 0) : 0,
+  defender_saves_forced: defenderSavesForced,
   attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
-  wounds_taken: defenderWounds,
-  special_rules_applied: specialRulesApplied
+  wounds_taken: dRes ? Math.min(defenderWounds, Math.max(0, defenderSavesForced - (dRes.saves ?? 0))) : 0,
+  special_rules_applied: dedupedMeleeRules
   };
 
   return {
