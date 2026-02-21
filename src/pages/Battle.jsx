@@ -99,7 +99,7 @@ export default function Battle() {
     });
 
     // Run alternating deployment phase (mutates unit positions, logs coin toss + deploy events)
-    const { firstActivation } = await runDeploymentPhase(units, objectives, terrain, logger);
+    const { firstActivation } = await runDeploymentPhase(units, objectives, terrain, logger, advRules);
 
     const initialState = {
     units,
