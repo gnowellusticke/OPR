@@ -406,77 +406,87 @@ export class RulesEngine {
 
   // Melee
   resolveMelee(attacker, defender, gameState) {
-    const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
-    let defenderResults = null;
-    if (defender.status !== 'shaken' && defender.current_models > 0) {
-    defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
-    }
+     const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
+     let defenderResults = null;
+     if (defender.status !== 'shaken' && defender.current_models > 0) {
+     defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
+     }
 
-    // Bug 1 fix: wounds_dealt LOCKED from dice, NEVER modified by Fear or other modifiers
-    let attackerRealWounds = attackerResults.total_wounds;
-    let defenderRealWounds = defenderResults?.total_wounds || 0;
+     // Bug 1+2 fix: LOCK wounds from dice FIRST, before any other calculations
+     // wounds_dealt = (hits - saves) × damage_x + bane_procs
+     // wounds_taken = (defender_hits - attacker_saves) × defender_damage_x + defender_bane_procs
+     let attackerRealWounds = attackerResults.total_wounds;
+     let defenderRealWounds = defenderResults?.total_wounds || 0;
 
-    // Apply Fear(X) bonuses ONLY to the melee resolution comparison, not to actual wounds
-    const attackerFearBonus = attackerResults.results?.[0]?.fearBonus || 0;
-    const defenderFearBonus = defenderResults?.results?.[0]?.fearBonus || 0;
+     // Bug 3 fix: Apply Fear(X) ONLY to the comparison, AFTER wounds are locked
+     const attackerFearBonus = attackerResults.results?.[0]?.fearBonus || 0;
+     const defenderFearBonus = defenderResults?.results?.[0]?.fearBonus || 0;
 
-    // For winner determination: use Fear-adjusted wounds (for comparison only)
-    const attackerWoundsForComparison = attackerRealWounds + attackerFearBonus;
-    const defenderWoundsForComparison = defenderRealWounds + defenderFearBonus;
+     // For winner determination: use Fear-adjusted wounds (for comparison only)
+     const attackerWoundsForComparison = attackerRealWounds + attackerFearBonus;
+     const defenderWoundsForComparison = defenderRealWounds + defenderFearBonus;
 
-    const winner = attackerWoundsForComparison > defenderWoundsForComparison ? attacker :
-                   defenderWoundsForComparison > attackerWoundsForComparison ? defender : null;
+     // Assertion: wounds_dealt must always be <= attacker_wounds_for_comparison
+     if (attackerRealWounds > attackerWoundsForComparison) {
+       console.error(`[MELEE BUG] attackerRealWounds(${attackerRealWounds}) > comp(${attackerWoundsForComparison})`);
+     }
+     if (defenderRealWounds > defenderWoundsForComparison) {
+       console.error(`[MELEE BUG] defenderRealWounds(${defenderRealWounds}) > comp(${defenderWoundsForComparison})`);
+     }
 
-    // Build full bidirectional roll_results for the logger
-    const aRes = attackerResults.results?.[0] || {};
-    const dRes = defenderResults?.results?.[0] || null;
-    const specialRulesApplied = [
-    ...(attackerResults.specialRulesApplied || []),
-    ...(defenderResults?.specialRulesApplied || [])
-    ];
+     const winner = attackerWoundsForComparison > defenderWoundsForComparison ? attacker :
+                    defenderWoundsForComparison > attackerWoundsForComparison ? defender : null;
 
-    // Bug 4 fix: Global SRA deduplication — max one entry per rule name
-    const seenRules = new Set();
-    const deduplicatedRules = specialRulesApplied.filter(rule => {
-      if (seenRules.has(rule.rule)) return false;
-      seenRules.add(rule.rule);
-      return true;
-    });
+     // Build full bidirectional roll_results for the logger
+     const aRes = attackerResults.results?.[0] || {};
+     const dRes = defenderResults?.results?.[0] || null;
+     const specialRulesApplied = [
+     ...(attackerResults.specialRulesApplied || []),
+     ...(defenderResults?.specialRulesApplied || [])
+     ];
 
-    // Bug 1 fix: attacker_saves_forced tracks non-Bane hits only (Bane hits don't roll saves)
-    const attackerSavesForced = aRes.hits ?? 0;
-    const defenderSavesForced = dRes ? (dRes.hits ?? 0) : 0;
+     // Bug 4 fix: Global SRA deduplication — max one entry per rule name
+     const seenRules = new Set();
+     const deduplicatedRules = specialRulesApplied.filter(rule => {
+       if (seenRules.has(rule.rule)) return false;
+       seenRules.add(rule.rule);
+       return true;
+     });
 
-    const rollResults = {
-    attacker_attacks: aRes.attacks || 1,
-    attacker_hits: aRes.hits ?? 0,
-    attacker_saves_forced: attackerSavesForced,
-    defender_saves_made: aRes.saves ?? 0,
-    wounds_dealt: attackerRealWounds,  // LOCKED from dice, no modifications after
-    defender_attacks: dRes ? (dRes.attacks || 1) : 0,
-    defender_hits: dRes ? (dRes.hits ?? 0) : 0,
-    defender_saves_forced: defenderSavesForced,
-    attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
-    wounds_taken: defenderRealWounds,  // LOCKED from dice, no modifications after
-    melee_resolution: {
-      attacker_wounds_for_comparison: attackerWoundsForComparison,
-      fear_bonus_attacker: attackerFearBonus,
-      defender_wounds_for_comparison: defenderWoundsForComparison,
-      fear_bonus_defender: defenderFearBonus,
-      winner: winner?.name || 'tie'
-    },
-    special_rules_applied: deduplicatedRules
-    };
+     // Bug 1+2 fix: attacker_saves_forced and defender_saves_forced track non-Bane hits only
+     const attackerSavesForced = aRes.hits ?? 0;
+     const defenderSavesForced = dRes ? (dRes.hits ?? 0) : 0;
 
-    return {
-    attacker_results: attackerResults,
-    defender_results: defenderResults,
-    winner,
-    attacker_wounds: attackerRealWounds,
-    defender_wounds: defenderRealWounds,
-    rollResults
-    };
-  }
+     const rollResults = {
+     attacker_attacks: aRes.attacks || 1,
+     attacker_hits: aRes.hits ?? 0,
+     attacker_saves_forced: attackerSavesForced,
+     defender_saves_made: aRes.saves ?? 0,
+     wounds_dealt: attackerRealWounds,  // LOCKED from dice, no modifications after (Bug 1+2)
+     defender_attacks: dRes ? (dRes.attacks || 1) : 0,
+     defender_hits: dRes ? (dRes.hits ?? 0) : 0,
+     defender_saves_forced: defenderSavesForced,
+     attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
+     wounds_taken: defenderRealWounds,  // LOCKED from dice, no modifications after (Bug 2)
+     melee_resolution: {
+       attacker_wounds_for_comparison: attackerWoundsForComparison,
+       fear_bonus_attacker: attackerFearBonus,
+       defender_wounds_for_comparison: defenderWoundsForComparison,
+       fear_bonus_defender: defenderFearBonus,
+       winner: winner?.name || 'tie'
+     },
+     special_rules_applied: deduplicatedRules
+     };
+
+     return {
+     attacker_results: attackerResults,
+     defender_results: defenderResults,
+     winner,
+     attacker_wounds: attackerRealWounds,
+     defender_wounds: defenderRealWounds,
+     rollResults
+     };
+   }
 
   resolveMeleeStrikes(attacker, defender, isStrikeBack = false, gameState = null) {
       const results = [];
