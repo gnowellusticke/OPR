@@ -408,11 +408,23 @@ export default function Battle() {
     const logger = loggerRef.current;
     let shotFired = false;
 
-    // Use the canonical ordered list stored at deploy; fall back to filtering weapons live
-    // if unit somehow lacks the field (e.g. loaded from DB before this deploy change).
-    const rangedWeapons = unit.ranged_weapons?.length > 0
+    // Build the full expanded weapon list — each weapon entry fires once.
+    // If a weapon has a count (from "3x Rifle" style entries), expand it into
+    // that many individual entries so each fires independently.
+    const expandWeapons = (list) => {
+      const expanded = [];
+      for (const w of list) {
+        const copies = w.count || 1;
+        for (let c = 0; c < copies; c++) expanded.push(w);
+      }
+      return expanded;
+    };
+
+    const baseWeapons = unit.ranged_weapons?.length > 0
       ? unit.ranged_weapons
       : (unit.weapons || []).filter(w => w.range > 2);
+
+    const rangedWeapons = expandWeapons(baseWeapons);
 
     if (rangedWeapons.length === 0) return false;
 
