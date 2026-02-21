@@ -592,16 +592,17 @@ export default function Battle() {
       const totalAttacks = baseAttacks * currentModelCount;
 
       let result;
+      let loggedAttacks;
       if (isBlast) {
         const blastWeapon = { ...normWeapon, attacks: blastCount };
         result = rules.resolveShooting(unit, target, blastWeapon, gs.terrain, gs);
-        result = { ...result, hits: blastCount };
+        result = { ...result, hits: blastCount, blast: true };
+        loggedAttacks = blastCount;
       } else {
         const shootWeapon = { ...normWeapon, attacks: totalAttacks };
         result = rules.resolveShooting(unit, target, shootWeapon, gs.terrain, gs);
+        loggedAttacks = totalAttacks;
       }
-
-      const loggedAttacks = isBlast ? blastCount : totalAttacks;
       const woundsDealt = result.wounds;
       const targetWasPreviouslyAlive = target.current_models > 0;
       target.current_models = Math.max(0, target.current_models - woundsDealt);
@@ -617,6 +618,7 @@ export default function Battle() {
       });
 
       const weaponLabel = isBlast ? `${weapon.name} [Blast(${blastCount})]` : weapon.name;
+      const blastFlagValue = result.blast || false;
       evs.push({
         round, type: 'combat',
         message: `${unit.name} fires ${weaponLabel} at ${target.name}: ${result.hits} hits, ${result.saves} saves, ${woundsDealt} wounds`,
@@ -647,7 +649,7 @@ export default function Battle() {
           hits: result.hits,
           saves: result.saves,
           wounds_dealt: woundsDealt,
-          blast: isBlast,
+          blast: blastFlagValue,
           special_rules_applied: deduplicatedRules
         },
         gameState: gs,
