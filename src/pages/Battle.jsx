@@ -390,14 +390,19 @@ export default function Battle() {
     const otherRemaining = remaining.filter(u => u.owner !== gs.active_agent);
 
     let unit;
+    const dmn = dmnRef.current;
+    const strategicState = dmn.analyzeStrategicPosition(gs, gs.active_agent);
+
     if (agentRemaining.length > 0) {
-      unit = agentRemaining[0];
+      // Use intelligent activation priority instead of first unit
+      unit = dmn.selectUnitToActivate(agentRemaining, gs, gs.active_agent, strategicState);
     } else {
       // Current agent exhausted — flip and take from other
       const flipped = gs.active_agent === 'agent_a' ? 'agent_b' : 'agent_a';
       const flippedRemaining = otherRemaining.filter(u => u.owner === flipped);
       if (flippedRemaining.length === 0) { await endRound(gs); return; }
-      unit = flippedRemaining[0];
+      const flippedStrategicState = dmn.analyzeStrategicPosition(gs, flipped);
+      unit = dmn.selectUnitToActivate(flippedRemaining, gs, flipped, flippedStrategicState);
     }
 
     await activateUnit(unit, gs);
