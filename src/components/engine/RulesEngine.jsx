@@ -266,7 +266,10 @@ export class RulesEngine {
   if (autoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${autoWounds} extra hits from natural 6s, bypassing saves` });
   }
 
-  let wounds = hitCount - saves;
+  // Bug 5 fix: wounds cannot exceed hitCount unless a special rule bypasses saves
+  let wounds = Math.max(0, hitCount - saves);
+  // Clamp: wounds can never exceed hits (no rule in base OPR grants this)
+  wounds = Math.min(wounds, hitCount);
 
   return { rolls, saves, wounds, specialRulesApplied };
   }
