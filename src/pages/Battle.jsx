@@ -553,21 +553,24 @@ export default function Battle() {
       if (dist > weapon.range) continue;
 
       // ── Blast(X): X automatic hits, no quality roll ────────────────────────
-      const blastMatch = weapon.special_rules?.match(/Blast\((\d+)\)/);
+      // Normalise special_rules to a string regardless of whether it came in as array or string
+      const weaponSpecialStr = Array.isArray(weapon.special_rules)
+        ? weapon.special_rules.join(' ')
+        : (weapon.special_rules || '');
+      const blastMatch = weaponSpecialStr.match(/Blast\((\d+)\)/);
       const isBlast = !!blastMatch;
       const blastCount = isBlast ? parseInt(blastMatch[1]) : 0;
 
+      // Ensure the weapon object always has special_rules as a string for RulesEngine
+      const normWeapon = { ...weapon, special_rules: weaponSpecialStr };
+
       let result;
       if (isBlast) {
-        // Override weapon attacks to blastCount and resolve — RulesEngine.rollToHit
-        // already handles Blast by returning blastCount auto-hits when it detects the rule,
-        // but we also force attacks = blastCount here for clarity in the log.
-        const blastWeapon = { ...weapon, attacks: blastCount };
+        const blastWeapon = { ...normWeapon, attacks: blastCount };
         result = rules.resolveShooting(unit, target, blastWeapon, gs.terrain, gs);
-        // Ensure logged values reflect X attacks / X hits regardless of RulesEngine internals
         result = { ...result, hits: blastCount };
       } else {
-        result = rules.resolveShooting(unit, target, weapon, gs.terrain, gs);
+        result = rules.resolveShooting(unit, target, normWeapon, gs.terrain, gs);
       }
 
       const loggedAttacks = isBlast ? blastCount : (weapon.attacks || 1);
