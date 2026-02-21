@@ -194,10 +194,8 @@ export default function Battle() {
       // Scouting Deployment: scouts redeploy to mid-table (12"+ from deployment zones)
       const scoutX = isScout ? Math.random() * 40 + 16 : baseX;
       const scoutY = isScout ? Math.random() * 12 + 20 : baseY;
-      // Expand multiplied weapons (e.g. "3x Rifle" stored as {count:3,...}) into
-      // individual entries so each copy fires as a separate shoot event.
-      const expandWeapons = (list) => list.flatMap(w => Array(w.count || 1).fill(null).map(() => ({ ...w })));
-      const ranged_weapons = expandWeapons((unit.weapons || []).filter(w => w.range > 2));
+      // ranged_weapons: one entry per weapon copy (parser already expands multiplied weapons)
+      const ranged_weapons = (unit.weapons || []).filter(w => w.range > 2);
       return {
         ...unit,
         id: `${owner === 'agent_a' ? 'a' : 'b'}_${id++}`,
