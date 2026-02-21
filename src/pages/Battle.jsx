@@ -416,15 +416,7 @@ export default function Battle() {
 
     if (rangedWeapons.length === 0) return false;
 
-    // Track weapon names fired this activation to guard against duplicates
-    const firedNames = new Set();
-
     for (const weapon of rangedWeapons) {
-      // Duplicate guard — should never trigger with a clean ranged_weapons list,
-      // but protects against malformed army data.
-      if (firedNames.has(weapon.name)) continue;
-      firedNames.add(weapon.name);
-
       // Re-query live enemies before each weapon so mid-activation kills are respected
       const liveEnemies = gs.units.filter(u =>
         u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed'
