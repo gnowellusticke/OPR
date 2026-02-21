@@ -347,95 +347,36 @@ export class DMNEngine {
     return score;
   }
 
-  selectUnitToActivate(remainingUnits, gameState, owner, strategicState) {
-    // Score units by priority based on archetype and game state
-    const scoredUnits = remainingUnits.map(unit => ({
-      unit,
-      score: this.scoreUnitActivationPriority(unit, gameState, owner, strategicState)
-    }));
-
-    scoredUnits.sort((a, b) => b.score - a.score);
-    return scoredUnits[0]?.unit || remainingUnits[0];
-  }
-
-  scoreUnitActivationPriority(unit, gameState, owner, strategicState) {
-    let score = 0;
-
-    // Objective control: fast units should activate early to cap objectives
-    const isFast = unit.special_rules?.includes('Fast');
-    if (isFast && gameState.objectives?.length > 0) {
-      const nearestObj = this.findNearestObjective(unit, gameState.objectives);
-      if (nearestObj && this.getDistance(unit, nearestObj) <= 24) {
-        score += 1.0;
-      }
-    }
-
-    // Melee units: activate early to charge before enemy responds
-    const isMeleePrimary = this.isMeleePrimary(unit);
-    const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
-    if (isMeleePrimary && enemies.length > 0) {
-      const nearestEnemy = this.findNearestEnemy(unit, enemies);
-      if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= this.maxChargeDistance(unit)) {
-        score += 0.8;
-      }
-    }
-
-    // Fire support units: activate later, after positioning
-    const isFireSupport = unit.special_rules?.includes('Indirect') || 
-                          /artillery|gun|cannon|mortar|support/i.test(unit.name);
-    if (isFireSupport) {
-      score -= 0.3;
-    }
-
-    // Damaged units: prioritize rescue/healing if possible
-    const healthRatio = unit.current_models / unit.total_models;
-    if (healthRatio < 0.3 && unit.status === 'normal') {
-      score += 0.5;
-    }
-
-    // Aggressive when winning: activate aggressive units first
-    if (strategicState.isWinning && isMeleePrimary) {
-      score += 0.4;
-    }
-
-    // Defensive when losing: activate ranged/support units first for coverage
-    if (strategicState.isLosing && isFireSupport) {
-      score += 0.5;
-    }
-
-    return score;
-  }
-
-  selectTarget(unit, enemies, gameState, strategicState) {
+  selectTarget(unit, enemies) {
     if (!enemies || enemies.length === 0) return null;
-
+    
     // Score each enemy
     const scoredEnemies = enemies.map(enemy => ({
       enemy,
-      score: this.scoreTarget(unit, enemy, gameState, strategicState)
+      score: this.scoreTarget(unit, enemy)
     }));
-
+    
     scoredEnemies.sort((a, b) => b.score - a.score);
     return scoredEnemies[0].enemy;
   }
 
-  scoreTarget(unit, enemy, gameState, strategicState) {
+  scoreTarget(unit, enemy) {
     let score = 0;
-
+    
     // Prefer weakened targets we can finish off
-    const healthRatio = enemy.total_models > 0 ? enemy.current_models / enemy.total_models : 1;
+    const healthRatio = enemy.current_models / enemy.total_models;
     score += (1 - healthRatio) * 0.5;
-
+    
     // Big bonus for nearly destroyed units (finish them off!)
     if (healthRatio < 0.3) score += 0.4;
-
+    
     // Prefer closer targets
     const distance = this.getDistance(unit, enemy);
     score += Math.max(0, (30 - distance) / 30) * 0.3;
-
+    
     // Prefer targets we can damage
     if (enemy.defense <= 3) score += 0.3;
-
+    
     // Prioritize threats - units with high quality/firepower
     if (enemy.quality <= 3) score += 0.2;
     if (enemy.weapons?.some(w => w.range > 18 && w.attacks >= 3)) score += 0.2;
@@ -451,38 +392,7 @@ export class DMNEngine {
     if (hasBlast && enemy.current_models >= 5) {
       score += 0.4;
     }
-
-    // Archetype-aware targeting
-    const isMeleePrimary = this.isMeleePrimary(unit);
-    const isFast = unit.special_rules?.includes('Fast');
-
-    // Melee units: target enemies blocking objectives
-    if (isMeleePrimary && gameState.objectives?.length > 0) {
-      const nearestObj = this.findNearestObjective(enemy, gameState.objectives);
-      if (nearestObj && this.getDistance(enemy, nearestObj) <= 6) {
-        score += 0.6;
-      }
-    }
-
-    // Fast units: prioritize already-wounded prey
-    if (isFast && healthRatio < 0.5) {
-      score += 0.4;
-    }
-
-    // Dynamic strategy: aggressive when winning
-    if (strategicState?.isWinning) {
-      // Finish off weak enemies faster
-      if (healthRatio < 0.6) score += 0.3;
-    }
-
-    // Dynamic strategy: defensive when losing
-    if (strategicState?.isLosing) {
-      // Prioritize high-threat enemies
-      if (enemy.quality <= 2 || enemy.weapons?.some(w => w.range > 18 && w.attacks >= 2)) {
-        score += 0.5;
-      }
-    }
-
+    
     return score;
   }
 
@@ -494,24 +404,18 @@ export class DMNEngine {
 
   findNearestEnemy(unit, enemies) {
     if (!enemies || enemies.length === 0) return null;
-    if (enemies.length === 1) return enemies[0];
     return enemies.reduce((nearest, enemy) => {
-      if (!nearest || !nearest.x || !nearest.y || !enemy.x || !enemy.y) return enemy;
       const dist = this.getDistance(unit, enemy);
-      const nearestDist = this.getDistance(unit, nearest);
-      return dist < nearestDist ? enemy : nearest;
-    }, enemies[0]);
+      return dist < this.getDistance(unit, nearest) ? enemy : nearest;
+    });
   }
 
   findNearestObjective(unit, objectives) {
     if (!objectives || objectives.length === 0) return null;
-    if (objectives.length === 1) return objectives[0];
     return objectives.reduce((nearest, obj) => {
-      if (!nearest || !nearest.x || !nearest.y || !obj.x || !obj.y) return obj;
       const dist = this.getDistance(unit, obj);
-      const nearestDist = this.getDistance(unit, nearest);
-      return dist < nearestDist ? obj : nearest;
-    }, objectives[0]);
+      return dist < this.getDistance(unit, nearest) ? obj : nearest;
+    });
   }
 
   // ─── DEPLOYMENT DMN ──────────────────────────────────────────────────────
@@ -535,7 +439,7 @@ export class DMNEngine {
   const hasIndirect = rangedWeapons.some(w => w.special_rules?.includes('Indirect'));
   const isFireSupport = unit.special_rules?.includes('Indirect') || 
                         /artillery|gun|cannon|mortar|support/i.test(unit.name);
-  
+
   // Bug 2 fix: classify by highest-Attack weapon to distinguish fire support from melee
   const bestMeleeAttacks = meleeWeapons.reduce((max, w) => Math.max(max, w.attacks || 1), 0);
   const bestRangedAttacks = rangedWeapons.reduce((max, w) => Math.max(max, w.attacks || 1), 0);
@@ -571,9 +475,8 @@ export class DMNEngine {
   if (objectives?.length > 0) {
     const nearestObj = objectives.reduce((n, o) => {
       const d = Math.hypot(cx - o.x, cy - o.y);
-      const nd = Math.hypot(cx - n.x, cy - n.y);
-      return d < nd ? o : n;
-    }, objectives[0]);
+      return d < Math.hypot(cx - n.x, cy - n.y) ? o : n;
+    });
     const objDist = Math.hypot(cx - nearestObj.x, cy - nearestObj.y);
     if (isFast) score += Math.max(0, 40 - objDist) * 0.8;
     else if (!isMeleePrimary && !isHeavy) score += Math.max(0, 30 - objDist) * 0.5;
@@ -583,9 +486,8 @@ export class DMNEngine {
   if (isMeleePrimary && deployedEnemies.length > 0) {
     const nearestEnemy = deployedEnemies.reduce((n, e) => {
       const d = Math.hypot(cx - e.x, cy - e.y);
-      const nd = Math.hypot(cx - n.x, cy - n.y);
-      return d < nd ? e : n;
-    }, deployedEnemies[0]);
+      return d < Math.hypot(cx - n.x, cy - n.y) ? e : n;
+    });
     const enemyDist = Math.hypot(cx - nearestEnemy.x, cy - nearestEnemy.y);
     score += Math.max(0, 60 - enemyDist) * 0.6;
   }
@@ -617,9 +519,8 @@ export class DMNEngine {
   if (isScreener && deployedFriendlies.length > 0) {
     const nearestFriendly = deployedFriendlies.reduce((n, f) => {
       const d = Math.hypot(cx - f.x, cy - f.y);
-      const nd = Math.hypot(cx - n.x, cy - n.y);
-      return d < nd ? f : n;
-    }, deployedFriendlies[0]);
+      return d < Math.hypot(cx - n.x, cy - n.y) ? f : n;
+    });
     const friendlyDist = Math.hypot(cx - nearestFriendly.x, cy - nearestFriendly.y);
     score += Math.max(0, 20 - friendlyDist) * 0.4;
   }
@@ -693,15 +594,13 @@ export class DMNEngine {
       u.current_models > 0 &&
       !u.embarked_in
     );
-
+    
     if (transports.length === 0) return null;
-
+    
     return transports.reduce((nearest, transport) => {
-      if (!nearest) return transport;
       const dist = this.getDistance(unit, transport);
-      const nearestDist = this.getDistance(unit, nearest);
-      return dist < nearestDist ? transport : nearest;
-    }, transports[0]);
+      return !nearest || dist < this.getDistance(unit, nearest) ? transport : nearest;
+    });
   }
 }
 

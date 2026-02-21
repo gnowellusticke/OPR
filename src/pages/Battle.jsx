@@ -390,19 +390,14 @@ export default function Battle() {
     const otherRemaining = remaining.filter(u => u.owner !== gs.active_agent);
 
     let unit;
-    const dmn = dmnRef.current;
-    const strategicState = dmn.analyzeStrategicPosition(gs, gs.active_agent);
-
     if (agentRemaining.length > 0) {
-      // Use intelligent activation priority instead of first unit
-      unit = dmn.selectUnitToActivate(agentRemaining, gs, gs.active_agent, strategicState);
+      unit = agentRemaining[0];
     } else {
       // Current agent exhausted — flip and take from other
       const flipped = gs.active_agent === 'agent_a' ? 'agent_b' : 'agent_a';
       const flippedRemaining = otherRemaining.filter(u => u.owner === flipped);
       if (flippedRemaining.length === 0) { await endRound(gs); return; }
-      const flippedStrategicState = dmn.analyzeStrategicPosition(gs, flipped);
-      unit = dmn.selectUnitToActivate(flippedRemaining, gs, flipped, flippedStrategicState);
+      unit = flippedRemaining[0];
     }
 
     await activateUnit(unit, gs);
@@ -584,7 +579,6 @@ export default function Battle() {
   const dmn = dmnRef.current;
   const rules = rulesRef.current;
   const logger = loggerRef.current;
-  const strategicState = dmn.analyzeStrategicPosition(gs, unit.owner);
   let shotFired = false;
 
   // Deduplicate weapons by name to guarantee one event per distinct weapon, not per attack
@@ -608,7 +602,7 @@ export default function Battle() {
       );
       if (liveEnemies.length === 0) break;
 
-      const target = dmn.selectTarget(unit, liveEnemies, gs, strategicState);
+      const target = dmn.selectTarget(unit, liveEnemies);
       if (!target) continue;
 
       const dist = rules.calculateDistance(unit, target);
