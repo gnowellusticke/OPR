@@ -53,6 +53,14 @@ export default function Battle() {
   }, []);
 
   useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
+
+  useEffect(() => {
     if (playing && gameState && battle?.status !== 'completed') {
       const timer = setTimeout(() => {
         processNextAction();
