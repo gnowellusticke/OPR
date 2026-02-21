@@ -180,37 +180,59 @@ export class RulesEngine {
   }
 
   rollToHit(unit, weapon, target, gameState) {
-    let quality = unit.quality || 4;
+  let quality = unit.quality || 4;
+  const specialRulesApplied = [];
 
-    // Shaken: -1 to Quality (higher number = harder to hit)
-    if (unit.status === 'shaken') quality = Math.min(6, quality + 1);
+  // Shaken: -1 to Quality (higher number = harder to hit)
+  if (unit.status === 'shaken') {
+  quality = Math.min(6, quality + 1);
+  specialRulesApplied.push({ rule: 'Shaken', value: null, effect: 'quality +1 (harder to hit)' });
+  }
 
-    // Machine-Fog on target: +1 to quality needed to hit
-    if (target?.special_rules?.includes('Machine-Fog')) quality = Math.min(6, quality + 1);
+  // Machine-Fog on target: +1 to quality needed to hit
+  if (target?.special_rules?.includes('Machine-Fog')) {
+  quality = Math.min(6, quality + 1);
+  specialRulesApplied.push({ rule: 'Machine-Fog', value: null, effect: 'quality +1 vs target' });
+  }
 
-    // Stealth on target (direct or via Stealth Aura): +1 to quality needed
-    if (target && this.hasStealth(target, gameState) && weapon.range > 2) quality = Math.min(6, quality + 1);
+  // Stealth on target (direct or via Stealth Aura): +1 to quality needed
+  if (target && this.hasStealth(target, gameState) && weapon.range > 2) {
+  quality = Math.min(6, quality + 1);
+  specialRulesApplied.push({ rule: 'Stealth', value: null, effect: 'quality +1 vs stealthed target' });
+  }
 
-    let attacks = weapon.attacks || 1;
+  let attacks = weapon.attacks || 1;
 
-    // Blast(X) — X automatic hits, no quality roll, proceeds directly to saves (Bug 1)
-    if (weapon.special_rules?.includes('Blast')) {
-      const blastMatch = weapon.special_rules.match(/Blast\((\d+)\)/);
-      const blastCount = blastMatch ? parseInt(blastMatch[1]) : 3;
-      const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
-      return { rolls: autoHitRolls, successes: blastCount };
-    }
+  // Blast(X) — X automatic hits, no quality roll
+  if (weapon.special_rules?.includes('Blast')) {
+  const blastMatch = weapon.special_rules.match(/Blast\((\d+)\)/);
+  const blastCount = blastMatch ? parseInt(blastMatch[1]) : 3;
+  const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
+  specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
+  return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied };
+  }
 
-    const rolls = this.dice.rollQualityTest(quality, attacks);
-    let successes = rolls.filter(r => r.success).length;
+  const rolls = this.dice.rollQualityTest(quality, attacks);
+  let successes = rolls.filter(r => r.success).length;
 
-    if (weapon.special_rules?.includes('Deadly')) {
-      const deadlyMatch = weapon.special_rules.match(/Deadly\((\d+)\)/);
-      const deadlyThreshold = deadlyMatch ? parseInt(deadlyMatch[1]) : 6;
-      successes += rolls.filter(r => r.value >= deadlyThreshold).length;
-    }
+  if (weapon.special_rules?.includes('Deadly')) {
+  const deadlyMatch = weapon.special_rules.match(/Deadly\((\d+)\)/);
+  const deadlyThreshold = deadlyMatch ? parseInt(deadlyMatch[1]) : 6;
+  const extra = rolls.filter(r => r.value >= deadlyThreshold).length;
+  successes += extra;
+  if (extra > 0) specialRulesApplied.push({ rule: 'Deadly', value: deadlyThreshold, effect: `${extra} extra hits on ${deadlyThreshold}+` });
+  }
 
-    return { rolls, successes };
+  // Reliable: re-roll all misses
+  if (weapon.special_rules?.includes('Reliable')) {
+  const misses = rolls.filter(r => !r.success);
+  const rerolls = this.dice.rollQualityTest(quality, misses.length);
+  const extraHits = rerolls.filter(r => r.success).length;
+  successes += extraHits;
+  if (misses.length > 0) specialRulesApplied.push({ rule: 'Reliable', value: null, effect: `re-rolled ${misses.length} misses, ${extraHits} extra hits` });
+  }
+
+  return { rolls, successes, specialRulesApplied };
   }
 
   rollDefense(unit, hitCount, weapon, terrain, hitRolls) {
