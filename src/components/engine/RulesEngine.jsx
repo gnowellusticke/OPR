@@ -340,41 +340,46 @@ export class RulesEngine {
   }
 
   resolveMeleeStrikes(attacker, defender, isStrikeBack = false, gameState = null) {
-  const results = [];
-  let totalWounds = 0;
-  const allSpecialRules = [];
+      const results = [];
+      let totalWounds = 0;
+      const allSpecialRules = [];
 
-  const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
-  const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
+      const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
+      const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
 
-  weaponsToUse.forEach(weapon => {
-  let modifiedWeapon = { ...weapon };
-  const weaponSpecialRules = [];
+      weaponsToUse.forEach(weapon => {
+      let modifiedWeapon = { ...weapon };
+      const weaponSpecialRules = [];
 
-  if (attacker.just_charged && attacker.special_rules?.includes('Furious')) {
-  modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
-  weaponSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack on charge' });
-  }
+      if (attacker.just_charged && attacker.special_rules?.includes('Furious')) {
+      modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
+      weaponSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack on charge' });
+      }
 
-  const result = this.resolveShooting(attacker, defender, modifiedWeapon, null, gameState);
-  result.hits = result.hits ?? 0;
-  result.saves = result.saves ?? 0;
-  result.attacks = modifiedWeapon.attacks || 1;
+      const result = this.resolveShooting(attacker, defender, modifiedWeapon, null, gameState);
+      result.hits = result.hits ?? 0;
+      result.saves = result.saves ?? 0;
+      result.attacks = modifiedWeapon.attacks || 1;
 
-  // Merge any special rules from this weapon's resolution
-  const combined = [...weaponSpecialRules, ...(result.specialRulesApplied || [])];
-  result.specialRulesApplied = combined;
-  allSpecialRules.push(...combined);
-  results.push(result);
-  totalWounds += result.wounds;
-  });
+      // Merge any special rules from this weapon's resolution and deduplicate by rule name
+      const combined = [...weaponSpecialRules, ...(result.specialRulesApplied || [])];
+      const seenRules = new Set();
+      result.specialRulesApplied = combined.filter(rule => {
+        if (seenRules.has(rule.rule)) return false;
+        seenRules.add(rule.rule);
+        return true;
+      });
+      allSpecialRules.push(...result.specialRulesApplied);
+      results.push(result);
+      totalWounds += result.wounds;
+      });
 
-  if (isStrikeBack || attacker.just_charged) {
-  attacker.fatigued = true;
-  }
+      if (isStrikeBack || attacker.just_charged) {
+      attacker.fatigued = true;
+      }
 
-  return { results, total_wounds: totalWounds, specialRulesApplied: allSpecialRules };
-  }
+      return { results, total_wounds: totalWounds, specialRulesApplied: allSpecialRules };
+      }
 
   // Morale — never called on already-shaken units (callers must guard), but defensively roll anyway
   checkMorale(unit, reason = 'wounds') {
