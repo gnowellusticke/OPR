@@ -407,25 +407,18 @@ export default function Battle() {
     const logger = loggerRef.current;
     let shotFired = false;
 
-    // Build the full expanded weapon list — each weapon entry fires once.
-    // If a weapon has a count (from "3x Rifle" style entries), expand it into
-    // that many individual entries so each fires independently.
-    const expandWeapons = (list) => {
-      const expanded = [];
-      for (const w of list) {
-        const copies = w.count || 1;
-        for (let c = 0; c < copies; c++) expanded.push(w);
-      }
-      return expanded;
-    };
-
-    const baseWeapons = unit.ranged_weapons?.length > 0
-      ? unit.ranged_weapons
-      : (unit.weapons || []).filter(w => w.range > 2);
-
-    const rangedWeapons = expandWeapons(baseWeapons);
+    // Collect all ranged weapons — use unit.weapons directly so every weapon fires.
+    // unit.ranged_weapons is a pre-filtered convenience copy; fall back to unit.weapons.
+    // Ensure we always work with an array (guard against any legacy single-object storage).
+    const allRanged = (unit.weapons || []).filter(w => (w.range ?? 2) > 2);
+    const rangedWeapons = allRanged.length > 0 ? allRanged : (
+      Array.isArray(unit.ranged_weapons) ? unit.ranged_weapons :
+      unit.ranged_weapons ? [unit.ranged_weapons] : []
+    );
 
     if (rangedWeapons.length === 0) return false;
+
+    console.log(`[SHOOT] ${unit.name} has ${rangedWeapons.length} ranged weapon(s):`, rangedWeapons.map(w => w.name));
 
     for (const weapon of rangedWeapons) {
       // Re-query live enemies before each weapon so mid-activation kills are respected
