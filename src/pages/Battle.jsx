@@ -276,10 +276,12 @@ export default function Battle() {
     const enemyDeployed = deployedByOwner[unit.owner === 'agent_a' ? 'agent_b' : 'agent_a'];
     const myUsedZones = zonesUsedByOwner[unit.owner];
 
-    // Bug 6 fix: Count units per zone per agent to prevent stacking more than 2
+    // Bug 7 fix: Count units per zone per agent to prevent stacking more than 2
     const zoneUnitCounts = {};
     myDeployed.forEach(u => {
-      const zone = dmn.decideDeployment(u, isAgentA, enemyDeployed, [...myDeployed], objectives, terrain, new Set()).zone;
+      const fZoneCol = u.x < 24 ? 'left' : u.x < 48 ? 'centre' : 'right';
+      const fZoneRow = isAgentA ? 'south' : 'north';
+      const zone = `${fZoneRow}-${fZoneCol}`;
       zoneUnitCounts[zone] = (zoneUnitCounts[zone] || 0) + 1;
     });
 
@@ -797,7 +799,7 @@ export default function Battle() {
     if (isCumulative) {
       newState.cumulative_score = { agent_a: prevScore.agent_a + roundA, agent_b: prevScore.agent_b + roundB };
     }
-    // Round summary always shows both per-round and running totals when cumulative is enabled
+    // Bug 1 fix: Round summary accumulates per-round scores
     const scoreToLog = isCumulative
       ? { agent_a: newState.cumulative_score.agent_a, agent_b: newState.cumulative_score.agent_b, this_round_a: roundA, this_round_b: roundB, mode: 'cumulative' }
       : { agent_a: roundA, agent_b: roundB, mode: 'per_round' };
@@ -819,11 +821,27 @@ export default function Battle() {
     const isCumulative = gs.advance_rules?.cumulativeScoring;
     const roundA = gs.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const roundB = gs.objectives.filter(o => o.controlled_by === 'agent_b').length;
-    // Final cumulative score = running total (already includes all previous rounds) + this round
-    const finalCumA = (gs.cumulative_score?.agent_a || 0) + roundA;
-    const finalCumB = (gs.cumulative_score?.agent_b || 0) + roundB;
-    const aScore = isCumulative ? finalCumA : roundA;
-    const bScore = isCumulative ? finalCumB : roundB;
+
+    // Bug 1 fix: Per-round mode sums all round scores; cumulative adds this round to running total
+    let aScore, bScore;
+    if (isCumulative) {
+      // Cumulative: running total already includes R1-R3; add R4
+      aScore = (gs.cumulative_score?.agent_a || 0) + roundA;
+      bScore = (gs.cumulative_score?.agent_b || 0) + roundB;
+    } else {
+      // Per-round: sum all round summaries from the event log
+      aScore = 0;
+      bScore = 0;
+      evRef.current.forEach(ev => {
+        if (ev.event_type === 'round_summary') {
+          aScore += ev.score?.agent_a || 0;
+          bScore += ev.score?.agent_b || 0;
+        }
+      });
+      // Add this final round's score
+      aScore += roundA;
+      bScore += roundB;
+    }
     const winner = aScore > bScore ? 'agent_a' : bScore > aScore ? 'agent_b' : 'draw';
 
     // Bake battle_config into logger — scoring_mode + full advance_rules key list
@@ -834,8 +852,8 @@ export default function Battle() {
       advance_rules: activeRuleKeys,   // top-level array of all enabled rule keys
     });
 
-    // Bug 8 fix: always include mode in final round summary score
-    logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: aScore, agent_b: bScore, mode: isCumulative ? 'cumulative' : 'per_round' } });
+    // Bug 1 fix: final_score = sum of all per-round scores or cumulative total
+    logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: isCumulative ? aScore : roundA, agent_b: isCumulative ? bScore : roundB, mode: isCumulative ? 'cumulative' : 'per_round' } });
     logger?.logBattleEnd({ winner, finalScore: { agent_a: aScore, agent_b: bScore } });
 
     const log = logger?.getFullLog(winner, { agent_a: aScore, agent_b: bScore });
