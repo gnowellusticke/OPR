@@ -136,6 +136,17 @@ export class RulesEngine {
   }
 
   getMoveDistance(unit, action, terrain) {
+    // Immobile: can only use Hold
+    if (unit.special_rules?.includes('Immobile') && action !== 'Hold') {
+      return 0;
+    }
+
+    // Aircraft: can only use Advance, add 30" bonus
+    if (unit.special_rules?.includes('Aircraft')) {
+      if (action !== 'Advance') return 0;
+      return 6 + 30; // 36" total
+    }
+
     let base = 0;
     switch (action) {
       case 'Hold': base = 0; break;
@@ -203,10 +214,27 @@ export class RulesEngine {
   specialRulesApplied.push({ rule: 'Stealth', value: null, effect: 'quality +1 vs stealthed target' });
   }
 
+  // Indirect: -1 to hit after moving
+  if (weapon.special_rules?.includes('Indirect')) {
+  quality = Math.min(6, quality + 1);
+  specialRulesApplied.push({ rule: 'Indirect', value: null, effect: 'quality +1 after moving' });
+  }
+
+  // Artillery: +1 to hit at range > 9"
+  if (weapon.special_rules?.includes('Artillery') && this.calculateDistance(unit, target) > 9) {
+  quality = Math.max(2, quality - 1);
+  specialRulesApplied.push({ rule: 'Artillery', value: null, effect: 'quality -1 at 9"+ range' });
+  }
+
+  // Reliable: attacks at Quality 2+ (override quality)
+  if (weapon.special_rules?.includes('Reliable')) {
+  quality = 2;
+  specialRulesApplied.push({ rule: 'Reliable', value: null, effect: 'attacks at Quality 2+' });
+  }
+
   let attacks = weapon.attacks || 1;
 
   // Blast(X) — X automatic hits, no quality roll
-  // Check both weapon.special_rules string AND weapon name convention
   const blastCheckStr = weapon.special_rules || '';
   const blastCheckMatch = blastCheckStr.match(/Blast\((\d+)\)/);
   if (blastCheckMatch || blastCheckStr.includes('Blast')) {
@@ -227,13 +255,18 @@ export class RulesEngine {
   if (extra > 0) specialRulesApplied.push({ rule: 'Deadly', value: deadlyThreshold, effect: `${extra} extra hits on ${deadlyThreshold}+` });
   }
 
-  // Reliable: re-roll all misses
-  if (weapon.special_rules?.includes('Reliable')) {
-  const misses = rolls.filter(r => !r.success);
-  const rerolls = this.dice.rollQualityTest(quality, misses.length);
-  const extraHits = rerolls.filter(r => r.success).length;
-  successes += extraHits;
-  if (misses.length > 0) specialRulesApplied.push({ rule: 'Reliable', value: null, effect: `re-rolled ${misses.length} misses, ${extraHits} extra hits` });
+  // Relentless: extra hit on 6 at 9"+ range
+  if (weapon.special_rules?.includes('Relentless') && this.calculateDistance(unit, target) > 9) {
+  const natureSixes = rolls.filter(r => r.value === 6 && r.success).length;
+  successes += natureSixes;
+  if (natureSixes > 0) specialRulesApplied.push({ rule: 'Relentless', value: null, effect: `${natureSixes} extra hits from natural 6s at 9"+ range` });
+  }
+
+  // Surge: extra hit on natural 6
+  if (weapon.special_rules?.includes('Surge')) {
+  const natureSixes = rolls.filter(r => r.value === 6 && r.success).length;
+  successes += natureSixes;
+  if (natureSixes > 0) specialRulesApplied.push({ rule: 'Surge', value: null, effect: `${natureSixes} extra hits from natural 6s` });
   }
 
   return { rolls, successes, specialRulesApplied };
@@ -244,6 +277,9 @@ export class RulesEngine {
   const ap = weapon.ap || 0;
   const specialRulesApplied = [];
 
+  // Bane: re-roll unmodified 6s on Defense
+  const baneRerolls = weapon.special_rules?.includes('Bane');
+
   if (terrain) {
   const coverBonus = this.getCoverBonus(unit, terrain);
   if (coverBonus > 0) {
@@ -252,13 +288,31 @@ export class RulesEngine {
   }
   }
 
-  if (ap > 0) {
-  specialRulesApplied.push({ rule: 'AP', value: ap, effect: `enemy saves reduced by ${ap}` });
+  // Unstoppable: ignores negative AP modifiers
+  let effectiveAp = ap;
+  if (weapon.special_rules?.includes('Unstoppable') && ap < 0) {
+  effectiveAp = 0;
+  specialRulesApplied.push({ rule: 'Unstoppable', value: null, effect: 'ignores negative AP modifiers' });
   }
 
-  const modifiedDefense = Math.min(6, Math.max(2, defense + ap));
+  if (effectiveAp > 0) {
+  specialRulesApplied.push({ rule: 'AP', value: effectiveAp, effect: `enemy saves reduced by ${effectiveAp}` });
+  }
+
+  const modifiedDefense = Math.min(6, Math.max(2, defense + effectiveAp));
   const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
   let saves = rolls.filter(r => r.success).length;
+
+  // Bane: re-roll unmodified 6s
+  if (baneRerolls) {
+  const natureSixes = rolls.filter(r => r.value === 6).length;
+  if (natureSixes > 0) {
+    const rerolls = this.dice.rollDefense(modifiedDefense, natureSixes);
+    const extraSaves = rerolls.filter(r => r.success).length;
+    saves = saves - natureSixes + extraSaves;
+    if (extraSaves > 0) specialRulesApplied.push({ rule: 'Bane', value: null, effect: `re-rolled ${natureSixes} natural 6s, ${extraSaves} failed` });
+  }
+  }
 
   // Rending: Unmodified 6s on hit rolls auto-wound (bypass saves)
   let autoWounds = 0;
@@ -268,9 +322,7 @@ export class RulesEngine {
   if (autoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${autoWounds} extra hits from natural 6s, bypassing saves` });
   }
 
-  // Bug 5 fix: wounds cannot exceed hitCount unless a special rule bypasses saves
   let wounds = Math.max(0, hitCount - saves);
-  // Clamp: wounds can never exceed hits (no rule in base OPR grants this)
   wounds = Math.min(wounds, hitCount);
 
   return { rolls, saves, wounds, specialRulesApplied };
@@ -298,10 +350,17 @@ export class RulesEngine {
     defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
     }
 
-    const attackerWounds = attackerResults.total_wounds;
-    const defenderWounds = defenderResults?.total_wounds || 0;
+    let attackerWounds = attackerResults.total_wounds;
+    let defenderWounds = defenderResults?.total_wounds || 0;
+
+    // Apply Fear(X) bonuses
+    const attackerFearBonus = attackerResults.results?.[0]?.fearBonus || 0;
+    const defenderFearBonus = defenderResults?.results?.[0]?.fearBonus || 0;
+    attackerWounds += attackerFearBonus;
+    defenderWounds += defenderFearBonus;
+
     const winner = attackerWounds > defenderWounds ? attacker :
-                 defenderWounds > attackerWounds ? defender : null;
+                   defenderWounds > attackerWounds ? defender : null;
 
     // Build full bidirectional roll_results for the logger
     const aRes = attackerResults.results?.[0] || {};
@@ -356,10 +415,34 @@ export class RulesEngine {
       weaponSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack on charge' });
       }
 
+      // Thrust: +1 to hit and AP(+1) when charging
+      if (attacker.just_charged && weapon.special_rules?.includes('Thrust')) {
+      modifiedWeapon.ap = (weapon.ap || 0) + 1;
+      // Note: +1 to hit handled in rollToHit via quality modification
+      weaponSpecialRules.push({ rule: 'Thrust', value: null, effect: '+1 to hit and AP(+1) on charge' });
+      }
+
+      // Impact(X): Roll X dice on charge attack (unless fatigued)
+      if (attacker.just_charged && !attacker.fatigued && weapon.special_rules?.includes('Impact')) {
+      const impactMatch = weapon.special_rules.match(/Impact\((\d+)\)/);
+      const impactDice = impactMatch ? parseInt(impactMatch[1]) : 1;
+      const impactHits = Array.from({ length: impactDice }, () => this.dice.roll()).filter(r => r >= 2).length;
+      modifiedWeapon.attacks = (weapon.attacks || 1) + impactHits;
+      weaponSpecialRules.push({ rule: 'Impact', value: impactDice, effect: `${impactHits} extra hits from Impact(${impactDice})` });
+      }
+
       const result = this.resolveShooting(attacker, defender, modifiedWeapon, null, gameState);
       result.hits = result.hits ?? 0;
       result.saves = result.saves ?? 0;
       result.attacks = modifiedWeapon.attacks || 1;
+
+      // Fear(X): attacker counts as dealing +X wounds when checking who won melee
+      if (attacker.special_rules?.includes('Fear')) {
+      const fearMatch = attacker.special_rules.match(/Fear\((\d+)\)/);
+      const fearBonus = fearMatch ? parseInt(fearMatch[1]) : 1;
+      result.fearBonus = fearBonus;
+      weaponSpecialRules.push({ rule: 'Fear', value: fearBonus, effect: `+${fearBonus} wounds for melee victory check` });
+      }
 
       // Merge any special rules from this weapon's resolution and deduplicate by rule name
       const combined = [...weaponSpecialRules, ...(result.specialRulesApplied || [])];
