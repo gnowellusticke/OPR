@@ -43,7 +43,13 @@ export default function Battle() {
     if (newEvs) setEvents([...newEvs]);
   };
 
-  useEffect(() => { loadBattle(); }, []);
+  useEffect(() => { 
+    setLoadingStatus("Loading battle data...");
+    loadBattle().catch(err => {
+      console.error("Battle load error:", err);
+      setLoadingStatus(`Error: ${err.message}`);
+    });
+  }, []);
 
   // Play loop — triggers on playing flag change or after each state update
   useEffect(() => {
