@@ -289,38 +289,28 @@ export default function Battle() {
   };
 
   const processNextAction = async () => {
-    if (!gameState || !battle) return;
+    const gs = gameStateRef.current;
+    if (!gs || !battle) return;
 
-    // Bug 6: each unit may only activate once — use units_activated as the single source of truth
-    const activeUnits = gameState.units.filter(u =>
+    // Every living unit gets exactly one activation per round
+    const activeUnits = gs.units.filter(u =>
       u.current_models > 0 &&
       u.status !== 'destroyed' &&
       u.status !== 'routed' &&
-      !gameState.units_activated?.includes(u.id)
+      !gs.units_activated?.includes(u.id)
     );
-    
+
     if (activeUnits.length === 0) {
       await endRound();
       return;
     }
 
-    // Bug 1: when one side is exhausted, immediately activate all remaining units from the other side
-    // rather than bouncing the active_agent flag (which causes skip-round offsets)
-    const agentUnits = activeUnits.filter(u => u.owner === gameState.active_agent);
-    const otherAgentUnits = activeUnits.filter(u => u.owner !== gameState.active_agent);
-    
-    if (agentUnits.length === 0 && otherAgentUnits.length === 0) {
-      await endRound();
-      return;
-    }
+    // Alternate agents; if current agent has no units left, drain the other side
+    const agentUnits = activeUnits.filter(u => u.owner === gs.active_agent);
 
     if (agentUnits.length === 0) {
-      // Switch directly to the other agent so they drain out too
-      const newState = {
-        ...gameState,
-        active_agent: gameState.active_agent === 'agent_a' ? 'agent_b' : 'agent_a'
-      };
-      setGameState(newState);
+      const newState = { ...gs, active_agent: gs.active_agent === 'agent_a' ? 'agent_b' : 'agent_a' };
+      setGameStateAndRef(newState);
       return;
     }
 
@@ -329,97 +319,84 @@ export default function Battle() {
   };
 
   const activateUnit = async (unit) => {
-    setActiveUnit(unit);
-
-    // Bug 4 & Bug 2: Shaken recovery roll at START of activation using live unit state from gameState
-    // Always read unit state from gameState.units (single source of truth — Bug 2)
-    const liveUnit = gameState.units.find(u => u.id === unit.id) || unit;
+    // Always read the canonical live state from the ref (avoids stale closure wound resets)
+    const gs = gameStateRef.current;
+    const liveUnit = gs.units.find(u => u.id === unit.id) || unit;
+    setActiveUnit(liveUnit);
 
     let canShootOrCharge = true;
     if (liveUnit.status === 'shaken') {
       const quality = liveUnit.quality || 4;
-      const roll = rules.dice.roll(); // always a real integer 1-6
+      const roll = rules.dice.roll();
       const recovered = roll >= quality;
       const outcome = recovered ? 'recovered' : 'failed';
-      const round = gameState.current_round;
-      if (recovered) {
-        liveUnit.status = 'normal';
-      } else {
-        canShootOrCharge = false;
-      }
-      const recoveryEvents = [...events, {
-        round,
-        type: 'morale',
+      const round = gs.current_round;
+      if (recovered) liveUnit.status = 'normal';
+      else canShootOrCharge = false;
+
+      const recoveryEvents = [...eventsRef.current, {
+        round, type: 'morale',
         message: `${liveUnit.name} Shaken recovery roll: ${roll} (need ${quality}+) — ${outcome}`,
         timestamp: new Date().toLocaleTimeString()
       }];
       battleLogger?.logMorale({ round, unit: liveUnit, outcome, roll, qualityTarget: quality, dmnReason: 'shaken recovery check' });
-      setEvents(recoveryEvents);
+      setEventsAndRef(recoveryEvents);
     }
-    
-    const options = dmn.evaluateActionOptions(liveUnit, gameState, liveUnit.owner);
+
+    const options = dmn.evaluateActionOptions(liveUnit, gs, liveUnit.owner);
     let selectedAction = options.find(o => o.selected)?.action || 'Hold';
     if (!canShootOrCharge && (selectedAction === 'Charge' || selectedAction === 'Hold')) {
       selectedAction = 'Advance';
     }
-    
+
     setCurrentDecision({
-      unit: liveUnit,
-      options,
-      dmn_phase: 'Action Selection',
+      unit: liveUnit, options, dmn_phase: 'Action Selection',
       reasoning: `Unit at (${liveUnit.x.toFixed(0)}, ${liveUnit.y.toFixed(0)}) selected ${selectedAction} based on tactical evaluation.`
     });
-    
+
     await new Promise(resolve => setTimeout(resolve, 500));
     await executeAction(liveUnit, selectedAction, canShootOrCharge);
-    
-    // Bug 6: mark activated immediately after execution — single activation per round
+
+    // Mark activated and switch agent using the latest ref state
+    const latestGs = gameStateRef.current;
     const newState = {
-      ...gameState,
-      units_activated: [...(gameState.units_activated || []), liveUnit.id],
-      active_agent: gameState.active_agent === 'agent_a' ? 'agent_b' : 'agent_a'
+      ...latestGs,
+      units_activated: [...(latestGs.units_activated || []), liveUnit.id],
+      active_agent: latestGs.active_agent === 'agent_a' ? 'agent_b' : 'agent_a'
     };
-    setGameState(newState);
+    setGameStateAndRef(newState);
     setActiveUnit(null);
   };
 
   const executeAction = async (unit, action, canShootOrCharge = true) => {
-    const newEvents = [...events];
-    
+    // Always read latest state from ref to avoid stale closures
+    const gs = gameStateRef.current;
+    const newEvents = [...eventsRef.current];
+
     const tracking = { ...actionTracking };
     tracking[unit.owner][action] = (tracking[unit.owner][action] || 0) + 1;
     setActionTracking(tracking);
 
-    const round = gameState.current_round;
-    const dmnOptions = dmn.evaluateActionOptions(unit, gameState, unit.owner);
+    const round = gs.current_round;
+    const dmnOptions = dmn.evaluateActionOptions(unit, gs, unit.owner);
     const topOption = dmnOptions.sort((a, b) => b.score - a.score)[0];
     const dmnReason = topOption ? `${topOption.action} scored highest (${topOption.score.toFixed(2)})` : action;
 
-    // Bug 6: track offensive inactivity — boost engagement after 2 quiet rounds
-    const inactiveRounds = unit.rounds_without_offense || 0;
-
-    // Teleport: use instead of normal move if available, then ALWAYS attempt shooting (Bug 6)
+    // Teleport — reposition then shoot/charge
     if (unit.special_rules?.includes('Teleport') && (action === 'Advance' || action === 'Rush')) {
-      const teleported = rules.executeTeleport(unit, gameState);
+      const teleported = rules.executeTeleport(unit, gs);
       if (teleported) {
         const zone = rules.getZone(unit.x, unit.y);
-        newEvents.push({
-          round,
-          type: 'ability',
-          message: `${unit.name} used Teleport to redeploy`,
-          timestamp: new Date().toLocaleTimeString()
-        });
+        newEvents.push({ round, type: 'ability', message: `${unit.name} used Teleport to redeploy`, timestamp: new Date().toLocaleTimeString() });
         battleLogger?.logAbility({ round, unit, ability: 'Teleport', details: { zone } });
-        // Bug 6: always try to shoot/charge after teleporting
         if (canShootOrCharge) {
           const didShoot = await attemptShooting(unit, newEvents, dmnReason);
           if (!didShoot) {
-            // try charge if no shot
-            const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
+            const enemies = gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
             const chargeTarget = enemies.find(e => rules.calculateDistance(unit, e) <= 12);
             if (chargeTarget) {
               unit.just_charged = true;
-              rules.executeMovement(unit, 'Charge', chargeTarget, gameState.terrain);
+              rules.executeMovement(unit, 'Charge', chargeTarget, gs.terrain);
               newEvents.push({ round, type: 'movement', message: `${unit.name} charged ${chargeTarget.name}!`, timestamp: new Date().toLocaleTimeString() });
               battleLogger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone: rules.getZone(unit.x, unit.y), dmnReason, chargeTarget: chargeTarget.name });
               await resolveMelee(unit, chargeTarget, newEvents, dmnReason);
@@ -427,75 +404,57 @@ export default function Battle() {
           }
           unit.rounds_without_offense = 0;
         }
-        setEvents(newEvents);
-        rules.updateObjectives(gameState);
+        setEventsAndRef(newEvents);
+        rules.updateObjectives(gs);
         return;
       }
     }
 
     if (action === 'Hold') {
-      // Shaken units that reach Hold are already handled in activateUnit — just shoot
       if (canShootOrCharge) await attemptShooting(unit, newEvents, dmnReason);
-      
+
     } else if (action === 'Advance') {
-      const target = dmn.findNearestObjective(unit, gameState.objectives);
+      const target = dmn.findNearestObjective(unit, gs.objectives);
       if (target) {
-        const result = rules.executeMovement(unit, action, target, gameState.terrain);
+        const result = rules.executeMovement(unit, action, target, gs.terrain);
         const zone = rules.getZone(unit.x, unit.y);
-        newEvents.push({
-          round,
-          type: 'movement',
-          message: `${unit.name} advanced ${result.distance.toFixed(1)}" toward objective`,
-          timestamp: new Date().toLocaleTimeString()
-        });
+        newEvents.push({ round, type: 'movement', message: `${unit.name} advanced ${result.distance.toFixed(1)}" toward objective`, timestamp: new Date().toLocaleTimeString() });
         battleLogger?.logMove({ round, actingUnit: unit, action, distance: result.distance, zone, dmnReason });
       }
-      // Advance can shoot (with -1 quality penalty in OPR, but we still fire)
       if (canShootOrCharge) await attemptShooting(unit, newEvents, dmnReason);
-      
+
     } else if (action === 'Rush') {
-      const target = dmn.findNearestObjective(unit, gameState.objectives);
+      const target = dmn.findNearestObjective(unit, gs.objectives);
       if (target) {
-        const result = rules.executeMovement(unit, action, target, gameState.terrain);
+        const result = rules.executeMovement(unit, action, target, gs.terrain);
         const zone = rules.getZone(unit.x, unit.y);
-        newEvents.push({
-          round,
-          type: 'movement',
-          message: `${unit.name} rushed ${result.distance.toFixed(1)}" toward objective`,
-          timestamp: new Date().toLocaleTimeString()
-        });
+        newEvents.push({ round, type: 'movement', message: `${unit.name} rushed ${result.distance.toFixed(1)}" toward objective`, timestamp: new Date().toLocaleTimeString() });
         battleLogger?.logMove({ round, actingUnit: unit, action, distance: result.distance, zone, dmnReason });
       }
-      // No shooting after Rush — but track as non-offensive
       unit.rounds_without_offense = (unit.rounds_without_offense || 0) + 1;
-      
+
     } else if (action === 'Charge') {
-      const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
+      const enemies = gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
       const target = dmn.selectTarget(unit, enemies);
-      
       if (target) {
         unit.just_charged = true;
-        rules.executeMovement(unit, action, target, gameState.terrain);
+        rules.executeMovement(unit, action, target, gs.terrain);
         const zone = rules.getZone(unit.x, unit.y);
-        newEvents.push({
-          round,
-          type: 'movement',
-          message: `${unit.name} charged ${target.name}!`,
-          timestamp: new Date().toLocaleTimeString()
-        });
+        newEvents.push({ round, type: 'movement', message: `${unit.name} charged ${target.name}!`, timestamp: new Date().toLocaleTimeString() });
         battleLogger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason, chargeTarget: target.name });
         await resolveMelee(unit, target, newEvents, dmnReason);
         unit.rounds_without_offense = 0;
       }
     }
-    
-    setEvents(newEvents);
-    rules.updateObjectives(gameState);
+
+    setEventsAndRef(newEvents);
+    rules.updateObjectives(gs);
   };
 
-  // Bug 6: fire ALL ranged weapons in a single activation, one shoot event per weapon
+  // Fire ALL ranged weapons in a single activation — one shoot event per weapon
   const attemptShooting = async (unit, newEvents, dmnReason) => {
-    const round = gameState.current_round;
+    const gs = gameStateRef.current;
+    const round = gs.current_round;
     let shotFired = false;
 
     const rangedWeapons = unit.weapons?.filter(w => w.range > 2) || [];
@@ -503,7 +462,7 @@ export default function Battle() {
 
     for (const weapon of rangedWeapons) {
       // Re-fetch living enemies per weapon so mid-activation kills are respected
-      const liveEnemies = gameState.units.filter(u =>
+      const liveEnemies = gs.units.filter(u =>
         u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed'
       );
       if (liveEnemies.length === 0) break;
@@ -514,7 +473,7 @@ export default function Battle() {
       const dist = rules.calculateDistance(unit, target);
       if (dist > weapon.range) continue;
 
-      const result = rules.resolveShooting(unit, target, weapon, gameState.terrain, gameState);
+      const result = rules.resolveShooting(unit, target, weapon, gs.terrain, gs);
       const woundsDealt = result.wounds;
       target.current_models = Math.max(0, target.current_models - woundsDealt);
       if (target.current_models <= 0) target.status = 'destroyed';
@@ -567,7 +526,7 @@ export default function Battle() {
         zone: rules.getZone(unit.x, unit.y),
         rangeDist: dist,
         rollResults: { attacks: loggedAttacks, hits: result.hits, saves: result.saves, wounds_dealt: woundsDealt },
-        gameState,
+        gameState: gs,
         dmnReason: shootDmnReason
       });
 
@@ -593,8 +552,9 @@ export default function Battle() {
   };
 
   const resolveMelee = async (attacker, defender, newEvents, dmnReason) => {
-    const result = rules.resolveMelee(attacker, defender, gameState);
-    const round = gameState.current_round;
+    const gs = gameStateRef.current;
+    const result = rules.resolveMelee(attacker, defender, gs);
+    const round = gs.current_round;
     
     defender.current_models = Math.max(0, defender.current_models - result.attacker_wounds);
     attacker.current_models = Math.max(0, attacker.current_models - result.defender_wounds);
@@ -641,7 +601,7 @@ export default function Battle() {
         attacker_saves_made: dRes?.saves ?? 0,
         wounds_taken: result.defender_wounds
       },
-      gameState,
+      gameState: gs,
       dmnReason
     });
     
@@ -661,28 +621,28 @@ export default function Battle() {
   };
 
   const endRound = async () => {
-    const newRound = gameState.current_round + 1;
-    
+    const gs = gameStateRef.current;
+    const newRound = gs.current_round + 1;
+
     if (newRound > 4) {
       await endBattle();
       return;
     }
-    
+
     const newState = {
-      ...gameState,
+      ...gs,
       current_round: newRound,
       units_activated: [],
       active_agent: 'agent_a'
     };
-    
-    // Bug 5: validate — any unit that was alive last round but now has no wounds and no destruction
-    // event should be force-logged as destroyed
-    const prevAlive = gameState.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
+
+    // Validate — force-log units that died with no destruction event
+    const prevAlive = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
     prevAlive.forEach(u => {
       const inNew = newState.units.find(n => n.id === u.id);
       if (inNew && inNew.current_models <= 0 && inNew.status !== 'destroyed') {
         inNew.status = 'destroyed';
-        battleLogger?.logDestruction({ round: gameState.current_round, unit: inNew, cause: 'unknown (validated at round end)' });
+        battleLogger?.logDestruction({ round: gs.current_round, unit: inNew, cause: 'unknown (validated at round end)' });
       }
     });
 
@@ -694,9 +654,8 @@ export default function Battle() {
       if (u.current_models <= 0) u.status = 'destroyed';
     });
 
-    // Bug 7 (Prompt 6): check synonyms for wound-recovery rules (Regeneration, Self-Repair, Repair)
     const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
-    const getRegenRuleName = (unit) => REGEN_RULES.find(r => unit.special_rules?.includes(r));
+    const getRegenRuleName = (u) => REGEN_RULES.find(r => u.special_rules?.includes(r));
 
     const regenEvents = [];
     newState.units.forEach(u => {
@@ -704,68 +663,54 @@ export default function Battle() {
       if (u.current_models > 0 && regenRule && u.current_models < u.total_models) {
         const { recovered, roll } = rules.applyRegeneration(u);
         regenEvents.push({
-          round: gameState.current_round,
-          type: 'regen',
+          round: gs.current_round, type: 'regen',
           message: `${u.name} ${regenRule} roll: ${roll} — ${recovered ? 'recovered 1 wound' : 'no recovery'}`,
           timestamp: new Date().toLocaleTimeString()
         });
-        battleLogger?.logRegeneration({ round: gameState.current_round, unit: u, recovered, roll, ruleName: regenRule });
+        battleLogger?.logRegeneration({ round: gs.current_round, unit: u, recovered, roll, ruleName: regenRule });
       }
-      // Reset offense counter at round boundary
       u.rounds_without_offense = u.rounds_without_offense || 0;
     });
 
-    // Round summary — cumulative scoring support (Advance Rule 1)
+    // Round summary — cumulative scoring
     const roundA = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const roundB = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
     const isCumulative = newState.advance_rules?.cumulativeScoring;
     const prevCumulative = newState.cumulative_score || { agent_a: 0, agent_b: 0 };
     if (isCumulative) {
-      newState.cumulative_score = {
-        agent_a: prevCumulative.agent_a + roundA,
-        agent_b: prevCumulative.agent_b + roundB,
-      };
+      newState.cumulative_score = { agent_a: prevCumulative.agent_a + roundA, agent_b: prevCumulative.agent_b + roundB };
     }
     const scoreToLog = isCumulative ? newState.cumulative_score : { agent_a: roundA, agent_b: roundB };
-    battleLogger?.logRoundSummary({
-      round: gameState.current_round,
-      objectives: newState.objectives,
-      score: scoreToLog,
-      units: newState.units
-    });
-    
-    setGameState(newState);
-    
-    const newEvents = [...events, ...regenEvents, {
-      round: newRound,
-      type: 'round',
+    battleLogger?.logRoundSummary({ round: gs.current_round, objectives: newState.objectives, score: scoreToLog, units: newState.units });
+
+    setGameStateAndRef(newState);
+
+    const newEvents = [...eventsRef.current, ...regenEvents, {
+      round: newRound, type: 'round',
       message: `--- Round ${newRound} begins ---`,
       timestamp: new Date().toLocaleTimeString()
     }];
-    setEvents(newEvents);
+    setEventsAndRef(newEvents);
   };
 
   const endBattle = async () => {
-    const isCumulative = gameState.advance_rules?.cumulativeScoring;
-    const roundA = gameState.objectives.filter(o => o.controlled_by === 'agent_a').length;
-    const roundB = gameState.objectives.filter(o => o.controlled_by === 'agent_b').length;
-    // For cumulative, final round score needs to be added to running total
+    const gs = gameStateRef.current;
+    const isCumulative = gs.advance_rules?.cumulativeScoring;
+    const roundA = gs.objectives.filter(o => o.controlled_by === 'agent_a').length;
+    const roundB = gs.objectives.filter(o => o.controlled_by === 'agent_b').length;
     const finalCumulative = isCumulative
-      ? { agent_a: (gameState.cumulative_score?.agent_a || 0) + roundA, agent_b: (gameState.cumulative_score?.agent_b || 0) + roundB }
+      ? { agent_a: (gs.cumulative_score?.agent_a || 0) + roundA, agent_b: (gs.cumulative_score?.agent_b || 0) + roundB }
       : null;
     const aScore = isCumulative ? finalCumulative.agent_a : roundA;
     const bScore = isCumulative ? finalCumulative.agent_b : roundB;
     const winner = aScore > bScore ? 'agent_a' : bScore > aScore ? 'agent_b' : 'draw';
-    
+
     await base44.entities.Battle.update(battle.id, {
-      status: 'completed',
-      winner,
-      game_state: gameState,
-      event_log: events
+      status: 'completed', winner, game_state: gs, event_log: eventsRef.current
     });
-    
-    const aUnits = gameState.units.filter(u => u.owner === 'agent_a' && u.current_models > 0).length;
-    const bUnits = gameState.units.filter(u => u.owner === 'agent_b' && u.current_models > 0).length;
+
+    const aUnits = gs.units.filter(u => u.owner === 'agent_a' && u.current_models > 0).length;
+    const bUnits = gs.units.filter(u => u.owner === 'agent_b' && u.current_models > 0).length;
     
     await base44.entities.BattleAnalytics.create({
       battle_id: battle.id,
@@ -785,15 +730,12 @@ export default function Battle() {
       successful_actions: actionTracking.agent_b
     });
     
-    // Final round summary before battle_end
     battleLogger?.logRoundSummary({
-      round: gameState.current_round,
-      objectives: gameState.objectives,
-      score: { agent_a: aScore, agent_b: bScore },
-      units: gameState.units
+      round: gs.current_round, objectives: gs.objectives,
+      score: { agent_a: aScore, agent_b: bScore }, units: gs.units
     });
-    // Embed battle_config and advance_rules in log header
-    const advRules = gameState.advance_rules || {};
+    // Embed battle_config and advance_rules in log header (advance rules wiring fix)
+    const advRules = gs.advance_rules || {};
     const activeRuleKeys = Object.entries(advRules).filter(([, v]) => v).map(([k]) => k);
     battleLogger?.setBattleConfig({
       scoring_mode: advRules.cumulativeScoring ? 'cumulative' : 'per_round',
@@ -807,14 +749,13 @@ export default function Battle() {
 
     setBattle({ ...battle, status: 'completed', winner });
     setPlaying(false);
-    
-    const newEvents = [...events, {
-      round: 4,
-      type: 'victory',
+
+    const newEvents = [...eventsRef.current, {
+      round: gs.current_round, type: 'victory',
       message: `Battle ended! ${winner === 'draw' ? 'Draw' : winner === 'agent_a' ? 'Agent A wins' : 'Agent B wins'} (${aScore} - ${bScore})`,
       timestamp: new Date().toLocaleTimeString()
     }];
-    setEvents(newEvents);
+    setEventsAndRef(newEvents);
   };
 
   if (!battle || !gameState) {
