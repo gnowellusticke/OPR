@@ -262,31 +262,28 @@ export default function Battle() {
     if (unit.is_in_reserve) {
       summaryDeployed.reserves.push(unit.name);
       logger?.logDeploy({
-        unit,
-        zone: 'reserve',
-        deploymentType: 'reserve',
-        reserveRule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve',
-        dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`,
-        specialRulesApplied: []
-      });
-    } else {
-      // Bug 2b fix: pass already-used zones so DMN avoids stacking friendlies in same zone
-      const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain, myUsedZones);
-      unit.x = decision.x;
-      unit.y = decision.y;
-      myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
-      myUsedZones.add(decision.zone);
-      (isAgentA ? summaryDeployed.agent_a : summaryDeployed.agent_b).push(unit.name);
-      logger?.logDeploy({
-        unit,
-        zone: decision.zone,
-        deploymentType: 'standard',
-        dmnReason: decision.dmnReason,
-        specialRulesApplied: decision.specialRulesApplied
-      });
-    }
-    // Bug 1 fix: stagger each deploy event by 1.5s
-    await new Promise(r => setTimeout(r, 1500));
+          unit,
+          zone: 'reserve',
+          deploymentType: 'reserve',
+          reserveRule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve',
+          dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`,
+          specialRulesApplied: []
+        });
+      } else {
+        const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain, myUsedZones);
+        unit.x = decision.x;
+        unit.y = decision.y;
+        myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
+        myUsedZones.add(decision.zone);
+        (isAgentA ? summaryDeployed.agent_a : summaryDeployed.agent_b).push(unit.name);
+        logger?.logDeploy({
+          unit,
+          zone: decision.zone,
+          deploymentType: 'standard',
+          dmnReason: decision.dmnReason,
+          specialRulesApplied: decision.specialRulesApplied
+        });
+      }
   }
 
   logger?.logDeploymentSummary({
