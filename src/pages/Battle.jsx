@@ -572,7 +572,7 @@ export default function Battle() {
 
     // Validation pass: every unit alive at round start must have had exactly one activation.
     // Log a structured warning event for any that were missed (scheduling bug detection).
-    const liveUnits = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
+    const liveUnits = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed' && !u.is_in_reserve);
     const activated = gs.units_activated || [];
     const notActivated = liveUnits.filter(u => !activated.includes(u.id));
     notActivated.forEach(u => {
