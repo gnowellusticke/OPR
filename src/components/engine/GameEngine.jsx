@@ -115,8 +115,11 @@ export class DMNEngine {
     });
 
     // Charge only offered when enemy is within maximum charge distance and unit hasn't charged this round
+    // Bug 4 fix: Fire support units NEVER charge
+    const isFireSupport = unit.special_rules?.includes('Indirect') || 
+                         /artillery|gun|cannon|mortar|support/i.test(unit.name);
     const chargeRange = this.maxChargeDistance(unit);
-    const canCharge = nearestEnemy && this.getDistance(unit, nearestEnemy) <= chargeRange && !isTransport && !unit.just_charged;
+    const canCharge = nearestEnemy && this.getDistance(unit, nearestEnemy) <= chargeRange && !isTransport && !unit.just_charged && !isFireSupport;
     if (canCharge) {
       options.push({
         action: 'Charge',
@@ -487,8 +490,8 @@ export class DMNEngine {
     score += Math.max(0, 60 - enemyDist) * 0.6;
   }
 
-  // Bug 4 fix: Fire support units deploy in rear, never centre
-  // Long-range fire support: prefer flanks and rear
+  // Bug 4 fix: Fire support units NEVER charge
+  // For deployment, fire support prefer rear flanks
   if (isFireSupport) {
     if (cand.col !== 'centre') score += 25;
     // Rear deployment for fire support — further from enemy lines
