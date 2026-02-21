@@ -531,15 +531,12 @@ export class RulesEngine {
       const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
       const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
 
-      // Bug 2 fix: Multi-model units strike once per model
+      // Multi-model units strike once per model
       const currentModelCount = Math.ceil(attacker.current_models / Math.max(attacker.tough_per_model, 1));
 
       weaponsToUse.forEach(weapon => {
       let modifiedWeapon = { ...weapon };
       const weaponSpecialRules = [];
-
-      // Bug 2 fix: Furious only re-rolls failed hits, does NOT add extra attacks automatically
-      // Handle Furious in rollToHit instead, where it belongs
 
       // Thrust: +1 to hit and AP(+1) when charging
       if (attacker.just_charged && weapon.special_rules?.includes('Thrust')) {
@@ -557,7 +554,7 @@ export class RulesEngine {
       weaponSpecialRules.push({ rule: 'Impact', value: impactDice, effect: `${impactHits} extra hits from Impact(${impactDice})` });
       }
 
-      // Bug 2 fix: scale attacks by model count
+      // Scale attacks by model count
       const baseAttacks = modifiedWeapon.attacks || 1;
       const scaledAttacks = baseAttacks * Math.max(currentModelCount, 1);
       const scaledWeapon = { ...modifiedWeapon, attacks: scaledAttacks };
@@ -567,9 +564,8 @@ export class RulesEngine {
       result.saves = result.saves ?? 0;
       result.attacks = scaledAttacks;
 
-      // Bug 1 fix: Lock wounds_dealt BEFORE building melee_resolution
-      // wounds_dealt = max(0, hits - saves) × damage_multiplier
-      // This is the ONLY source of truth for wounds
+      // Lock wounds_dealt BEFORE building melee_resolution
+      // wounds_dealt = max(0, hits - saves) × damage_multiplier × deadly_multiplier
       const realWounds = result.wounds || 0;
 
       // Fear(X): attacker counts as dealing +X wounds when checking who won melee
@@ -581,7 +577,7 @@ export class RulesEngine {
       weaponSpecialRules.push({ rule: 'Fear', value: fearBonus, effect: `+${fearBonus} wounds for melee victory check` });
       }
 
-      // Bug 3 fix: Only include rules from THIS melee weapon, not all weapons on the unit
+      // Only include rules from THIS melee weapon, not all weapons on the unit
       // Filter out ranged-only rules (Blast) and rules from other weapons
       const rangedOnlyRules = ['Blast', 'Relentless', 'Indirect', 'Artillery'];
       const filtered = (result.specialRulesApplied || []).filter(rule => !rangedOnlyRules.includes(rule.rule));
