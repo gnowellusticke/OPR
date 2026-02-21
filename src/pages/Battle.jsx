@@ -403,7 +403,7 @@ export default function Battle() {
     const rules = rulesRef.current;
     const logger = loggerRef.current;
 
-    // ── Shaken recovery (Bug 10 fix: proper morale recovery roll event) ──
+    // Bug 6 fix: Shaken recovery roll fires at START of unit's own activation, FIRST event
     let canAct = true;
     if (liveUnit.status === 'shaken') {
     const quality = liveUnit.quality || 4;
@@ -416,7 +416,13 @@ export default function Battle() {
     }
     const outcome = recovered ? 'recovered' : 'still_shaken';
     evs.push({ round, type: 'morale', message: `${liveUnit.name} Shaken recovery: rolled ${roll} vs ${quality}+ — ${recovered ? 'recovered' : 'still shaken, cannot charge or shoot'}`, timestamp: new Date().toLocaleTimeString() });
-    logger?.logMorale({ round, unit: liveUnit, outcome, roll, qualityTarget: quality, dmnReason: 'shaken recovery check' });
+    logger?.logMorale({ round, unit: liveUnit, outcome, roll, qualityTarget: quality, dmnReason: 'shaken recovery check at activation start' });
+    }
+    // Commit state immediately after shaken check so recovery is logged before any target actions
+    if (liveUnit.status === 'shaken') {
+      evRef.current = evs;
+      const tempGs = { ...gsRef.current };
+      commitState(tempGs, evs);
     }
 
     // ── Heroic Action (Advance Rule) ──────────────────────────────────────────
@@ -822,14 +828,14 @@ export default function Battle() {
     const roundA = gs.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const roundB = gs.objectives.filter(o => o.controlled_by === 'agent_b').length;
 
-    // Bug 1 fix: Per-round mode sums all round scores; cumulative adds this round to running total
+    // Bug 7 fix: Final score calculation — per-round sums all rounds, cumulative uses last cumulative total
     let aScore, bScore;
     if (isCumulative) {
       // Cumulative: running total already includes R1-R3; add R4
       aScore = (gs.cumulative_score?.agent_a || 0) + roundA;
       bScore = (gs.cumulative_score?.agent_b || 0) + roundB;
     } else {
-      // Per-round: sum all round summaries from the event log
+      // Per-round: sum all round summaries from the event log (including this round)
       aScore = 0;
       bScore = 0;
       evRef.current.forEach(ev => {
@@ -838,7 +844,7 @@ export default function Battle() {
           bScore += ev.score?.agent_b || 0;
         }
       });
-      // Add this final round's score
+      // Add this final round's score to the total
       aScore += roundA;
       bScore += roundB;
     }
