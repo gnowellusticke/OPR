@@ -596,7 +596,7 @@ export default function Battle() {
         if (!moraleResult.passed) {
           const outcome = rules.applyMoraleResult(target, false, 'wounds');
           evs.push({ round, type: 'morale', message: `${target.name} morale failed — ${outcome}`, timestamp: new Date().toLocaleTimeString() });
-          logger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll, qualityTarget: target.quality || 4 });
+          logger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll, qualityTarget: target.quality || 4, specialRulesApplied: moraleResult.specialRulesApplied || [] });
         }
       }
 
