@@ -437,6 +437,8 @@ export class DMNEngine {
   const rangedWeapons = (unit.weapons || []).filter(w => w.range > 2);
   const hasLongRange = rangedWeapons.some(w => w.range >= 24);
   const hasIndirect = rangedWeapons.some(w => w.special_rules?.includes('Indirect'));
+  const isFireSupport = unit.special_rules?.includes('Indirect') || 
+                        /artillery|gun|cannon|mortar|support/i.test(unit.name);
 
   // Bug 2 fix: classify by highest-Attack weapon to distinguish fire support from melee
   const bestMeleeAttacks = meleeWeapons.reduce((max, w) => Math.max(max, w.attacks || 1), 0);
