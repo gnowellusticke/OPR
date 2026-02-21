@@ -1,7 +1,7 @@
 import React from 'react';
 import { HelpCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { getRule } from "../RuleBook.js";
+import { getRule } from "../RuleBook";
 
 /**
  * RuleReference — wraps text with an inline rule tooltip
