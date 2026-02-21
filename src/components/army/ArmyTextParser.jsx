@@ -179,9 +179,12 @@ export class ArmyTextParser {
       .filter(s => !/^\d+"$/.test(s) && !/^A\d+$/.test(s) && !/^AP\(\d+\)$/.test(s));
     const special_rules = specialParts.join(', ') || undefined;
 
-    // Expand multiplied weapons into separate entries so each fires independently
+    // Return one entry per weapon copy so each fires independently in the engine
     const weapon = { name, range, attacks, ap, special_rules };
-    return count > 1 ? Array(count).fill(null).map(() => ({ ...weapon })) : weapon;
+    if (count > 1) {
+      return Array(count).fill(null).map(() => ({ ...weapon }));
+    }
+    return weapon;
   }
 }
 
