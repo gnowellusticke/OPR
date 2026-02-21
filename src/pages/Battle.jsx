@@ -576,7 +576,14 @@ export default function Battle() {
         round, actingUnit: unit, targetUnit: target,
         weapon: weapon.name,
         zone: rules.getZone(unit.x, unit.y), rangeDist: dist,
-        rollResults: { attacks: loggedAttacks, hits: result.hits, saves: result.saves, wounds_dealt: woundsDealt, blast: isBlast },
+        rollResults: {
+          attacks: loggedAttacks,
+          hits: result.hits,
+          saves: result.saves,
+          wounds_dealt: woundsDealt,
+          blast: isBlast,
+          special_rules_applied: result.specialRulesApplied || []
+        },
         gameState: gs,
         dmnReason: `${dmnReason} (score ${topScore})`
       });
