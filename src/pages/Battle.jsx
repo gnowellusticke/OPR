@@ -276,6 +276,13 @@ export default function Battle() {
     const enemyDeployed = deployedByOwner[unit.owner === 'agent_a' ? 'agent_b' : 'agent_a'];
     const myUsedZones = zonesUsedByOwner[unit.owner];
 
+    // Bug 6 fix: Count units per zone per agent to prevent stacking more than 2
+    const zoneUnitCounts = {};
+    myDeployed.forEach(u => {
+      const zone = dmn.decideDeployment(u, isAgentA, enemyDeployed, [...myDeployed], objectives, terrain, new Set()).zone;
+      zoneUnitCounts[zone] = (zoneUnitCounts[zone] || 0) + 1;
+    });
+
     if (unit.is_in_reserve) {
       summaryDeployed.reserves.push(unit.name);
       logger?.logDeploy({

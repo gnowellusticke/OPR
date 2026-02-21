@@ -62,7 +62,12 @@ export class DMNEngine {
   }
 
   // Classify unit as melee-primary: has at least one melee weapon AND melee weapons >= ranged weapons
+  // Bug 4 fix: Artillery/support units are never melee-primary
   isMeleePrimary(unit) {
+    const isFireSupport = unit.special_rules?.includes('Indirect') || 
+                         /artillery|gun|cannon|mortar|support/i.test(unit.name);
+    if (isFireSupport) return false;
+
     const melee = (unit.weapons || []).filter(w => w.range <= 2);
     const ranged = (unit.weapons || []).filter(w => w.range > 2);
     return melee.length > 0 && melee.length >= ranged.length;
@@ -482,8 +487,16 @@ export class DMNEngine {
     score += Math.max(0, 60 - enemyDist) * 0.6;
   }
 
-  // Long-range fire support: prefer centre for maximum arc
-  if (hasLongRange && !hasIndirect) {
+  // Bug 4 fix: Fire support units deploy in rear, never centre
+  // Long-range fire support: prefer flanks and rear
+  if (isFireSupport) {
+    if (cand.col !== 'centre') score += 25;
+    // Rear deployment for fire support — further from enemy lines
+    const deployZone = isAgentA ? 3 : 42;
+    const depthFromFront = isAgentA ? (deployZone - cand.y) : (cand.y - deployZone);
+    score += Math.max(0, depthFromFront) * 0.5;
+  } else if (hasLongRange && !hasIndirect) {
+    // Long-range fire support without Indirect: prefer centre for maximum arc
     if (cand.col === 'centre') score += 20;
   }
 
@@ -507,11 +520,17 @@ export class DMNEngine {
     score += Math.max(0, 20 - friendlyDist) * 0.4;
   }
 
-  // Bug 2b fix: hard penalty for using an already-occupied zone
+  // Bug 6 fix: hard penalty for using an already-occupied zone (max 2 per zone)
   const candidateZoneCol = cand.col === 'left' ? 'left' : cand.col === 'right' ? 'right' : 'centre';
   const candidateZoneRow = isAgentA ? 'south' : 'north';
   const candidateZone = `${candidateZoneRow}-${candidateZoneCol}`;
-  if (usedZones.has(candidateZone)) score -= 50;
+  // Count current units in this zone — allow only 2 per zone
+  const unitsInZone = deployedFriendlies.filter(f => {
+    const fZoneCol = f.x < 24 ? 'left' : f.x < 48 ? 'centre' : 'right';
+    const fZoneRow = isAgentA ? 'south' : 'north';
+    return `${fZoneRow}-${fZoneCol}` === candidateZone;
+  }).length;
+  if (unitsInZone >= 2) score -= 100;
 
   // Spread bonus: penalise piling into same column as too many friendlies
   const sameColFriendlies = deployedFriendlies.filter(f => Math.abs(f.x - cx) < 12).length;
