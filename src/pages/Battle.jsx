@@ -641,8 +641,9 @@ export default function Battle() {
   const rules = rulesRef.current;
   const logger = loggerRef.current;
 
-  // Guard: attacker must be alive (no phantom overwatch kills)
-  if (attacker.current_models <= 0 || attacker.status === 'destroyed') return false;
+  // Bug 8 fix: guard on wounds_remaining (0 wounds = dead, even if status not yet set)
+  if (attacker.current_models <= 0 || attacker.status === 'destroyed' || attacker.status === 'routed') return false;
+  if (defender.current_models <= 0 || defender.status === 'destroyed' || defender.status === 'routed') return false;
 
   const result = rules.resolveMelee(attacker, defender, gs);
 
