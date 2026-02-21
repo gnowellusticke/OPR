@@ -822,12 +822,16 @@ export default function Battle() {
   // ─── END ROUND ────────────────────────────────────────────────────────────────
 
   const endRound = async (gs) => {
-    const newRound = gs.current_round + 1;
-    if (newRound > 4) { await endBattle(gs); return; }
+        const newRound = gs.current_round + 1;
+        if (newRound > 4) { await endBattle(gs); return; }
 
-    const rules = rulesRef.current;
-    const logger = loggerRef.current;
-    const evs = [...evRef.current];
+        const rules = rulesRef.current;
+        const logger = loggerRef.current;
+        const evs = [...evRef.current];
+
+        // Bug 9 fix: Check if progressive scoring is enabled
+        const isProgressiveScoring = gs.advance_rules?.progressiveScoring === true;
+        const isFinalRound = newRound === 5; // After round 4
 
     // Validation pass: every unit alive at round start must have had exactly one activation.
     // Log a structured warning event for any that were missed (scheduling bug detection).
