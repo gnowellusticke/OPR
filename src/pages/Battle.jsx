@@ -89,9 +89,16 @@ export default function Battle() {
     setBattle(battleRef.current);
 
     if (battleData.status === 'setup') {
+      setLoadingStatus("Initializing battle...");
       await initializeBattle(battleData, armyA, armyB, logger);
     } else {
+      setLoadingStatus("Loading saved battle state...");
       commitState(battleData.game_state, battleData.event_log || []);
+    }
+    } catch (err) {
+    console.error("Battle load error:", err);
+    setLoadingStatus(`Error: ${err.message}`);
+    throw err;
     }
   };
 
