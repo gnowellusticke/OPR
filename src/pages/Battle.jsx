@@ -957,9 +957,24 @@ export default function Battle() {
     logger?.logBattleEnd({ winner, finalScore });
 
     const log = logger?.getFullLog(winner, { agent_a: aScore, agent_b: bScore });
-    setFullJsonLog(log);
-    console.log('=== BATTLE JSON LOG ===');
-    console.log(JSON.stringify(log, null, 2));
+      setFullJsonLog(log);
+      console.log('=== BATTLE JSON LOG ===');
+      console.log(JSON.stringify(log, null, 2));
+
+      // Trigger rule compliance verification
+      try {
+        const { default: verifyRuleCompliance } = await import('../functions/verifyRuleCompliance.js');
+        const complianceReport = await verifyRuleCompliance(log);
+        console.log('=== COMPLIANCE REPORT ===');
+        console.log(JSON.stringify(complianceReport, null, 2));
+        evs.push({ 
+          round: 4, type: 'system', 
+          message: `Compliance check complete: ${complianceReport.summary.total_violations} violations found (Score: ${complianceReport.summary.compliance_score}/100)`,
+          timestamp: new Date().toLocaleTimeString()
+        });
+      } catch (err) {
+        console.error('Compliance verification failed:', err);
+      }
 
     const aUnits = gs.units.filter(u => u.owner === 'agent_a' && u.current_models > 0).length;
     const bUnits = gs.units.filter(u => u.owner === 'agent_b' && u.current_models > 0).length;
