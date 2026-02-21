@@ -34,6 +34,20 @@ export default function Battle() {
   const [armyBData, setArmyBData] = useState(null);
   const [fullJsonLog, setFullJsonLog] = useState(null);
 
+  // Use a ref for gameState so closures inside async functions always read the latest value
+  const gameStateRef = React.useRef(null);
+  const eventsRef = React.useRef([]);
+
+  const setGameStateAndRef = (newState) => {
+    gameStateRef.current = newState;
+    setGameState(newState);
+  };
+
+  const setEventsAndRef = (newEvents) => {
+    eventsRef.current = newEvents;
+    setEvents(newEvents);
+  };
+
   useEffect(() => {
     loadBattle();
   }, []);
