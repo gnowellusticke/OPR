@@ -227,6 +227,14 @@ export class DMNEngine {
 
   scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState) {
     let score = 0.5;
+
+    // Bug 2 (Prompt 6): melee-primary units near an enemy should prefer Charge over Advance
+    const meleeWeapons = unit.weapons?.filter(w => w.range <= 2) || [];
+    const rangedWeapons = unit.weapons?.filter(w => w.range > 2) || [];
+    const isMeleePrimary = meleeWeapons.length >= rangedWeapons.length && meleeWeapons.length > 0;
+    if (isMeleePrimary && nearestEnemy && this.getDistance(unit, nearestEnemy) <= 12) {
+      score -= 0.4; // heavily favour Charge instead
+    }
     
     // Bonus for moving toward objectives
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 3) {
@@ -280,18 +288,33 @@ export class DMNEngine {
   scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState) {
     let score = 0.6;
 
-    // Bug 6: boost units that haven't engaged offensively in 2+ rounds
+    // Boost units that haven't engaged offensively in 2+ rounds
     const inactiveBoost = (unit.rounds_without_offense || 0) >= 2 ? 0.5 : 0;
     score += inactiveBoost;
 
-    // Bonus for melee-focused units
-    const hasMelee = unit.weapons?.some(w => w.range <= 2);
+    // Bug 2 (Prompt 6): melee-primary units should charge aggressively
+    const meleeWeapons = unit.weapons?.filter(w => w.range <= 2) || [];
+    const rangedWeapons = unit.weapons?.filter(w => w.range > 2) || [];
+    const isMeleePrimary = meleeWeapons.length > 0 && meleeWeapons.length >= rangedWeapons.length;
+    if (isMeleePrimary) score += 0.6;
+
+    // Furious rule: always prefer charge
+    if (unit.special_rules?.includes('Furious')) score += 0.5;
+
+    // Bonus for units with any melee weapon
+    const hasMelee = meleeWeapons.length > 0;
     if (hasMelee) score += 0.4;
 
-    // Bug 9 fix: heavily penalise weak melee profiles (CCW A1, no AP)
-    const meleeWeapons = unit.weapons?.filter(w => w.range <= 2) || [];
-    const onlyCCW = meleeWeapons.length === 0 || (meleeWeapons.length === 1 && (meleeWeapons[0].attacks || 1) <= 1 && (meleeWeapons[0].ap || 0) === 0);
-    if (onlyCCW) score -= 0.6; // screening/shooting units should not charge
+    // Distance bonus: strongly prefer charging when enemy is close
+    if (nearestEnemy) {
+      const dist = this.getDistance(unit, nearestEnemy);
+      if (dist <= 12) score += 0.5;
+      if (dist <= 6) score += 0.3;
+    }
+
+    // Only penalise units with NO melee weapons at all
+    const hasNoMeleeAtAll = meleeWeapons.length === 0;
+    if (hasNoMeleeAtAll) score -= 0.6;
     
     // Consider unit strength vs enemy
     const strengthRatio = unit.current_models / (nearestEnemy.current_models || 1);
