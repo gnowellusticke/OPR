@@ -701,6 +701,7 @@ export default function Battle() {
       });
 
       if (target.current_models <= 0) {
+        target.status = 'destroyed';
         evs.push({ round, type: 'combat', message: `${target.name} destroyed!`, timestamp: new Date().toLocaleTimeString() });
         logger?.logDestruction({ round, unit: target, cause: `shooting by ${unit.name} (${weaponLabel})` });
       }
