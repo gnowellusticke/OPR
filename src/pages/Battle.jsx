@@ -83,22 +83,22 @@ export default function Battle() {
       setLoadingStatus("Analyzing army performance...");
       await dmnRef.current.loadLearningData(battleData.army_a_id);
 
-    const logger = new BattleLogger(battleData.id, armyA, armyB);
-    loggerRef.current = logger;
-    battleRef.current = { ...battleData, armyAName: armyA.name, armyBName: armyB.name };
-    setBattle(battleRef.current);
+      const logger = new BattleLogger(battleData.id, armyA, armyB);
+      loggerRef.current = logger;
+      battleRef.current = { ...battleData, armyAName: armyA.name, armyBName: armyB.name };
+      setBattle(battleRef.current);
 
-    if (battleData.status === 'setup') {
-      setLoadingStatus("Initializing battle...");
-      await initializeBattle(battleData, armyA, armyB, logger);
-    } else {
-      setLoadingStatus("Loading saved battle state...");
-      commitState(battleData.game_state, battleData.event_log || []);
-    }
+      if (battleData.status === 'setup') {
+        setLoadingStatus("Initializing battle...");
+        await initializeBattle(battleData, armyA, armyB, logger);
+      } else {
+        setLoadingStatus("Loading saved battle state...");
+        commitState(battleData.game_state, battleData.event_log || []);
+      }
     } catch (err) {
-    console.error("Battle load error:", err);
-    setLoadingStatus(`Error: ${err.message}`);
-    throw err;
+      console.error("Battle load error:", err);
+      setLoadingStatus(`Error: ${err.message}`);
+      throw err;
     }
   };
 
