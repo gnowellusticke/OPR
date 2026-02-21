@@ -86,6 +86,34 @@ export class RulesEngine {
     return { success: true, distance: moveDistance };
   }
 
+  // Ambush: check if a unit has the Ambush rule and is currently in reserve
+  isAmbushUnit(unit) {
+    return unit.special_rules?.includes('Ambush');
+  }
+
+  // Deploy an Ambush unit from reserve — places it anywhere on the table > 9" from all enemies.
+  // Returns true if a valid position was found and the unit was placed, false otherwise.
+  deployAmbush(unit, gameState) {
+    const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
+    let attempts = 0;
+    while (attempts < 100) {
+      const x = Math.random() * 66 + 3;
+      const y = Math.random() * 42 + 3;
+      const tooClose = enemies.some(e => {
+        const dx = e.x - x; const dy = e.y - y;
+        return Math.sqrt(dx * dx + dy * dy) < 9;
+      });
+      if (!tooClose) {
+        unit.x = x;
+        unit.y = y;
+        unit.is_in_reserve = false;
+        return true;
+      }
+      attempts++;
+    }
+    return false;
+  }
+
   // Teleport: redeploy anywhere outside 9" of all enemies
   executeTeleport(unit, gameState) {
     const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);

@@ -197,6 +197,7 @@ export default function Battle() {
       // ranged_weapons: pre-filtered list for convenience; shooting also checks unit.weapons
       const ranged_weapons = (unit.weapons || []).filter(w => (w.range ?? 2) > 2);
       console.log(`[DEPLOY] ${name} weapons:`, JSON.stringify(unit.weapons), '→ ranged:', ranged_weapons.length);
+      const isAmbush = unit.special_rules?.includes('Ambush');
       return {
         ...unit,
         id: `${owner === 'agent_a' ? 'a' : 'b'}_${id++}`,
@@ -207,6 +208,7 @@ export default function Battle() {
         ranged_weapons,          // ordered list, immutable for the whole battle
         heroic_action_used: false,
         is_scout: isScout,
+        is_in_reserve: isAmbush,  // Ambush units start off the table
       };
     });
 
