@@ -158,12 +158,22 @@ export default function Battle() {
   // ─── DEPLOY ──────────────────────────────────────────────────────────────────
 
   const computeWounds = (unit) => {
+    // Bug 1 fix: Multi-model units have wounds = models × tough per model
     const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
     const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
+    const modelCount = unit.models || 1;
     const isHero = unit.special_rules?.toLowerCase().includes('hero');
-    if (isHero && toughValue > 0) return Math.max(0, unit.models - 1) + toughValue;
-    if (toughValue > 0) return toughValue;
-    return unit.models;
+    
+    if (isHero && toughValue > 0) {
+      // Hero: 1 hero model + toughValue wounds
+      return 1 + toughValue;
+    }
+    if (toughValue > 0) {
+      // Multi-model unit: each model has toughValue wounds
+      return modelCount * toughValue;
+    }
+    // No tough value: each model is 1 wound (degenerate, but handle it)
+    return modelCount;
   };
 
   const resolveMeleeWeaponName = (unit) => {
@@ -194,6 +204,12 @@ export default function Battle() {
   const isAmbush = unit.special_rules?.includes('Ambush') || unit.special_rules?.includes('Teleport') || unit.special_rules?.includes('Infiltrate');
   const isScout = unit.special_rules?.includes('Scout') && advRules?.scoutingDeployment;
   const ranged_weapons = (unit.weapons || []).filter(w => (w.range ?? 2) > 2);
+  
+  // Bug 1 & 2 fix: store model count and tough per model for scaling
+  const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
+  const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 0;
+  const modelCount = unit.models || 1;
+  
   // Placeholder positions — real positions set during alternating deployment phase
   return {
   ...unit,
@@ -202,6 +218,8 @@ export default function Battle() {
   x: owner === 'agent_a' ? 10 : 60,
   y: owner === 'agent_a' ? 10 : 38,
   current_models: maxWounds, total_models: maxWounds,
+  model_count: modelCount,
+  tough_per_model: toughPerModel,
   status: 'normal', fatigued: false, just_charged: false, rounds_without_offense: 0,
   melee_weapon_name: resolveMeleeWeaponName(unit),
   ranged_weapons,
@@ -376,16 +394,20 @@ export default function Battle() {
     const rules = rulesRef.current;
     const logger = loggerRef.current;
 
-    // ── Shaken recovery (Bug 5 fix: always logged before any other action) ──
+    // ── Shaken recovery (Bug 10 fix: proper morale recovery roll event) ──
     let canAct = true;
     if (liveUnit.status === 'shaken') {
     const quality = liveUnit.quality || 4;
     const roll = rules.dice.roll();
     const recovered = roll >= quality;
-    if (recovered) liveUnit.status = 'normal';
-    else canAct = false;
+    if (recovered) {
+      liveUnit.status = 'normal';
+    } else {
+      canAct = false;
+    }
+    const outcome = recovered ? 'recovered' : 'still_shaken';
     evs.push({ round, type: 'morale', message: `${liveUnit.name} Shaken recovery: rolled ${roll} vs ${quality}+ — ${recovered ? 'recovered' : 'still shaken, cannot charge or shoot'}`, timestamp: new Date().toLocaleTimeString() });
-    logger?.logMorale({ round, unit: liveUnit, outcome: recovered ? 'recovered' : 'still_shaken', roll, qualityTarget: quality, dmnReason: 'shaken recovery check' });
+    logger?.logMorale({ round, unit: liveUnit, outcome, roll, qualityTarget: quality, dmnReason: 'shaken recovery check' });
     }
 
     // ── Heroic Action (Advance Rule) ──────────────────────────────────────────
@@ -564,16 +586,22 @@ export default function Battle() {
       // Ensure the weapon object always has special_rules as a string for RulesEngine
       const normWeapon = { ...weapon, special_rules: weaponSpecialStr };
 
+      // Bug 2 fix: Multi-model units fire once per model
+      const currentModelCount = Math.ceil(unit.current_models / Math.max(unit.tough_per_model, 1));
+      const baseAttacks = weapon.attacks || 1;
+      const totalAttacks = baseAttacks * currentModelCount;
+
       let result;
       if (isBlast) {
         const blastWeapon = { ...normWeapon, attacks: blastCount };
         result = rules.resolveShooting(unit, target, blastWeapon, gs.terrain, gs);
         result = { ...result, hits: blastCount };
       } else {
-        result = rules.resolveShooting(unit, target, normWeapon, gs.terrain, gs);
+        const shootWeapon = { ...normWeapon, attacks: totalAttacks };
+        result = rules.resolveShooting(unit, target, shootWeapon, gs.terrain, gs);
       }
 
-      const loggedAttacks = isBlast ? blastCount : (weapon.attacks || 1);
+      const loggedAttacks = isBlast ? blastCount : totalAttacks;
       const woundsDealt = result.wounds;
       const targetWasPreviouslyAlive = target.current_models > 0;
       target.current_models = Math.max(0, target.current_models - woundsDealt);
@@ -601,6 +629,15 @@ export default function Battle() {
       }
 
       const topScore = liveEnemies.map(e => dmn.scoreTarget(unit, e)).sort((a, b) => b - a)[0]?.toFixed(2);
+
+      // Bug 6 fix: Deduplicate special_rules_applied by rule name
+      const seenRules = new Set();
+      const deduplicatedRules = (result.specialRulesApplied || []).filter(rule => {
+        if (seenRules.has(rule.rule)) return false;
+        seenRules.add(rule.rule);
+        return true;
+      });
+
       logger?.logShoot({
         round, actingUnit: unit, targetUnit: target,
         weapon: weapon.name,
@@ -611,7 +648,7 @@ export default function Battle() {
           saves: result.saves,
           wounds_dealt: woundsDealt,
           blast: isBlast,
-          special_rules_applied: result.specialRulesApplied || []
+          special_rules_applied: deduplicatedRules
         },
         gameState: gs,
         dmnReason: `${dmnReason} (score ${topScore})`
