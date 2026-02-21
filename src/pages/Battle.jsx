@@ -493,26 +493,24 @@ export default function Battle() {
   // never the same weapon twice. Blast(X) uses X automatic hits with no quality roll.
 
   const attemptShooting = async (unit, gs, evs, dmnReason) => {
-    const round = gs.current_round;
-    const dmn = dmnRef.current;
-    const rules = rulesRef.current;
-    const logger = loggerRef.current;
-    let shotFired = false;
+  const round = gs.current_round;
+  const dmn = dmnRef.current;
+  const rules = rulesRef.current;
+  const logger = loggerRef.current;
+  let shotFired = false;
 
-    // Collect all ranged weapons — use unit.weapons directly so every weapon fires.
-    // unit.ranged_weapons is a pre-filtered convenience copy; fall back to unit.weapons.
-    // Ensure we always work with an array (guard against any legacy single-object storage).
-    const allRanged = (unit.weapons || []).filter(w => (w.range ?? 2) > 2);
-    const rangedWeapons = allRanged.length > 0 ? allRanged : (
-      Array.isArray(unit.ranged_weapons) ? unit.ranged_weapons :
-      unit.ranged_weapons ? [unit.ranged_weapons] : []
-    );
+  // Deduplicate weapons by name to guarantee one event per distinct weapon, not per attack
+  const seen = new Set();
+  const rangedWeapons = (unit.weapons || []).filter(w => {
+  if ((w.range ?? 2) <= 2) return false;
+  if (seen.has(w.name)) return false;
+  seen.add(w.name);
+  return true;
+  });
 
-    if (rangedWeapons.length === 0) return false;
+  if (rangedWeapons.length === 0) return false;
 
-    console.log(`[SHOOT] ${unit.name} has ${rangedWeapons.length} ranged weapon(s):`, rangedWeapons.map(w => w.name));
-
-    for (const weapon of rangedWeapons) {
+  for (const weapon of rangedWeapons) {
       // Re-query live enemies before each weapon so mid-activation kills are respected
       const liveEnemies = gs.units.filter(u =>
         u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed'
