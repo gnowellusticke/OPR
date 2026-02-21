@@ -276,12 +276,16 @@ export class RulesEngine {
   return { rolls, saves, wounds, specialRulesApplied };
   }
 
-  // End-of-round regeneration — single roll per unit per round regardless of wounds lost (Bug 2)
+  // End-of-round regeneration/self-repair — unified for Regeneration, Self-Repair and Repair.
+  // NEVER touches unit.status — only modifies current_models.
   applyRegeneration(unit) {
-    if (!unit.special_rules?.includes('Regeneration')) return { recovered: 0, roll: null };
+    const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
+    const hasRule = REGEN_RULES.some(r => unit.special_rules?.includes(r));
+    if (!hasRule) return { recovered: 0, roll: null };
     if (unit.current_models >= unit.total_models) return { recovered: 0, roll: null };
-    const roll = this.dice.roll();
+    const roll = this.dice.roll(); // always an integer 1-6
     const recovered = roll >= 5 ? 1 : 0;
+    // Only heal wounds — never touch status
     unit.current_models = Math.min(unit.total_models, unit.current_models + recovered);
     return { recovered, roll };
   }
