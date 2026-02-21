@@ -104,10 +104,11 @@ export class ArmyTextParser {
         break;
       }
 
-      // Parse weapon line
+      // Parse weapon line (may return a single weapon or an array for multiplied weapons)
       const weapon = this.parseWeapon(nextLine);
       if (weapon) {
-        weapons.push(weapon);
+        if (Array.isArray(weapon)) weapons.push(...weapon);
+        else weapons.push(weapon);
       }
       
       nextIndex++;
