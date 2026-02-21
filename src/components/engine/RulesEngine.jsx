@@ -165,23 +165,12 @@ export class RulesEngine {
 
     let attacks = weapon.attacks || 1;
 
-    // FIX: Blast(X) — X attacks as auto-hits, no quality roll needed
+    // Blast(X) — X automatic hits, no quality roll, proceeds directly to saves (Bug 1)
     if (weapon.special_rules?.includes('Blast')) {
       const blastMatch = weapon.special_rules.match(/Blast\((\d+)\)/);
       const blastCount = blastMatch ? parseInt(blastMatch[1]) : 3;
-      // Blast attacks are auto-hits regardless of model count
       const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
-      // Also roll base weapon attacks normally
-      const normalRolls = this.dice.rollQualityTest(quality, attacks);
-      const normalHits = normalRolls.filter(r => r.success).length;
-      const allRolls = [...normalRolls, ...autoHitRolls];
-      let successes = normalHits + blastCount;
-      if (weapon.special_rules?.includes('Deadly')) {
-        const deadlyMatch = weapon.special_rules.match(/Deadly\((\d+)\)/);
-        const deadlyThreshold = deadlyMatch ? parseInt(deadlyMatch[1]) : 6;
-        successes += normalRolls.filter(r => r.value >= deadlyThreshold).length;
-      }
-      return { rolls: allRolls, successes };
+      return { rolls: autoHitRolls, successes: blastCount };
     }
 
     const rolls = this.dice.rollQualityTest(quality, attacks);
@@ -223,20 +212,14 @@ export class RulesEngine {
     return { rolls, saves, wounds };
   }
 
-  // End-of-round regeneration — returns { recovered, rolls } for logging
+  // End-of-round regeneration — single roll per unit per round regardless of wounds lost (Bug 2)
   applyRegeneration(unit) {
-    if (!unit.special_rules?.includes('Regeneration')) return { recovered: 0, rolls: [] };
-    if (unit.current_models >= unit.total_models) return { recovered: 0, rolls: [] };
-    const missing = unit.total_models - unit.current_models;
-    let recovered = 0;
-    const rolls = [];
-    for (let i = 0; i < missing; i++) {
-      const r = this.dice.roll();
-      rolls.push(r);
-      if (r >= 5) recovered++;
-    }
+    if (!unit.special_rules?.includes('Regeneration')) return { recovered: 0, roll: null };
+    if (unit.current_models >= unit.total_models) return { recovered: 0, roll: null };
+    const roll = this.dice.roll();
+    const recovered = roll >= 5 ? 1 : 0;
     unit.current_models = Math.min(unit.total_models, unit.current_models + recovered);
-    return { recovered, rolls };
+    return { recovered, roll };
   }
 
   // Melee
