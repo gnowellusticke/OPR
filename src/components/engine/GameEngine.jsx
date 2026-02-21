@@ -415,21 +415,26 @@ export class DMNEngine {
   /**
   * Decide the best deployment zone and coordinates for a unit.
   * Returns { x, y, zone, dmnReason, specialRulesApplied }
+  * Bug 2 fix: usedZones set passed in to prevent friendly zone stacking
   */
-  decideDeployment(unit, isAgentA, deployedEnemies, deployedFriendlies, objectives, terrain) {
+  decideDeployment(unit, isAgentA, deployedEnemies, deployedFriendlies, objectives, terrain, usedZones = new Set()) {
   const isReserve = unit.special_rules?.includes('Ambush') ||
                   unit.special_rules?.includes('Teleport') ||
                   unit.special_rules?.includes('Infiltrate');
-  // Scout deploys mid-table — handled separately in deployArmies; here treat as standard
   if (isReserve) {
-  return { x: unit.x, y: unit.y, zone: 'reserve', dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`, specialRulesApplied: [{ rule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve', value: null, effect: 'deployed to reserve, not on table' }] };
+    return { x: unit.x, y: unit.y, zone: 'reserve', dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`, specialRulesApplied: [{ rule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve', value: null, effect: 'deployed to reserve, not on table' }] };
   }
 
   const meleeWeapons = (unit.weapons || []).filter(w => w.range <= 2);
   const rangedWeapons = (unit.weapons || []).filter(w => w.range > 2);
   const hasLongRange = rangedWeapons.some(w => w.range >= 24);
   const hasIndirect = rangedWeapons.some(w => w.special_rules?.includes('Indirect'));
-  const isMeleePrimary = meleeWeapons.length > 0 && meleeWeapons.length >= rangedWeapons.length;
+
+  // Bug 2 fix: classify by highest-Attack weapon to distinguish fire support from melee
+  const bestMeleeAttacks = meleeWeapons.reduce((max, w) => Math.max(max, w.attacks || 1), 0);
+  const bestRangedAttacks = rangedWeapons.reduce((max, w) => Math.max(max, w.attacks || 1), 0);
+  // A unit is melee-primary only if its best melee weapon out-attacks its best ranged weapon
+  const isMeleePrimary = meleeWeapons.length > 0 && (rangedWeapons.length === 0 || bestMeleeAttacks >= bestRangedAttacks);
   const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
   const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
   const isHeavy = toughValue >= 6;
