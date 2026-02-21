@@ -197,13 +197,24 @@ export class RulesEngine {
       defense_rolls: [],
       saves: 0,
       wounds: 0,
+      blast: false,
+      baneProcs: 0,
       specialRulesApplied: [{ rule: 'Limited', value: null, effect: 'weapon already used once this game' }]
     };
   }
 
   const hits = this.rollToHit(attacker, weapon, defender, gameState);
   const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
-  const specialRulesApplied = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
+  const allRules = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
+
+  // Global deduplication: max one entry per rule name
+  const seenRules = new Set();
+  const specialRulesApplied = allRules.filter(rule => {
+    if (seenRules.has(rule.rule)) return false;
+    seenRules.add(rule.rule);
+    return true;
+  });
+
   return {
   weapon: weapon.name,
   hit_rolls: hits.rolls,
@@ -211,6 +222,8 @@ export class RulesEngine {
   defense_rolls: saves.rolls,
   saves: saves.saves,
   wounds: saves.wounds,
+  blast: hits.blast || false,
+  baneProcs: saves.baneProcs || 0,
   specialRulesApplied
   };
   }
@@ -270,7 +283,7 @@ export class RulesEngine {
   const blastCount = blastCheckMatch ? parseInt(blastCheckMatch[1]) : 3;
   const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
   specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
-  return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied };
+  return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
   }
 
   const rolls = this.dice.rollQualityTest(quality, attacks);
@@ -305,9 +318,17 @@ export class RulesEngine {
   let defense = unit.defense || 5;
   const ap = weapon.ap || 0;
   const specialRulesApplied = [];
+  let baneProcs = 0;
 
-  // Bane: re-roll unmodified 6s on Defense
-  const baneRerolls = weapon.special_rules?.includes('Bane');
+  // Bane: natural 6s on hit rolls auto-wound, bypassing saves
+  const baneHits = weapon.special_rules?.includes('Bane') && hitRolls
+    ? hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length
+    : 0;
+  if (baneHits > 0) {
+    baneProcs = baneHits;
+    hitCount = Math.max(0, hitCount - baneHits); // Remove Bane hits from save pool
+    if (baneHits > 0) specialRulesApplied.push({ rule: 'Bane', value: baneHits, effect: `${baneHits} natural 6s auto-wound, bypassing saves` });
+  }
 
   if (terrain) {
   const coverBonus = this.getCoverBonus(unit, terrain);
@@ -315,6 +336,13 @@ export class RulesEngine {
   defense -= coverBonus;
   specialRulesApplied.push({ rule: 'Cover', value: coverBonus, effect: `save improved by ${coverBonus} from terrain` });
   }
+  }
+
+  // Damage(X): each unsaved wound deals X damage
+  const damageMatch = weapon.special_rules?.match(/Damage\((\d+)\)/);
+  const damageValue = damageMatch ? parseInt(damageMatch[1]) : 1;
+  if (damageMatch) {
+  specialRulesApplied.push({ rule: 'Damage', value: damageValue, effect: `each unsaved wound deals ${damageValue} damage` });
   }
 
   // Unstoppable: ignores negative AP modifiers
@@ -332,29 +360,20 @@ export class RulesEngine {
   const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
   let saves = rolls.filter(r => r.success).length;
 
-  // Bane: re-roll unmodified 6s
-  if (baneRerolls) {
-  const natureSixes = rolls.filter(r => r.value === 6).length;
-  if (natureSixes > 0) {
-    const rerolls = this.dice.rollDefense(modifiedDefense, natureSixes);
-    const extraSaves = rerolls.filter(r => r.success).length;
-    saves = saves - natureSixes + extraSaves;
-    if (extraSaves > 0) specialRulesApplied.push({ rule: 'Bane', value: null, effect: `re-rolled ${natureSixes} natural 6s, ${extraSaves} failed` });
-  }
-  }
-
   // Rending: Unmodified 6s on hit rolls auto-wound (bypass saves)
-  let autoWounds = 0;
+  let renderingAutoWounds = 0;
   if (weapon.special_rules?.includes('Rending') && hitRolls) {
-  autoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length;
-  saves = Math.max(0, saves - autoWounds);
-  if (autoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${autoWounds} extra hits from natural 6s, bypassing saves` });
+  renderingAutoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto && r.baneProc !== true).length;
+  saves = Math.max(0, saves - renderingAutoWounds);
+  if (renderingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${renderingAutoWounds} natural 6s bypass saves` });
   }
 
-  let wounds = Math.max(0, hitCount - saves);
-  wounds = Math.min(wounds, hitCount);
+  let unsavedWounds = Math.max(0, hitCount - saves);
+  unsavedWounds = Math.min(unsavedWounds, hitCount);
+  // Apply Damage(X) multiplier to unsaved wounds
+  let wounds = unsavedWounds * damageValue + baneProcs;
 
-  return { rolls, saves, wounds, specialRulesApplied };
+  return { rolls, saves, wounds, baneProcs, specialRulesApplied };
   }
 
   // End-of-round regeneration/self-repair — unified for Regeneration, Self-Repair and Repair.
