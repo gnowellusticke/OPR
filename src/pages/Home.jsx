@@ -6,6 +6,7 @@ import { Swords, Zap, ChevronDown, ChevronRight } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { ArmyTextParser } from '../components/army/ArmyTextParser';
 import { base44 } from "@/api/base44Client";
+import RulesReference from '../components/rules/RulesReference';
 
 
 export default function Home() {
