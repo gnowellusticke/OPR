@@ -143,14 +143,14 @@ export default function Battle() {
   };
 
   const generateObjectives = () => {
-    // Bug 6 fix: always generate exactly 5 objectives
     const objectives = [];
-    const target = 5;
-    let attempts = 0;
-    while (objectives.length < target && attempts < 500) {
-      attempts++;
-      const o = { x: Math.random() * 54 + 9, y: Math.random() * 18 + 15, controlled_by: null };
-      if (!objectives.some(e => Math.hypot(o.x - e.x, o.y - e.y) < 9)) objectives.push(o);
+    const count = Math.floor(Math.random() * 3) + 3;
+    while (objectives.length < count) {
+      for (let a = 0; a < 100; a++) {
+        const o = { x: Math.random() * 54 + 9, y: Math.random() * 18 + 15, controlled_by: null };
+        if (!objectives.some(e => Math.hypot(o.x - e.x, o.y - e.y) < 9)) { objectives.push(o); break; }
+      }
+      if (objectives.length < count && objectives.length === objectives.length) break; // safety
     }
     return objectives;
   };
@@ -641,9 +641,10 @@ export default function Battle() {
   const rules = rulesRef.current;
   const logger = loggerRef.current;
 
-  // Bug 8 fix: guard on wounds_remaining (0 wounds = dead, even if status not yet set)
-  if (attacker.current_models <= 0 || attacker.status === 'destroyed' || attacker.status === 'routed') return false;
-  if (defender.current_models <= 0 || defender.status === 'destroyed' || defender.status === 'routed') return false;
+  // Guard: attacker must be alive (no zombie melee from destroyed or at-zero-wounds units)
+  if (attacker.current_models <= 0 || attacker.status === 'destroyed') return false;
+  // Also check defender is alive at melee start
+  if (defender.current_models <= 0 || defender.status === 'destroyed') return false;
 
   const result = rules.resolveMelee(attacker, defender, gs);
 
@@ -716,31 +717,26 @@ export default function Battle() {
       }
     });
 
-    // Bug 7 fix: alternate starting agent each round to prevent same-agent starvation
-    const startingAgent = gs.current_round % 2 === 0 ? 'agent_a' : 'agent_b';
     const newState = {
       ...gs,
       current_round: newRound,
       units_activated: [],
-      active_agent: startingAgent,
+      active_agent: 'agent_a',
     };
 
-    // Reset per-round flags only — do NOT clear shaken here; shaken clears via recovery roll at activation start
+    // Reset per-round flags — NEVER clear shaken here (only morale recovery rolls can do that)
     newState.units = newState.units.map(u => ({
       ...u,
       fatigued: false, just_charged: false,
       status: u.current_models <= 0 ? 'destroyed' : u.status,
     }));
 
-    // Regeneration / Self-Repair / Repair — heals wounds only, never changes status
+    // Regeneration / Self-Repair / Repair
     const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
     newState.units.forEach(u => {
       const rule = REGEN_RULES.find(r => u.special_rules?.includes(r));
       if (u.current_models > 0 && rule && u.current_models < u.total_models) {
-        const statusBefore = u.status; // Bug 3 guard: capture before
         const { recovered, roll } = rules.applyRegeneration(u);
-        // Enforce: regen must never change status
-        if (u.status !== statusBefore) u.status = statusBefore;
         evs.push({ round: gs.current_round, type: 'regen', message: `${u.name} ${rule}: roll ${roll} — ${recovered ? 'recovered 1 wound' : 'no recovery'}`, timestamp: new Date().toLocaleTimeString() });
         logger?.logRegeneration({ round: gs.current_round, unit: u, recovered, roll, ruleName: rule });
       }
