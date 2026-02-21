@@ -948,9 +948,9 @@ export default function Battle() {
       advance_rules: activeRuleKeys,   // top-level array of all enabled rule keys
     });
 
-    // Bug 4 fix: final_score must be cumulative total across all rounds, not just last round
+    // Bug 9 fix: final_score must be cumulative total across all rounds (progressive only)
     const finalScore = { agent_a: aScore, agent_b: bScore };
-    logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: aScore, agent_b: bScore, mode: isCumulative ? 'cumulative' : 'per_round' } });
+    logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: aScore, agent_b: bScore, mode: isProgressiveScoring ? 'progressive' : 'standard' } });
     logger?.logBattleEnd({ winner, finalScore });
 
     const log = logger?.getFullLog(winner, { agent_a: aScore, agent_b: bScore });
