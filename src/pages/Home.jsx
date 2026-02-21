@@ -250,6 +250,9 @@ export default function Home() {
           )}
         </Card>
 
+        {/* Rules Reference */}
+        <RulesReference />
+
         {/* Start Button */}
         <div className="flex justify-center pt-4">
           <Button
