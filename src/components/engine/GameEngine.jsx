@@ -347,36 +347,95 @@ export class DMNEngine {
     return score;
   }
 
-  selectTarget(unit, enemies) {
+  selectUnitToActivate(remainingUnits, gameState, owner, strategicState) {
+    // Score units by priority based on archetype and game state
+    const scoredUnits = remainingUnits.map(unit => ({
+      unit,
+      score: this.scoreUnitActivationPriority(unit, gameState, owner, strategicState)
+    }));
+
+    scoredUnits.sort((a, b) => b.score - a.score);
+    return scoredUnits[0]?.unit || remainingUnits[0];
+  }
+
+  scoreUnitActivationPriority(unit, gameState, owner, strategicState) {
+    let score = 0;
+
+    // Objective control: fast units should activate early to cap objectives
+    const isFast = unit.special_rules?.includes('Fast');
+    if (isFast && gameState.objectives?.length > 0) {
+      const nearestObj = this.findNearestObjective(unit, gameState.objectives);
+      if (nearestObj && this.getDistance(unit, nearestObj) <= 24) {
+        score += 1.0;
+      }
+    }
+
+    // Melee units: activate early to charge before enemy responds
+    const isMeleePrimary = this.isMeleePrimary(unit);
+    const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
+    if (isMeleePrimary && enemies.length > 0) {
+      const nearestEnemy = this.findNearestEnemy(unit, enemies);
+      if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= this.maxChargeDistance(unit)) {
+        score += 0.8;
+      }
+    }
+
+    // Fire support units: activate later, after positioning
+    const isFireSupport = unit.special_rules?.includes('Indirect') || 
+                          /artillery|gun|cannon|mortar|support/i.test(unit.name);
+    if (isFireSupport) {
+      score -= 0.3;
+    }
+
+    // Damaged units: prioritize rescue/healing if possible
+    const healthRatio = unit.current_models / unit.total_models;
+    if (healthRatio < 0.3 && unit.status === 'normal') {
+      score += 0.5;
+    }
+
+    // Aggressive when winning: activate aggressive units first
+    if (strategicState.isWinning && isMeleePrimary) {
+      score += 0.4;
+    }
+
+    // Defensive when losing: activate ranged/support units first for coverage
+    if (strategicState.isLosing && isFireSupport) {
+      score += 0.5;
+    }
+
+    return score;
+  }
+
+  selectTarget(unit, enemies, gameState, strategicState) {
     if (!enemies || enemies.length === 0) return null;
-    
+
     // Score each enemy
     const scoredEnemies = enemies.map(enemy => ({
       enemy,
-      score: this.scoreTarget(unit, enemy)
+      score: this.scoreTarget(unit, enemy, gameState, strategicState)
     }));
-    
+
     scoredEnemies.sort((a, b) => b.score - a.score);
     return scoredEnemies[0].enemy;
   }
 
-  scoreTarget(unit, enemy) {
+  scoreTarget(unit, enemy, gameState, strategicState) {
     let score = 0;
-    
+
     // Prefer weakened targets we can finish off
     const healthRatio = enemy.current_models / enemy.total_models;
     score += (1 - healthRatio) * 0.5;
-    
+
     // Big bonus for nearly destroyed units (finish them off!)
     if (healthRatio < 0.3) score += 0.4;
-    
+
     // Prefer closer targets
     const distance = this.getDistance(unit, enemy);
     score += Math.max(0, (30 - distance) / 30) * 0.3;
-    
+
     // Prefer targets we can damage
     if (enemy.defense <= 3) score += 0.3;
-    
+
     // Prioritize threats - units with high quality/firepower
     if (enemy.quality <= 3) score += 0.2;
     if (enemy.weapons?.some(w => w.range > 18 && w.attacks >= 3)) score += 0.2;
@@ -392,7 +451,38 @@ export class DMNEngine {
     if (hasBlast && enemy.current_models >= 5) {
       score += 0.4;
     }
-    
+
+    // Archetype-aware targeting
+    const isMeleePrimary = this.isMeleePrimary(unit);
+    const isFast = unit.special_rules?.includes('Fast');
+
+    // Melee units: target enemies blocking objectives
+    if (isMeleePrimary && gameState.objectives?.length > 0) {
+      const nearestObj = this.findNearestObjective(enemy, gameState.objectives);
+      if (nearestObj && this.getDistance(enemy, nearestObj) <= 6) {
+        score += 0.6;
+      }
+    }
+
+    // Fast units: prioritize already-wounded prey
+    if (isFast && healthRatio < 0.5) {
+      score += 0.4;
+    }
+
+    // Dynamic strategy: aggressive when winning
+    if (strategicState?.isWinning) {
+      // Finish off weak enemies faster
+      if (healthRatio < 0.6) score += 0.3;
+    }
+
+    // Dynamic strategy: defensive when losing
+    if (strategicState?.isLosing) {
+      // Prioritize high-threat enemies
+      if (enemy.quality <= 2 || enemy.weapons?.some(w => w.range > 18 && w.attacks >= 2)) {
+        score += 0.5;
+      }
+    }
+
     return score;
   }
 
