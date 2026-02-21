@@ -174,18 +174,27 @@ export class BattleLogger {
     });
   }
 
-  logMove({ round, actingUnit, action, distance, zone, dmnReason, chargeTarget }) {
+  logMove({ round, actingUnit, action, distance, zone, dmnReason, chargeTarget, chargeTargetState, chargeSpecialRules }) {
+    const isCharge = action === 'Charge';
     this.events.push({
       round,
       timestamp: this._timestamp(),
-      event_type: action === 'Charge' ? 'charge' : 'move',
+      event_type: isCharge ? 'charge' : 'move',
       acting_unit: actingUnit.name,
       target_unit: chargeTarget || null,
       weapon_used: null,
       zone,
       range_bracket: null,
-      roll_results: { distance_moved: parseFloat(distance?.toFixed(1) || 0) },
-      unit_state_after: { acting_unit: this._unitState(actingUnit) },
+      // Bug 4 fix: special_rules_applied always present on charge events
+      roll_results: {
+        distance_moved: parseFloat(distance?.toFixed(1) || 0),
+        ...(isCharge ? { special_rules_applied: chargeSpecialRules || [] } : {})
+      },
+      unit_state_after: {
+        acting_unit: this._unitState(actingUnit),
+        // Bug 3 fix: populate target state at moment of charge declaration
+        ...(isCharge && chargeTargetState ? { target_unit: chargeTargetState } : {})
+      },
       dmn_reason: dmnReason || action.toLowerCase(),
       flags: { turning_point: false, first_blood: false, unit_destroyed: false }
     });
