@@ -584,6 +584,7 @@ export default function Battle() {
   const dmn = dmnRef.current;
   const rules = rulesRef.current;
   const logger = loggerRef.current;
+  const strategicState = dmn.analyzeStrategicPosition(gs, unit.owner);
   let shotFired = false;
 
   // Deduplicate weapons by name to guarantee one event per distinct weapon, not per attack
@@ -607,7 +608,7 @@ export default function Battle() {
       );
       if (liveEnemies.length === 0) break;
 
-      const target = dmn.selectTarget(unit, liveEnemies);
+      const target = dmn.selectTarget(unit, liveEnemies, gs, strategicState);
       if (!target) continue;
 
       const dist = rules.calculateDistance(unit, target);
