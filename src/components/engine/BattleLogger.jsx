@@ -31,6 +31,21 @@ export class BattleLogger {
   }
 
   logDeploy({ unit, zone, deploymentType, reserveRule, dmnReason, specialRulesApplied }) {
+    // Bug 4 fix: Include unit profile for verification
+    const unitProfile = {
+      quality: unit.quality || 4,
+      defense: unit.defense || 5,
+      tough: unit.special_rules?.match(/Tough\((\d+)\)/)?.[1] || null,
+      models: unit.model_count || 1,
+      weapons: (unit.weapons || []).map(w => ({
+        name: w.name,
+        range: w.range,
+        attacks: w.attacks || 1,
+        ap: w.ap || 0,
+        special_rules: w.special_rules || []
+      }))
+    };
+
     this.events.push({
       round: 0,
       timestamp: this._timestamp(),
@@ -52,6 +67,7 @@ export class BattleLogger {
           status: unit.status || 'normal'
         }
       },
+      unit_profile: unitProfile,
       dmn_reason: dmnReason || 'standard deployment',
       flags: { turning_point: false, first_blood: false, unit_destroyed: false }
     });
