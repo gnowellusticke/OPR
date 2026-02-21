@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Swords, Zap } from "lucide-react";
+import { Swords, Zap, ChevronDown, ChevronRight } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { ArmyTextParser } from '../components/army/ArmyTextParser';
 import { base44 } from "@/api/base44Client";
@@ -17,6 +17,15 @@ export default function Home() {
   const [armyTextB, setArmyTextB] = useState('');
   const [errorA, setErrorA] = useState('');
   const [errorB, setErrorB] = useState('');
+  const [advanceRulesOpen, setAdvanceRulesOpen] = useState(false);
+  const [advanceRules, setAdvanceRules] = useState({
+    cumulativeScoring: false,
+    scoutingDeployment: false,
+    overrun: false,
+    heroicActions: false,
+  });
+
+  const toggleAdvanceRule = (key) => setAdvanceRules(prev => ({ ...prev, [key]: !prev[key] }));
 
   const handleParseArmy = async (text, setArmy, setError) => {
     setError('');
@@ -34,7 +43,10 @@ export default function Home() {
     
     setCreating(true);
     try {
-      // Create battle
+      const activeRules = Object.entries(advanceRules)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+
       const battle = await base44.entities.Battle.create({
         army_a_id: armyA.id,
         army_b_id: armyB.id,
@@ -44,7 +56,8 @@ export default function Home() {
           units: [],
           terrain: [],
           objectives: [],
-          active_agent: 'agent_a'
+          active_agent: 'agent_a',
+          advance_rules: advanceRules,
         },
         event_log: []
       });
@@ -178,6 +191,63 @@ export default function Home() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Advance Rules */}
+        <Card className="bg-slate-800/50 border-slate-700">
+          <button
+            className="w-full flex items-center justify-between px-6 py-4 text-left"
+            onClick={() => setAdvanceRulesOpen(o => !o)}
+          >
+            <span className="text-white font-semibold text-base sm:text-lg flex items-center gap-2">
+              ⚔️ Advance Rules <span className="text-slate-400 font-normal text-sm">(optional)</span>
+            </span>
+            {advanceRulesOpen ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
+          </button>
+          {advanceRulesOpen && (
+            <CardContent className="pt-0 space-y-4 border-t border-slate-700">
+              {[
+                {
+                  key: 'cumulativeScoring',
+                  label: 'Cumulative Scoring',
+                  desc: 'Victory Points accumulate each round instead of resetting. A 2–0 round followed by a 1–1 round gives A: 3 pts, B: 1 pt total.'
+                },
+                {
+                  key: 'scoutingDeployment',
+                  label: 'Scouting Deployment',
+                  desc: 'Units with the Scout rule may deploy anywhere on the table before Round 1, as long as they stay 12"+ from all enemies.'
+                },
+                {
+                  key: 'overrun',
+                  label: 'Overrun',
+                  desc: 'After destroying an enemy in melee, the attacker may immediately move up to 3" in any direction.'
+                },
+                {
+                  key: 'heroicActions',
+                  label: 'Heroic Actions',
+                  desc: 'Hero units (Tough(X)) may use one Heroic Action per battle to re-roll all dice for a single action.'
+                },
+              ].map(({ key, label, desc }) => (
+                <label key={key} className="flex items-start gap-3 cursor-pointer group">
+                  <div className="relative mt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={advanceRules[key]}
+                      onChange={() => toggleAdvanceRule(key)}
+                      className="sr-only"
+                    />
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${advanceRules[key] ? 'bg-yellow-500 border-yellow-500' : 'border-slate-500 bg-slate-800 group-hover:border-yellow-500'}`}>
+                      {advanceRules[key] && <span className="text-black text-xs font-bold">✓</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-white font-medium text-sm">{label}</p>
+                    <p className="text-slate-400 text-xs mt-0.5">{desc}</p>
+                  </div>
+                </label>
+              ))}
+            </CardContent>
+          )}
+        </Card>
 
         {/* Start Button */}
         <div className="flex justify-center pt-4">
