@@ -546,8 +546,9 @@ export default function Battle() {
 
       const loggedAttacks = isBlast ? blastCount : (weapon.attacks || 1);
       const woundsDealt = result.wounds;
+      const targetWasPreviouslyAlive = target.current_models > 0;
       target.current_models = Math.max(0, target.current_models - woundsDealt);
-      if (target.current_models <= 0) target.status = 'destroyed';
+      if (target.current_models <= 0 && targetWasPreviouslyAlive) target.status = 'destroyed';
       shotFired = true;
       unit.rounds_without_offense = 0;
 
