@@ -104,13 +104,18 @@ export class ArmyTextParser {
         break;
       }
 
-      // Parse weapon line (may return a single weapon or an array for multiplied weapons)
-      const weapon = this.parseWeapon(nextLine);
-      if (weapon) {
-        if (Array.isArray(weapon)) weapons.push(...weapon);
-        else weapons.push(weapon);
+      // A single line may contain multiple comma-separated weapon entries, e.g.:
+      // "4x Heavy Rifle (24", A1, AP(1)), 5x CCW (A1), Plasma Cannon (30", A1, AP(4), Blast(3))"
+      // Split on "), " boundaries (closing paren followed by comma+space then next weapon)
+      const weaponEntries = this.splitWeaponLine(nextLine);
+      for (const entry of weaponEntries) {
+        const weapon = this.parseWeapon(entry.trim());
+        if (weapon) {
+          if (Array.isArray(weapon)) weapons.push(...weapon);
+          else weapons.push(weapon);
+        }
       }
-      
+
       nextIndex++;
     }
 
