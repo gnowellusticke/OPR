@@ -148,14 +148,16 @@ export class ArmyTextParser {
   static parseWeapon(line) {
     // Parse weapon: Energy Spear (A2, AP(4))
     // Or: 9x Shard Carbine (18", A2, Crack)
-    const weaponMatch = line.match(/^(?:\d+x\s+)?(.+?)\s*\(([^)]+)\)/);
-    
+    const weaponMatch = line.match(/^(\d+)x\s+(.+?)\s*\(([^)]+)\)|^(.+?)\s*\(([^)]+)\)/);
+
     if (!weaponMatch) {
       return null;
     }
 
-    const name = weaponMatch[1].trim();
-    const stats = weaponMatch[2];
+    // Group 1/2/3 = multiplier form; group 4/5 = plain form
+    const count = weaponMatch[1] ? parseInt(weaponMatch[1]) : 1;
+    const name = (weaponMatch[2] || weaponMatch[4]).trim();
+    const stats = weaponMatch[3] || weaponMatch[5];
 
     // Extract range
     const rangeMatch = stats.match(/(\d+)"/);
@@ -165,11 +167,20 @@ export class ArmyTextParser {
     const attacksMatch = stats.match(/A(\d+)/);
     const attacks = attacksMatch ? parseInt(attacksMatch[1]) : 1;
 
-    return {
-      name: name,
-      range: range,
-      attacks: attacks
-    };
+    // Extract AP
+    const apMatch = stats.match(/AP\((\d+)\)/);
+    const ap = apMatch ? parseInt(apMatch[1]) : 0;
+
+    // Extract special rules (everything that isn't range/attacks/AP)
+    const specialParts = stats
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => !/^\d+"$/.test(s) && !/^A\d+$/.test(s) && !/^AP\(\d+\)$/.test(s));
+    const special_rules = specialParts.join(', ') || undefined;
+
+    // Expand multiplied weapons into separate entries so each fires independently
+    const weapon = { name, range, attacks, ap, special_rules };
+    return count > 1 ? Array(count).fill(null).map(() => ({ ...weapon })) : weapon;
   }
 }
 
