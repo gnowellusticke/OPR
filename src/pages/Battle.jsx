@@ -458,8 +458,12 @@ export default function Battle() {
         unit.just_charged = true;
         rules.executeMovement(unit, action, target, gs.terrain);
         const zone = rules.getZone(unit.x, unit.y);
+        // Bug 3+4 fix: capture target state BEFORE melee; add special_rules_applied to charge event
+        const chargeSpecialRules = [];
+        if (unit.special_rules?.includes('Furious')) chargeSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack in melee on charge' });
+        if (unit.special_rules?.includes('Rage')) chargeSpecialRules.push({ rule: 'Rage', value: null, effect: 'charge modifier' });
         evs.push({ round, type: 'movement', message: `${unit.name} charges ${target.name}!`, timestamp: new Date().toLocaleTimeString() });
-        logger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason, chargeTarget: target.name });
+        logger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason, chargeTarget: target.name, chargeTargetState: { wounds_remaining: target.current_models, max_wounds: target.total_models, status: target.status || 'normal' }, chargeSpecialRules });
         // Guard: no overwatch in OPR — charger should never be dead here, but be safe
         if (unit.current_models <= 0 || unit.status === 'destroyed') {
           evs.push({ round, type: 'warning', message: `${unit.name} destroyed before melee — skipping combat`, timestamp: new Date().toLocaleTimeString() });
