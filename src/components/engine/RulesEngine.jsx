@@ -274,13 +274,13 @@ export class RulesEngine {
     return { results, total_wounds: totalWounds };
   }
 
-  // Morale
+  // Morale — never called on already-shaken units (callers must guard), but defensively roll anyway
   checkMorale(unit, reason = 'wounds') {
-    if (unit.status === 'shaken') {
-      return { passed: false, roll: null, reason: 'Already Shaken' };
-    }
     const quality = unit.quality || 4;
-    const roll = this.dice.roll();
+    const roll = this.dice.roll(); // always a real integer 1-6
+    if (unit.status === 'shaken') {
+      return { passed: false, roll, reason: 'Already Shaken' };
+    }
     const passed = roll >= quality;
 
     if (!passed && unit.special_rules?.includes('Fearless')) {
