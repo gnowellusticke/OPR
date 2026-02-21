@@ -162,17 +162,21 @@ export default function Battle() {
   };
 
   const generateObjectives = () => {
-    // Bug 7 fix: 5 fixed canonical positions across the board with guaranteed distinct coordinates
-    const canonicalPositions = [
-      { x: 12, y: 24 },  // left-centre
-      { x: 36, y: 10 },  // centre-north
-      { x: 36, y: 36 },  // centre
-      { x: 36, y: 46 },  // centre-south
-      { x: 60, y: 24 }   // right-centre
+    // Bug 8 fix: Roll d3+2 for number of objectives, place in centre zone only
+    const rollD3 = () => Math.floor(Math.random() * 3) + 1;
+    const numObjectives = rollD3() + 2; // Result: 3, 4, or 5
+
+    // Fixed positions in centre zone (neutral, outside deployment strips)
+    const allPositions = [
+      { x: 12, y: 24, id: 'obj_1' },   // left-centre
+      { x: 36, y: 12, id: 'obj_2' },   // centre-north
+      { x: 36, y: 36, id: 'obj_3' },   // centre
+      { x: 36, y: 48, id: 'obj_4' },   // centre-south
+      { x: 60, y: 24, id: 'obj_5' }    // right-centre
     ];
 
-    // Always generate all 5 objectives at canonical positions (no shuffling)
-    return canonicalPositions.map(pos => ({ ...pos, id: `obj_${canonicalPositions.indexOf(pos) + 1}`, controlled_by: null }));
+    // Take first numObjectives
+    return allPositions.slice(0, numObjectives).map(pos => ({ ...pos, controlled_by: null }));
   };
 
   // ─── DEPLOY ──────────────────────────────────────────────────────────────────
