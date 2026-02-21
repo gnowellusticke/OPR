@@ -470,15 +470,29 @@ export default function Battle() {
       canAct = false;
     }
     const outcome = recovered ? 'recovered' : 'still_shaken';
-    evs.push({ round, type: 'morale', message: `${liveUnit.name} Shaken recovery: rolled ${roll} vs ${quality}+ — ${recovered ? 'recovered' : 'still shaken, cannot charge or shoot'}`, timestamp: new Date().toLocaleTimeString() });
+    evs.push({ round, type: 'morale', message: `${liveUnit.name} Shaken recovery: rolled ${roll} vs ${quality}+ — ${recovered ? 'recovered' : 'still shaken, cannot act'}`, timestamp: new Date().toLocaleTimeString() });
     logger?.logMorale({ round, unit: liveUnit, outcome, roll, qualityTarget: quality, dmnReason: 'shaken recovery check at activation start' });
     }
-    // Commit state immediately after shaken check so recovery is logged before any target actions
-    if (liveUnit.status === 'shaken') {
+
+    // Bug 4 fix: Failed shaken recovery ends activation immediately
+    if (!canAct) {
+      liveUnit.just_charged = false;
+      const nextAgent = liveUnit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
+      const updatedGs = {
+        ...gsRef.current,
+        units_activated: [...(gsRef.current.units_activated || []), liveUnit.id],
+        active_agent: nextAgent,
+      };
       evRef.current = evs;
-      const tempGs = { ...gsRef.current };
-      commitState(tempGs, evs);
+      commitState(updatedGs, evs);
+      setActiveUnit(null);
+      return;
     }
+
+    // Commit state immediately after shaken check so recovery is logged before any target actions
+    evRef.current = evs;
+    const tempGs = { ...gsRef.current };
+    commitState(tempGs, evs);
 
     // ── Heroic Action (Advance Rule) ──────────────────────────────────────────
     const advRules = gs.advance_rules || {};
