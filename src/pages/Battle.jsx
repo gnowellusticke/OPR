@@ -249,7 +249,6 @@ export default function Battle() {
   }
 
   const deployedByOwner = { agent_a: [], agent_b: [] };
-  // Bug 2b fix: track zones deployed into per owner to prevent stacking
   const zonesUsedByOwner = { agent_a: new Set(), agent_b: new Set() };
   const summaryDeployed = { agent_a: [], agent_b: [], reserves: [] };
 
@@ -262,28 +261,48 @@ export default function Battle() {
     if (unit.is_in_reserve) {
       summaryDeployed.reserves.push(unit.name);
       logger?.logDeploy({
-          unit,
-          zone: 'reserve',
-          deploymentType: 'reserve',
-          reserveRule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve',
-          dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`,
-          specialRulesApplied: []
-        });
-      } else {
-        const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain, myUsedZones);
-        unit.x = decision.x;
-        unit.y = decision.y;
-        myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
-        myUsedZones.add(decision.zone);
-        (isAgentA ? summaryDeployed.agent_a : summaryDeployed.agent_b).push(unit.name);
-        logger?.logDeploy({
-          unit,
-          zone: decision.zone,
-          deploymentType: 'standard',
-          dmnReason: decision.dmnReason,
-          specialRulesApplied: decision.specialRulesApplied
-        });
-      }
+        unit,
+        zone: 'reserve',
+        deploymentType: 'reserve',
+        reserveRule: unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve',
+        dmnReason: `${unit.special_rules?.match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve'} rule: unit enters from reserve mid-battle`,
+        specialRulesApplied: []
+      });
+    } else {
+      const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain, myUsedZones);
+      unit.x = decision.x;
+      unit.y = decision.y;
+      myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
+      myUsedZones.add(decision.zone);
+      (isAgentA ? summaryDeployed.agent_a : summaryDeployed.agent_b).push(unit.name);
+      logger?.logDeploy({
+        unit,
+        zone: decision.zone,
+        deploymentType: 'standard',
+        dmnReason: decision.dmnReason,
+        specialRulesApplied: decision.specialRulesApplied
+      });
+    }
+
+    // Show each unit appearing on the battlefield one at a time
+    const deploySnapshot = [...units];
+    const deployLog = [{
+      round: 0, type: 'setup',
+      message: `Deploying ${unit.is_in_reserve ? `${unit.name} → Reserve` : `${unit.name} (${unit.owner === 'agent_a' ? 'A' : 'B'})`}`,
+      timestamp: new Date().toLocaleTimeString()
+    }];
+    commitState({
+      units: deploySnapshot,
+      terrain,
+      objectives,
+      active_agent: firstActivation,
+      current_round: 0,
+      units_activated: [],
+      advance_rules: advRules,
+      cumulative_score: { agent_a: 0, agent_b: 0 },
+      deployment_in_progress: true,
+    }, deployLog);
+    await new Promise(r => setTimeout(r, 400));
   }
 
   logger?.logDeploymentSummary({
