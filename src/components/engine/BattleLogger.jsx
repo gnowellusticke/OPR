@@ -112,7 +112,26 @@ export class BattleLogger {
     });
   }
 
-  logMorale({ round, unit, outcome, roll, qualityTarget }) {
+  logDestruction({ round, unit, cause }) {
+    unit.status = 'destroyed';
+    this.events.push({
+      round,
+      timestamp: this._timestamp(),
+      event_type: 'destruction',
+      acting_unit: null,
+      target_unit: unit.name,
+      weapon_used: null,
+      zone: null,
+      range_bracket: null,
+      roll_results: { cause },
+      unit_state_after: { target_unit: { wounds_remaining: 0, max_wounds: unit.total_models, status: 'destroyed' } },
+      dmn_reason: null,
+      flags: { turning_point: true, first_blood: false, unit_destroyed: true }
+    });
+    if (!this.roundDestroyed.includes(unit.name)) this.roundDestroyed.push(unit.name);
+  }
+
+  logMorale({ round, unit, outcome, roll, qualityTarget, dmnReason }) {
     if (outcome === 'shaken' && !this.roundShaken.includes(unit.name)) {
       this.roundShaken.push(unit.name);
     }
@@ -127,7 +146,7 @@ export class BattleLogger {
       range_bracket: null,
       roll_results: { roll: roll ?? null, quality_target: qualityTarget ?? (unit.quality || 4), outcome },
       unit_state_after: { acting_unit: this._unitState(unit) },
-      dmn_reason: 'morale check triggered',
+      dmn_reason: dmnReason || 'morale check triggered',
       flags: {
         turning_point: outcome === 'routed',
         first_blood: false,
@@ -136,7 +155,7 @@ export class BattleLogger {
     });
   }
 
-  logRegeneration({ round, unit, recovered, rolls }) {
+  logRegeneration({ round, unit, recovered, roll }) {
     this.events.push({
       round,
       timestamp: this._timestamp(),
@@ -146,7 +165,8 @@ export class BattleLogger {
       weapon_used: null,
       zone: null,
       range_bracket: null,
-      roll_results: { rolls: rolls || [], wounds_recovered: recovered, outcome: recovered > 0 ? 'recovered' : 'no recovery' },
+      // Bug 2: single roll value, not array
+      roll_results: { roll: roll ?? null, wounds_recovered: recovered, outcome: recovered > 0 ? 'recovered' : 'no recovery' },
       unit_state_after: { acting_unit: this._unitState(unit) },
       dmn_reason: 'end of round regeneration',
       flags: { turning_point: false, first_blood: false, unit_destroyed: false }
