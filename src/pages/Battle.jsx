@@ -692,7 +692,8 @@ export default function Battle() {
       });
 
       const weaponLabel = isBlast ? `${weapon.name} [Blast(${blastCount})]` : weapon.name;
-      const blastFlagValue = result.blast || false;
+      // Bug 8 fix: Set blast flag when Blast rule fires
+      const blastFlagValue = isBlast || result.blast || false;
       evs.push({
         round, type: 'combat',
         message: `${unit.name} fires ${weaponLabel} at ${target.name}: ${result.hits} hits, ${result.saves} saves, ${woundsDealt} wounds`,
