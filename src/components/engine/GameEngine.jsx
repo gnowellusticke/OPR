@@ -61,52 +61,58 @@ export class DMNEngine {
     return { winRate, actionSuccess, totalBattles };
   }
 
+  // Classify unit as melee-primary: has at least one melee weapon AND melee weapons >= ranged weapons
+  isMeleePrimary(unit) {
+    const melee = (unit.weapons || []).filter(w => w.range <= 2);
+    const ranged = (unit.weapons || []).filter(w => w.range > 2);
+    return melee.length > 0 && melee.length >= ranged.length;
+  }
+
+  // Maximum charge distance for unit (base 12" for Charge action)
+  maxChargeDistance(unit) {
+    let base = 12;
+    if (unit.special_rules?.includes('Fast')) base += 4;
+    if (unit.special_rules?.includes('Slow')) base -= 4;
+    return Math.max(0, base);
+  }
+
   evaluateActionOptions(unit, gameState, owner) {
     const options = [];
     const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
     const nearestEnemy = this.findNearestEnemy(unit, enemies);
     const nearestObjective = this.findNearestObjective(unit, gameState.objectives);
     
-    // Strategic analysis - evaluate if we're winning or losing
     const strategicState = this.analyzeStrategicPosition(gameState, owner);
 
-    // Check if embarked
     if (unit.embarked_in) {
-      // Only option is to disembark
-      options.push({
-        action: 'Disembark',
-        score: this.scoreDisembarkAction(unit, gameState, owner),
-        selected: true
-      });
+      options.push({ action: 'Disembark', score: this.scoreDisembarkAction(unit, gameState, owner), selected: true });
       return options;
     }
 
-    // Check if this is a transport with passengers
     const isTransport = unit.special_rules?.includes('Transport');
     
-    // Hold - good for shooting units or if already in good position
     options.push({
       action: 'Hold',
       score: this.scoreHoldAction(unit, gameState, nearestEnemy, strategicState),
       selected: false
     });
 
-    // Advance - balanced option for moving and shooting
     options.push({
       action: 'Advance',
       score: this.scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState),
       selected: false
     });
 
-    // Rush - for getting into position quickly
     options.push({
       action: 'Rush',
       score: this.scoreRushAction(unit, gameState, nearestObjective, strategicState),
       selected: false
     });
 
-    // Charge - for melee units when enemies are in range (not if transport with passengers)
-    if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= 12 && !isTransport) {
+    // Charge only offered when enemy is within maximum charge distance and unit hasn't charged this round
+    const chargeRange = this.maxChargeDistance(unit);
+    const canCharge = nearestEnemy && this.getDistance(unit, nearestEnemy) <= chargeRange && !isTransport && !unit.just_charged;
+    if (canCharge) {
       options.push({
         action: 'Charge',
         score: this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState),
@@ -228,34 +234,27 @@ export class DMNEngine {
   scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState) {
     let score = 0.5;
 
-    // Bug 2 (Prompt 6): melee-primary units near an enemy should prefer Charge over Advance
-    const meleeWeapons = unit.weapons?.filter(w => w.range <= 2) || [];
-    const rangedWeapons = unit.weapons?.filter(w => w.range > 2) || [];
-    const isMeleePrimary = meleeWeapons.length >= rangedWeapons.length && meleeWeapons.length > 0;
-    if (isMeleePrimary && nearestEnemy && this.getDistance(unit, nearestEnemy) <= 12) {
-      score -= 0.4; // heavily favour Charge instead
+    // Melee-primary units within charge range should strongly prefer Charge, not Advance
+    if (this.isMeleePrimary(unit) && nearestEnemy) {
+      const dist = this.getDistance(unit, nearestEnemy);
+      const chargeRange = this.maxChargeDistance(unit);
+      if (dist <= chargeRange) score -= 0.6; // decisive penalty — Charge will win
+      else if (dist <= chargeRange + 6) score -= 0.2; // getting close — still prefer Rush
     }
     
     // Bonus for moving toward objectives
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 3) {
       score += 0.3;
-      
-      // If losing on objectives, advancing to them is critical
-      if (strategicState.myObjectives < strategicState.enemyObjectives) {
-        score += 0.4;
-      }
+      if (strategicState.myObjectives < strategicState.enemyObjectives) score += 0.4;
     }
     
-    // Bonus if enemies are at medium range
+    // Bonus if enemies are at medium range (good for shoot-and-advance units)
     if (nearestEnemy) {
       const dist = this.getDistance(unit, nearestEnemy);
       if (dist > 12 && dist < 30) score += 0.2;
     }
     
-    // If losing and need to pressure, advance is good
-    if (strategicState.isLosing && strategicState.roundsRemaining < 3) {
-      score += 0.3;
-    }
+    if (strategicState.isLosing && strategicState.roundsRemaining < 3) score += 0.3;
     
     return score;
   }
@@ -286,69 +285,53 @@ export class DMNEngine {
   }
 
   scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState) {
-    let score = 0.6;
+    // Base score — deliberately high so melee-primary units almost always pick Charge
+    // when an enemy is within charge range.
+    let score = 1.0;
 
-    // Boost units that haven't engaged offensively in 2+ rounds
-    const inactiveBoost = (unit.rounds_without_offense || 0) >= 2 ? 0.5 : 0;
-    score += inactiveBoost;
-
-    // Bug 2 (Prompt 6): melee-primary units should charge aggressively
-    const meleeWeapons = unit.weapons?.filter(w => w.range <= 2) || [];
-    const rangedWeapons = unit.weapons?.filter(w => w.range > 2) || [];
-    const isMeleePrimary = meleeWeapons.length > 0 && meleeWeapons.length >= rangedWeapons.length;
-    if (isMeleePrimary) score += 0.6;
-
-    // Furious rule: always prefer charge
-    if (unit.special_rules?.includes('Furious')) score += 0.5;
-
-    // Bonus for units with any melee weapon
+    const meleeWeapons = (unit.weapons || []).filter(w => w.range <= 2);
     const hasMelee = meleeWeapons.length > 0;
+    const meleePrimary = this.isMeleePrimary(unit);
+    const chargeRange = this.maxChargeDistance(unit);
+    const dist = nearestEnemy ? this.getDistance(unit, nearestEnemy) : 99;
+
+    // Hard gate: never score Charge if enemy is outside max charge distance
+    // (evaluateActionOptions already filters this, but guard defensively)
+    if (dist > chargeRange) return -99;
+
+    // Melee-primary archetype bonus — ensures Orc Warriors / Buggies / Cyborgs charge reliably
+    if (meleePrimary) score += 1.0;
+
+    // Named rule bonuses
+    if (unit.special_rules?.includes('Furious')) score += 0.5;
+    if (unit.special_rules?.includes('Rage')) score += 0.4;
+
+    // Any melee weapon is better than nothing
     if (hasMelee) score += 0.4;
 
-    // Distance bonus: strongly prefer charging when enemy is close
-    if (nearestEnemy) {
-      const dist = this.getDistance(unit, nearestEnemy);
-      if (dist <= 12) score += 0.5;
-      if (dist <= 6) score += 0.3;
-    }
+    // Distance scaling: closer = better (normalised to 0–0.8 range)
+    score += ((chargeRange - dist) / chargeRange) * 0.8;
 
-    // Only penalise units with NO melee weapons at all
-    const hasNoMeleeAtAll = meleeWeapons.length === 0;
-    if (hasNoMeleeAtAll) score -= 0.6;
-    
-    // Consider unit strength vs enemy
-    const strengthRatio = unit.current_models / (nearestEnemy.current_models || 1);
-    score += Math.min(strengthRatio * 0.2, 0.3);
-    
-    // Strategic considerations
-    if (strategicState.isLosing) {
-      // If losing, need to be aggressive and eliminate threats
-      score += 0.4;
-      
-      // Especially target weak enemies we can finish off
-      const enemyHealthRatio = nearestEnemy.current_models / nearestEnemy.total_models;
-      if (enemyHealthRatio < 0.5) score += 0.3;
-    }
-    
-    // Predict opponent counter-charge risk
-    const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
-    const counterChargeRisk = enemies.filter(e => 
-      e.id !== nearestEnemy.id && 
-      this.getDistance(unit, e) <= 12 &&
-      e.current_models > unit.current_models
-    ).length;
-    
-    score -= counterChargeRisk * 0.2; // Reduce score if we'll get counter-charged
-    
-    // If target is on objective and we need it, charge!
+    // Finish off weak targets
+    const enemyHealthRatio = nearestEnemy.current_models / (nearestEnemy.total_models || 1);
+    if (enemyHealthRatio < 0.5) score += 0.3;
+
+    // Objective pressure
     const targetOnObjective = gameState.objectives.some(obj =>
-      this.getDistance(nearestEnemy, obj) <= 3 && 
-      obj.controlled_by !== owner
+      this.getDistance(nearestEnemy, obj) <= 3 && obj.controlled_by !== owner
     );
-    if (targetOnObjective && strategicState.enemyObjectives >= strategicState.myObjectives) {
-      score += 0.5;
-    }
-    
+    if (targetOnObjective) score += 0.4;
+
+    // Inactivity boost — push units that haven't fought recently
+    if ((unit.rounds_without_offense || 0) >= 2) score += 0.5;
+
+    // Penalise pure-ranged units (no melee weapons) — they should not charge
+    if (!hasMelee) score = 0.2;
+
+    // Reduce if badly outnumbered and no support
+    const strengthRatio = unit.current_models / (nearestEnemy.current_models || 1);
+    if (strengthRatio < 0.3) score -= 0.3;
+
     return score;
   }
 
