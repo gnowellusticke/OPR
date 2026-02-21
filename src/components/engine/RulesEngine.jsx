@@ -363,21 +363,24 @@ export class RulesEngine {
 
   // Morale — never called on already-shaken units (callers must guard), but defensively roll anyway
   checkMorale(unit, reason = 'wounds') {
-    const quality = unit.quality || 4;
-    const roll = this.dice.roll(); // always a real integer 1-6
-    if (unit.status === 'shaken') {
-      return { passed: false, roll, reason: 'Already Shaken' };
-    }
-    const passed = roll >= quality;
+  const quality = unit.quality || 4;
+  const roll = this.dice.roll();
+  const specialRulesApplied = [];
 
-    if (!passed && unit.special_rules?.includes('Fearless')) {
-      const reroll = this.dice.roll();
-      if (reroll >= 4) {
-        return { passed: true, roll, reroll, reason: 'Fearless reroll' };
-      }
-    }
+  if (unit.status === 'shaken') {
+  return { passed: false, roll, reason: 'Already Shaken', specialRulesApplied };
+  }
+  const passed = roll >= quality;
 
-    return { passed, roll, reason };
+  if (!passed && unit.special_rules?.includes('Fearless')) {
+  const reroll = this.dice.roll();
+  specialRulesApplied.push({ rule: 'Fearless', value: null, effect: `re-rolled morale, reroll: ${reroll}` });
+  if (reroll >= 4) {
+  return { passed: true, roll, reroll, reason: 'Fearless reroll', specialRulesApplied };
+  }
+  }
+
+  return { passed, roll, reason, specialRulesApplied };
   }
 
   applyMoraleResult(unit, passed, reason) {
