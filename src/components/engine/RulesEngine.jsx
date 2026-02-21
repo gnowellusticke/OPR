@@ -167,16 +167,18 @@ export class RulesEngine {
 
   // Shooting
   resolveShooting(attacker, defender, weapon, terrain, gameState) {
-    const hits = this.rollToHit(attacker, weapon, defender, gameState);
-    const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
-    return {
-      weapon: weapon.name,
-      hit_rolls: hits.rolls,
-      hits: hits.successes,
-      defense_rolls: saves.rolls,
-      saves: saves.saves,
-      wounds: saves.wounds
-    };
+  const hits = this.rollToHit(attacker, weapon, defender, gameState);
+  const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
+  const specialRulesApplied = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
+  return {
+  weapon: weapon.name,
+  hit_rolls: hits.rolls,
+  hits: hits.successes,
+  defense_rolls: saves.rolls,
+  saves: saves.saves,
+  wounds: saves.wounds,
+  specialRulesApplied
+  };
   }
 
   rollToHit(unit, weapon, target, gameState) {
