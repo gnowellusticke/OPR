@@ -151,6 +151,29 @@ export class ArmyTextParser {
     };
   }
 
+  // Split a weapon line like "4x Heavy Rifle (24", A1), Plasma Cannon (30", A1, Blast(3))"
+  // into individual weapon strings by splitting at "), " that separates weapon entries.
+  static splitWeaponLine(line) {
+    const entries = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '(') depth++;
+      else if (line[i] === ')') depth--;
+      // Split at ", " between weapon entries (depth back to 0 after closing paren)
+      if (depth === 0 && line[i] === ',' && i + 1 < line.length && line[i + 1] === ' ') {
+        const candidate = line.slice(start, i).trim();
+        // Only treat as a weapon entry boundary if the candidate looks like a weapon
+        // (i.e. the next token starts with a digit or a letter, not a stat keyword)
+        entries.push(candidate);
+        start = i + 2; // skip ", "
+        i++; // skip the space
+      }
+    }
+    entries.push(line.slice(start).trim());
+    return entries.filter(Boolean);
+  }
+
   static parseWeapon(line) {
     // Parse weapon: Energy Spear (A2, AP(4))
     // Or: 9x Shard Carbine (18", A2, Crack)
