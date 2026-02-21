@@ -196,6 +196,9 @@ export class DMNEngine {
 
   scoreHoldAction(unit, gameState, nearestEnemy, strategicState) {
     let score = 0.3;
+
+    // Bug 6: penalise Hold for units that have been inactive too long
+    if ((unit.rounds_without_offense || 0) >= 2) score -= 0.4;
     
     // Bonus if unit has good ranged weapons
     const hasRanged = unit.weapons?.some(w => w.range > 12);
@@ -276,6 +279,10 @@ export class DMNEngine {
 
   scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState) {
     let score = 0.6;
+
+    // Bug 6: boost units that haven't engaged offensively in 2+ rounds
+    const inactiveBoost = (unit.rounds_without_offense || 0) >= 2 ? 0.5 : 0;
+    score += inactiveBoost;
 
     // Bonus for melee-focused units
     const hasMelee = unit.weapons?.some(w => w.range <= 2);
