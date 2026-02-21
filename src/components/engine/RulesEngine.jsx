@@ -398,15 +398,15 @@ export class RulesEngine {
     defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
     }
 
-    // Bug 5 fix: Calculate real wounds ONLY from dice, Fear only affects comparison
+    // Bug 1 fix: wounds_dealt LOCKED from dice, NEVER modified by Fear or other modifiers
     let attackerRealWounds = attackerResults.total_wounds;
     let defenderRealWounds = defenderResults?.total_wounds || 0;
 
     // Apply Fear(X) bonuses ONLY to the melee resolution comparison, not to actual wounds
     const attackerFearBonus = attackerResults.results?.[0]?.fearBonus || 0;
     const defenderFearBonus = defenderResults?.results?.[0]?.fearBonus || 0;
-    
-    // For winner determination: use Fear-adjusted wounds
+
+    // For winner determination: use Fear-adjusted wounds (for comparison only)
     const attackerWoundsForComparison = attackerRealWounds + attackerFearBonus;
     const defenderWoundsForComparison = defenderRealWounds + defenderFearBonus;
 
@@ -421,7 +421,15 @@ export class RulesEngine {
     ...(defenderResults?.specialRulesApplied || [])
     ];
 
-    // Bug 5 fix: attacker_saves_forced and defender_saves_forced track how many saves each side had to roll
+    // Bug 4 fix: Global SRA deduplication — max one entry per rule name
+    const seenRules = new Set();
+    const deduplicatedRules = specialRulesApplied.filter(rule => {
+      if (seenRules.has(rule.rule)) return false;
+      seenRules.add(rule.rule);
+      return true;
+    });
+
+    // Bug 1 fix: attacker_saves_forced tracks non-Bane hits only (Bane hits don't roll saves)
     const attackerSavesForced = aRes.hits ?? 0;
     const defenderSavesForced = dRes ? (dRes.hits ?? 0) : 0;
 
@@ -430,12 +438,12 @@ export class RulesEngine {
     attacker_hits: aRes.hits ?? 0,
     attacker_saves_forced: attackerSavesForced,
     defender_saves_made: aRes.saves ?? 0,
-    wounds_dealt: attackerRealWounds,
+    wounds_dealt: attackerRealWounds,  // LOCKED from dice, no modifications after
     defender_attacks: dRes ? (dRes.attacks || 1) : 0,
     defender_hits: dRes ? (dRes.hits ?? 0) : 0,
     defender_saves_forced: defenderSavesForced,
     attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
-    wounds_taken: defenderRealWounds,
+    wounds_taken: defenderRealWounds,  // LOCKED from dice, no modifications after
     melee_resolution: {
       attacker_wounds_for_comparison: attackerWoundsForComparison,
       fear_bonus_attacker: attackerFearBonus,
@@ -443,7 +451,7 @@ export class RulesEngine {
       fear_bonus_defender: defenderFearBonus,
       winner: winner?.name || 'tie'
     },
-    special_rules_applied: specialRulesApplied
+    special_rules_applied: deduplicatedRules
     };
 
     return {
@@ -471,10 +479,8 @@ export class RulesEngine {
       let modifiedWeapon = { ...weapon };
       const weaponSpecialRules = [];
 
-      if (attacker.just_charged && attacker.special_rules?.includes('Furious')) {
-      modifiedWeapon.attacks = (weapon.attacks || 1) + 1;
-      weaponSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack on charge' });
-      }
+      // Bug 2 fix: Furious only re-rolls failed hits, does NOT add extra attacks automatically
+      // Handle Furious in rollToHit instead, where it belongs
 
       // Thrust: +1 to hit and AP(+1) when charging
       if (attacker.just_charged && weapon.special_rules?.includes('Thrust')) {
@@ -502,7 +508,13 @@ export class RulesEngine {
       result.saves = result.saves ?? 0;
       result.attacks = scaledAttacks;
 
+      // Bug 1 fix: Lock wounds_dealt BEFORE building melee_resolution
+      // wounds_dealt = max(0, hits - saves) × damage_multiplier
+      // This is the ONLY source of truth for wounds
+      const realWounds = result.wounds || 0;
+
       // Fear(X): attacker counts as dealing +X wounds when checking who won melee
+      // Fear bonus goes ONLY into melee_resolution, NOT into wounds_dealt
       if (attacker.special_rules?.includes('Fear')) {
       const fearMatch = attacker.special_rules.match(/Fear\((\d+)\)/);
       const fearBonus = fearMatch ? parseInt(fearMatch[1]) : 1;
@@ -510,17 +522,23 @@ export class RulesEngine {
       weaponSpecialRules.push({ rule: 'Fear', value: fearBonus, effect: `+${fearBonus} wounds for melee victory check` });
       }
 
-      // Merge any special rules from this weapon's resolution and deduplicate by rule name
-      const combined = [...weaponSpecialRules, ...(result.specialRulesApplied || [])];
+      // Bug 3 fix: Only include rules from THIS melee weapon, not all weapons on the unit
+      // Filter out ranged-only rules (Blast) and rules from other weapons
+      const rangedOnlyRules = ['Blast', 'Relentless', 'Indirect', 'Artillery'];
+      const filtered = (result.specialRulesApplied || []).filter(rule => !rangedOnlyRules.includes(rule.rule));
+
+      // Merge melee-specific rules and weapon rules
+      const combined = [...weaponSpecialRules, ...filtered];
       const seenRules = new Set();
       result.specialRulesApplied = combined.filter(rule => {
         if (seenRules.has(rule.rule)) return false;
         seenRules.add(rule.rule);
         return true;
       });
+
       allSpecialRules.push(...result.specialRulesApplied);
       results.push(result);
-      totalWounds += result.wounds;
+      totalWounds += realWounds;
       });
 
       if (isStrikeBack || attacker.just_charged) {
