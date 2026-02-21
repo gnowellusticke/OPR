@@ -283,25 +283,45 @@ export class RulesEngine {
 
   // Melee
   resolveMelee(attacker, defender, gameState) {
-    const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
-    // FIX: correct operator precedence — check defender.status !== 'shaken'
-    let defenderResults = null;
-    if (defender.status !== 'shaken' && defender.current_models > 0) {
-      defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
-    }
+  const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
+  let defenderResults = null;
+  if (defender.status !== 'shaken' && defender.current_models > 0) {
+  defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
+  }
 
-    const attackerWounds = attackerResults.total_wounds;
-    const defenderWounds = defenderResults?.total_wounds || 0;
-    const winner = attackerWounds > defenderWounds ? attacker :
-                   defenderWounds > attackerWounds ? defender : null;
+  const attackerWounds = attackerResults.total_wounds;
+  const defenderWounds = defenderResults?.total_wounds || 0;
+  const winner = attackerWounds > defenderWounds ? attacker :
+               defenderWounds > attackerWounds ? defender : null;
 
-    return {
-      attacker_results: attackerResults,
-      defender_results: defenderResults,
-      winner,
-      attacker_wounds: attackerWounds,
-      defender_wounds: defenderWounds
-    };
+  // Build full bidirectional roll_results for the logger
+  const aRes = attackerResults.results?.[0] || {};
+  const dRes = defenderResults?.results?.[0] || null;
+  const specialRulesApplied = [
+  ...(attackerResults.specialRulesApplied || []),
+  ...(defenderResults?.specialRulesApplied || [])
+  ];
+
+  const rollResults = {
+  attacker_attacks: aRes.attacks || 1,
+  attacker_hits: aRes.hits ?? 0,
+  defender_saves_made: aRes.saves ?? 0,
+  wounds_dealt: attackerWounds,
+  defender_attacks: dRes ? (dRes.attacks || 1) : 0,
+  defender_hits: dRes ? (dRes.hits ?? 0) : 0,
+  attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
+  wounds_taken: defenderWounds,
+  special_rules_applied: specialRulesApplied
+  };
+
+  return {
+  attacker_results: attackerResults,
+  defender_results: defenderResults,
+  winner,
+  attacker_wounds: attackerWounds,
+  defender_wounds: defenderWounds,
+  rollResults
+  };
   }
 
   resolveMeleeStrikes(attacker, defender, isStrikeBack = false, gameState = null) {
