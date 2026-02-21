@@ -137,7 +137,7 @@ export class BattleLogger {
   }
 
   logMelee({ round, actingUnit, targetUnit, weaponName, rollResults, gameState, dmnReason }) {
-    const isFirstBlood = !this.firstBloodDealt && rollResults.wounds_dealt > 0;
+    const isFirstBlood = !this.firstBloodDealt && (rollResults.wounds_dealt > 0);
     if (isFirstBlood) this.firstBloodDealt = true;
 
     const unitDestroyed = targetUnit.current_models <= 0;
@@ -149,16 +149,18 @@ export class BattleLogger {
     const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
     const isTurningPoint = unitDestroyed && (toughValue >= 6 || targetUnit.status === 'shaken');
 
+    const specialRules = rollResults.special_rules_applied || [];
+
     this.events.push({
       round,
       timestamp: this._timestamp(),
       event_type: 'melee',
       acting_unit: actingUnit.name,
       target_unit: targetUnit.name,
-      weapon_used: weaponName || 'CCW',
+      weapon_used: weaponName || 'Fists',
       zone: null,
       range_bracket: 'close',
-      roll_results: rollResults,
+      roll_results: { ...rollResults, special_rules_applied: specialRules },
       unit_state_after: {
         acting_unit: this._unitState(actingUnit),
         target_unit: this._unitState(targetUnit)
