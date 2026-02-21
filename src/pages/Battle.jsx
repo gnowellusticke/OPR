@@ -228,12 +228,12 @@ export default function Battle() {
   const isAmbush = unit.special_rules?.includes('Ambush') || unit.special_rules?.includes('Teleport') || unit.special_rules?.includes('Infiltrate');
   const isScout = unit.special_rules?.includes('Scout') && advRules?.scoutingDeployment;
   const ranged_weapons = (unit.weapons || []).filter(w => (w.range ?? 2) > 2);
-  
-  // Bug 1 & 2 fix: store model count and tough per model for scaling
+
+  // Bug 5 fix: store model count and tough per model for scaling
   const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
   const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 0;
   const modelCount = unit.models || 1;
-  
+
   // Placeholder positions — real positions set during alternating deployment phase
   return {
   ...unit,
@@ -250,6 +250,9 @@ export default function Battle() {
   heroic_action_used: false,
   is_scout: isScout,
   is_in_reserve: isAmbush,
+  quality: unit.quality || 4,
+  defense: unit.defense || 5,
+  special_rules: unit.special_rules || []
   };
   });
 
