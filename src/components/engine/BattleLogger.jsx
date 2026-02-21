@@ -249,7 +249,12 @@ export class BattleLogger {
       weapon_used: null,
       zone: null,
       range_bracket: null,
-      roll_results: { roll: roll ?? null, wounds_recovered: recovered, outcome: recovered > 0 ? 'recovered' : 'no recovery' },
+      roll_results: {
+        roll: roll ?? null,
+        wounds_recovered: recovered,
+        outcome: recovered > 0 ? 'recovered' : 'no recovery',
+        special_rules_applied: [{ rule: ruleName || 'Regeneration', value: null, effect: 'end of round recovery roll' }]
+      },
       unit_state_after: { acting_unit: this._unitState(unit) },
       dmn_reason: `end of round ${ruleName || 'Regeneration'}`,
       flags: { turning_point: false, first_blood: false, unit_destroyed: false }
