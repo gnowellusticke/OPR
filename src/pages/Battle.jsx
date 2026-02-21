@@ -194,6 +194,9 @@ export default function Battle() {
       // Scouting Deployment: scouts redeploy to mid-table (12"+ from deployment zones)
       const scoutX = isScout ? Math.random() * 40 + 16 : baseX;
       const scoutY = isScout ? Math.random() * 12 + 20 : baseY;
+      // Store the ordered ranged weapon list once at deploy time so attemptShooting
+      // always iterates the canonical list and never fires the same weapon twice.
+      const ranged_weapons = (unit.weapons || []).filter(w => w.range > 2);
       return {
         ...unit,
         id: `${owner === 'agent_a' ? 'a' : 'b'}_${id++}`,
@@ -201,6 +204,7 @@ export default function Battle() {
         current_models: maxWounds, total_models: maxWounds,
         status: 'normal', fatigued: false, just_charged: false, rounds_without_offense: 0,
         melee_weapon_name: resolveMeleeWeaponName(unit),
+        ranged_weapons,          // ordered list, immutable for the whole battle
         heroic_action_used: false,
         is_scout: isScout,
       };
@@ -394,6 +398,8 @@ export default function Battle() {
   };
 
   // ─── SHOOTING ─────────────────────────────────────────────────────────────────
+  // Iterates unit.ranged_weapons exactly once — one shoot event per distinct weapon,
+  // never the same weapon twice. Blast(X) uses X automatic hits with no quality roll.
 
   const attemptShooting = async (unit, gs, evs, dmnReason) => {
     const round = gs.current_round;
@@ -402,10 +408,24 @@ export default function Battle() {
     const logger = loggerRef.current;
     let shotFired = false;
 
-    const rangedWeapons = (unit.weapons || []).filter(w => w.range > 2);
+    // Use the canonical ordered list stored at deploy; fall back to filtering weapons live
+    // if unit somehow lacks the field (e.g. loaded from DB before this deploy change).
+    const rangedWeapons = unit.ranged_weapons?.length > 0
+      ? unit.ranged_weapons
+      : (unit.weapons || []).filter(w => w.range > 2);
+
     if (rangedWeapons.length === 0) return false;
 
+    // Track weapon names fired this activation to guard against duplicates
+    const firedNames = new Set();
+
     for (const weapon of rangedWeapons) {
+      // Duplicate guard — should never trigger with a clean ranged_weapons list,
+      // but protects against malformed army data.
+      if (firedNames.has(weapon.name)) continue;
+      firedNames.add(weapon.name);
+
+      // Re-query live enemies before each weapon so mid-activation kills are respected
       const liveEnemies = gs.units.filter(u =>
         u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed'
       );
@@ -417,29 +437,59 @@ export default function Battle() {
       const dist = rules.calculateDistance(unit, target);
       if (dist > weapon.range) continue;
 
-      const result = rules.resolveShooting(unit, target, weapon, gs.terrain, gs);
+      // ── Blast(X): X automatic hits, no quality roll ────────────────────────
+      const blastMatch = weapon.special_rules?.match(/Blast\((\d+)\)/);
+      const isBlast = !!blastMatch;
+      const blastCount = isBlast ? parseInt(blastMatch[1]) : 0;
+
+      let result;
+      if (isBlast) {
+        // Override weapon attacks to blastCount and resolve — RulesEngine.rollToHit
+        // already handles Blast by returning blastCount auto-hits when it detects the rule,
+        // but we also force attacks = blastCount here for clarity in the log.
+        const blastWeapon = { ...weapon, attacks: blastCount };
+        result = rules.resolveShooting(unit, target, blastWeapon, gs.terrain, gs);
+        // Ensure logged values reflect X attacks / X hits regardless of RulesEngine internals
+        result = { ...result, hits: blastCount };
+      } else {
+        result = rules.resolveShooting(unit, target, weapon, gs.terrain, gs);
+      }
+
+      const loggedAttacks = isBlast ? blastCount : (weapon.attacks || 1);
       const woundsDealt = result.wounds;
       target.current_models = Math.max(0, target.current_models - woundsDealt);
       if (target.current_models <= 0) target.status = 'destroyed';
       shotFired = true;
       unit.rounds_without_offense = 0;
 
-      const isBlast = weapon.special_rules?.includes('Blast');
-      const blastMatch = weapon.special_rules?.match(/Blast\((\d+)\)/);
-      const loggedAttacks = blastMatch ? parseInt(blastMatch[1]) : (weapon.attacks || 1);
+      setCurrentCombat({
+        type: 'shooting', attacker: unit, defender: target, weapon: weapon.name,
+        hit_rolls: result.hit_rolls, hits: result.hits,
+        defense_rolls: result.defense_rolls, saves: result.saves,
+        result: `${result.hits} hits, ${result.saves} saves`
+      });
 
-      setCurrentCombat({ type: 'shooting', attacker: unit, defender: target, weapon: weapon.name, hit_rolls: result.hit_rolls, hits: result.hits, defense_rolls: result.defense_rolls, saves: result.saves, result: `${result.hits} hits, ${result.saves} saves` });
-
-      const weaponLabel = isBlast ? `${weapon.name} [Blast(${loggedAttacks})]` : weapon.name;
-      evs.push({ round, type: 'combat', message: `${unit.name} fires ${weaponLabel} at ${target.name}: ${result.hits} hits, ${woundsDealt} wounds`, timestamp: new Date().toLocaleTimeString() });
+      const weaponLabel = isBlast ? `${weapon.name} [Blast(${blastCount})]` : weapon.name;
+      evs.push({
+        round, type: 'combat',
+        message: `${unit.name} fires ${weaponLabel} at ${target.name}: ${result.hits} hits, ${result.saves} saves, ${woundsDealt} wounds`,
+        timestamp: new Date().toLocaleTimeString()
+      });
 
       if (target.current_models <= 0) {
         evs.push({ round, type: 'combat', message: `${target.name} destroyed!`, timestamp: new Date().toLocaleTimeString() });
-        logger?.logDestruction({ round, unit: target, cause: `shooting by ${unit.name}` });
+        logger?.logDestruction({ round, unit: target, cause: `shooting by ${unit.name} (${weaponLabel})` });
       }
 
       const topScore = liveEnemies.map(e => dmn.scoreTarget(unit, e)).sort((a, b) => b - a)[0]?.toFixed(2);
-      logger?.logShoot({ round, actingUnit: unit, targetUnit: target, weapon: weapon.name, zone: rules.getZone(unit.x, unit.y), rangeDist: dist, rollResults: { attacks: loggedAttacks, hits: result.hits, saves: result.saves, wounds_dealt: woundsDealt, blast: isBlast }, gameState: gs, dmnReason: `${dmnReason} (score ${topScore})` });
+      logger?.logShoot({
+        round, actingUnit: unit, targetUnit: target,
+        weapon: weapon.name,
+        zone: rules.getZone(unit.x, unit.y), rangeDist: dist,
+        rollResults: { attacks: loggedAttacks, hits: result.hits, saves: result.saves, wounds_dealt: woundsDealt, blast: isBlast },
+        gameState: gs,
+        dmnReason: `${dmnReason} (score ${topScore})`
+      });
 
       // Morale on wounded survivor
       if (target.current_models > 0 && target.status === 'normal' && target.current_models <= target.total_models / 2) {
@@ -451,7 +501,7 @@ export default function Battle() {
         }
       }
 
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 500));
     }
 
     setCurrentCombat(null);
