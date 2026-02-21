@@ -416,8 +416,18 @@ export class RulesEngine {
   }
 
   const modifiedDefense = Math.min(6, Math.max(2, defense - effectiveAp));
+
+  // Bug 5 fix: Debug logging for AP and defense rolls
+  if (hitCount > 0) {
+    console.log(`[AP DEBUG] Base Defense: ${defense}, AP: ${effectiveAp}, Modified Defense: ${modifiedDefense}, Hits to save: ${hitCount}`);
+  }
+
   const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
   let saves = rolls.filter(r => r.success).length;
+
+  if (hitCount > 0) {
+    console.log(`[AP DEBUG] Defense rolls: [${rolls.map(r => `${r.value}${r.success ? '✓' : '✗'}`).join(', ')}] = ${saves} saves out of ${hitCount}`);
+  }
 
   // Rending: Unmodified 6s on hit rolls auto-wound (bypass saves)
   let renderingAutoWounds = 0;
