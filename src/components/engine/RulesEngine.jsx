@@ -320,15 +320,13 @@ export class RulesEngine {
   const rolls = this.dice.rollQualityTest(quality, attacks);
   let successes = rolls.filter(r => r.success).length;
 
-  // Bug 2 fix: Furious — re-roll all misses once, gain bonus hits
+  // Bug 1 fix: Furious — add 1 extra hit per unmodified 6, do NOT re-roll misses
   if (unit.special_rules?.includes('Furious') && !weapon.special_rules?.includes('Furious')) {
-    const misses = rolls.length - successes;
-    if (misses > 0) {
-      const rerolls = this.dice.rollQualityTest(quality, misses);
-      const bonusHits = rerolls.filter(r => r.success).length;
-      successes += bonusHits;
-      bonusHitsFromFurious = bonusHits;
-      specialRulesApplied.push({ rule: 'Furious', value: null, effect: `re-rolled ${misses} misses, ${bonusHits} bonus hits gained` });
+    const naturalSixes = rolls.filter(r => r.value === 6 && r.success).length;
+    if (naturalSixes > 0) {
+      successes += naturalSixes;
+      bonusHitsFromFurious = naturalSixes;
+      specialRulesApplied.push({ rule: 'Furious', value: null, effect: `${naturalSixes} unmodified 6s generated ${naturalSixes} extra hits` });
     }
   }
 
@@ -381,11 +379,18 @@ export class RulesEngine {
   }
   }
 
-  // Damage(X): each unsaved wound deals X damage
+  // Damage(X): each unsaved wound deals X damage (only on weapons, not melee Fists)
   const damageMatch = weapon.special_rules?.match(/Damage\((\d+)\)/);
   const damageValue = damageMatch ? parseInt(damageMatch[1]) : 1;
   if (damageMatch) {
   specialRulesApplied.push({ rule: 'Damage', value: damageValue, effect: `each unsaved wound deals ${damageValue} damage` });
+  }
+
+  // Deadly(X): only applies to melee weapons with the rule (not to all melee)
+  const deadlyMatch = weapon.special_rules?.match(/Deadly\((\d+)\)/);
+  const deadlyMultiplier = deadlyMatch ? parseInt(deadlyMatch[1]) : 1;
+  if (deadlyMatch) {
+  specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `unsaved wounds multiplied by ${deadlyMultiplier}` });
   }
 
   // Unstoppable: ignores negative AP modifiers
@@ -411,13 +416,13 @@ export class RulesEngine {
   if (renderingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${renderingAutoWounds} natural 6s bypass saves` });
   }
 
-  // Bug 1 + 2 fix: Calculate wounds_dealt LOCKED from dice
-  // wounds_dealt = (normal_hits - saves) × damage_x + bane_procs (which bypass saves)
+  // Bug 3 fix: Calculate wounds_dealt LOCKED from dice
+  // wounds_dealt = (normal_hits - saves) × damage_x × deadly_multiplier + bane_procs
   let unsavedWounds = Math.max(0, hitCount - saves);
   unsavedWounds = Math.min(unsavedWounds, hitCount);
-  let wounds = unsavedWounds * damageValue + baneProcs;
+  let wounds = unsavedWounds * damageValue * deadlyMultiplier + baneProcs;
 
-  return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, specialRulesApplied };
+  return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, deadlyMultiplier, specialRulesApplied };
   }
 
   // End-of-round regeneration/self-repair — unified for Regeneration, Self-Repair and Repair.
