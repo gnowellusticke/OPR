@@ -194,8 +194,9 @@ export default function Battle() {
       // Scouting Deployment: scouts redeploy to mid-table (12"+ from deployment zones)
       const scoutX = isScout ? Math.random() * 40 + 16 : baseX;
       const scoutY = isScout ? Math.random() * 12 + 20 : baseY;
-      // ranged_weapons: one entry per weapon copy (parser already expands multiplied weapons)
-      const ranged_weapons = (unit.weapons || []).filter(w => w.range > 2);
+      // ranged_weapons: pre-filtered list for convenience; shooting also checks unit.weapons
+      const ranged_weapons = (unit.weapons || []).filter(w => (w.range ?? 2) > 2);
+      console.log(`[DEPLOY] ${name} weapons:`, JSON.stringify(unit.weapons), '→ ranged:', ranged_weapons.length);
       return {
         ...unit,
         id: `${owner === 'agent_a' ? 'a' : 'b'}_${id++}`,
