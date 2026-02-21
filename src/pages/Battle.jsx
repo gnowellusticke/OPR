@@ -570,11 +570,14 @@ export default function Battle() {
     const logger = loggerRef.current;
     const evs = [...evRef.current];
 
-    // Validation: warn about units that existed but had 0 activations
+    // Validation pass: every unit alive at round start must have had exactly one activation.
+    // Log a structured warning event for any that were missed (scheduling bug detection).
     const liveUnits = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
-    const notActivated = liveUnits.filter(u => !(gs.units_activated || []).includes(u.id));
+    const activated = gs.units_activated || [];
+    const notActivated = liveUnits.filter(u => !activated.includes(u.id));
     notActivated.forEach(u => {
-      evs.push({ round: gs.current_round, type: 'warning', message: `⚠ ${u.name} had no activation in round ${gs.current_round}!`, timestamp: new Date().toLocaleTimeString() });
+      evs.push({ round: gs.current_round, type: 'warning', message: `⚠ SCHEDULING: ${u.name} (${u.owner}) had no activation in round ${gs.current_round}`, timestamp: new Date().toLocaleTimeString() });
+      loggerRef.current?.logAbility({ round: gs.current_round, unit: u, ability: 'scheduling_warning', details: { reason: 'no_activation_this_round' } });
     });
 
     const newState = {
@@ -611,7 +614,10 @@ export default function Battle() {
     if (isCumulative) {
       newState.cumulative_score = { agent_a: prevScore.agent_a + roundA, agent_b: prevScore.agent_b + roundB };
     }
-    const scoreToLog = isCumulative ? newState.cumulative_score : { agent_a: roundA, agent_b: roundB };
+    // Round summary always shows both per-round and running totals when cumulative is enabled
+    const scoreToLog = isCumulative
+      ? { agent_a: newState.cumulative_score.agent_a, agent_b: newState.cumulative_score.agent_b, this_round_a: roundA, this_round_b: roundB, mode: 'cumulative' }
+      : { agent_a: roundA, agent_b: roundB, mode: 'per_round' };
 
     logger?.logRoundSummary({ round: gs.current_round, objectives: newState.objectives, score: scoreToLog });
 
@@ -630,19 +636,19 @@ export default function Battle() {
     const isCumulative = gs.advance_rules?.cumulativeScoring;
     const roundA = gs.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const roundB = gs.objectives.filter(o => o.controlled_by === 'agent_b').length;
-    const finalCumulative = isCumulative
-      ? { agent_a: (gs.cumulative_score?.agent_a || 0) + roundA, agent_b: (gs.cumulative_score?.agent_b || 0) + roundB }
-      : null;
-    const aScore = isCumulative ? finalCumulative.agent_a : roundA;
-    const bScore = isCumulative ? finalCumulative.agent_b : roundB;
+    // Final cumulative score = running total (already includes all previous rounds) + this round
+    const finalCumA = (gs.cumulative_score?.agent_a || 0) + roundA;
+    const finalCumB = (gs.cumulative_score?.agent_b || 0) + roundB;
+    const aScore = isCumulative ? finalCumA : roundA;
+    const bScore = isCumulative ? finalCumB : roundB;
     const winner = aScore > bScore ? 'agent_a' : bScore > aScore ? 'agent_b' : 'draw';
 
-    // Ensure battle_config is baked into logger before getFullLog
+    // Bake battle_config into logger — scoring_mode + full advance_rules key list
     const advRules = gs.advance_rules || {};
     const activeRuleKeys = Object.entries(advRules).filter(([, v]) => v).map(([k]) => k);
     logger?.setBattleConfig({
       scoring_mode: advRules.cumulativeScoring ? 'cumulative' : 'per_round',
-      advance_rules: activeRuleKeys,
+      advance_rules: activeRuleKeys,   // top-level array of all enabled rule keys
     });
 
     logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: aScore, agent_b: bScore } });
