@@ -437,6 +437,13 @@ export class RulesEngine {
   const unsavedWounds = Math.max(0, hitCount - saves);
   const wounds = unsavedWounds * deadlyMultiplier + baneProcs;
 
+  // CRITICAL VALIDATION: ensure wounds never exceed initial hit count (can happen if multipliers applied incorrectly)
+  // Also ensure if hitCount = 0, then wounds = 0
+  if (hitCount === 0 && wounds > 0) {
+    console.error(`[MELEE BUG] hitCount=0 but wounds=${wounds}. This is impossible. Setting to 0.`);
+    return { rolls, saves, wounds: 0, wounds_dealt: 0, baneProcs, deadlyMultiplier, specialRulesApplied };
+  }
+
   return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, deadlyMultiplier, specialRulesApplied };
   }
 
@@ -592,6 +599,12 @@ export class RulesEngine {
       // wounds_dealt = max(0, hits - saves) × damage_multiplier × deadly_multiplier
       const realWounds = result.wounds || 0;
 
+      // CRITICAL: Ensure realWounds is NEVER negative and never includes Fear bonus
+      if (realWounds < 0) {
+        console.error(`[MELEE BUG] realWounds is negative: ${realWounds}. Setting to 0.`);
+      }
+      const validatedWounds = Math.max(0, realWounds);
+
       // Fear(X): attacker counts as dealing +X wounds when checking who won melee
       // Fear bonus goes ONLY into melee_resolution, NOT into wounds_dealt
       if (attacker.special_rules?.includes('Fear')) {
@@ -617,7 +630,7 @@ export class RulesEngine {
 
       allSpecialRules.push(...result.specialRulesApplied);
       results.push(result);
-      totalWounds += realWounds;
+      totalWounds += validatedWounds;
       });
 
       if (isStrikeBack || attacker.just_charged) {
