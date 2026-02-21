@@ -98,15 +98,18 @@ export default function Battle() {
       advance_rules: activeRuleKeys,
     });
 
+    // Run alternating deployment phase (mutates unit positions, logs coin toss + deploy events)
+    const { firstActivation } = runDeploymentPhase(units, objectives, terrain, logger);
+
     const initialState = {
-      units,
-      terrain,
-      objectives,
-      active_agent: 'agent_a',
-      current_round: 1,
-      units_activated: [],
-      advance_rules: advRules,
-      cumulative_score: { agent_a: 0, agent_b: 0 },
+    units,
+    terrain,
+    objectives,
+    active_agent: firstActivation,
+    current_round: 1,
+    units_activated: [],
+    advance_rules: advRules,
+    cumulative_score: { agent_a: 0, agent_b: 0 },
     };
 
     const log = [{
