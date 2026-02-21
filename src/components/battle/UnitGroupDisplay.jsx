@@ -3,70 +3,115 @@ import { Users, User } from "lucide-react";
 
 export default function UnitGroupDisplay({ group, activeUnit, onUnitClick, CELL_SIZE, GRID_SIZE }) {
   const [showTooltip, setShowTooltip] = useState(false);
-  const isGroup = group.units.length > 1;
+  const displayUnit = group.displayUnit;
+  const isTransport = group.isTransport;
+  const embarkedCount = isTransport ? group.units.length - 1 : 0;
   const hasActiveUnit = group.units.some(u => u.id === activeUnit?.id);
+
+  // Use pre-computed pixel position from overlap resolution (_px/_py),
+  // falling back to raw coordinate conversion if not set.
+  const px = group._px ?? (displayUnit.x / GRID_SIZE) * CELL_SIZE;
+  const py = group._py ?? (displayUnit.y / GRID_SIZE) * CELL_SIZE;
 
   return (
     <div
       className="absolute"
       style={{
-        left: (group.x / GRID_SIZE) * CELL_SIZE - 20,
-        top: (group.y / GRID_SIZE) * CELL_SIZE - 20,
+        left: px - 20,
+        top: py - 20,
         zIndex: hasActiveUnit ? 100 : 10
       }}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
+      {/* Main token */}
       <div
-        onClick={() => onUnitClick?.(group.units[0])}
-        className={`rounded-lg border-2 cursor-pointer transition-all ${hasActiveUnit ? 'ring-4 ring-yellow-400 scale-110' : ''} ${group.units[0].status === 'shaken' ? 'opacity-60' : ''}`}
+        onClick={() => onUnitClick?.(displayUnit)}
+        className={`relative rounded-lg border-2 cursor-pointer transition-all
+          ${hasActiveUnit ? 'ring-4 ring-yellow-400 scale-110' : ''}
+          ${displayUnit.status === 'shaken' ? 'opacity-60' : ''}`}
         style={{
           width: 40,
           height: 40,
-          backgroundColor: group.owner === 'agent_a' ? '#1e40af' : '#991b1b',
-          borderColor: group.owner === 'agent_a' ? '#3b82f6' : '#ef4444'
+          backgroundColor: displayUnit.owner === 'agent_a' ? '#1e40af' : '#991b1b',
+          borderColor: displayUnit.owner === 'agent_a' ? '#3b82f6' : '#ef4444',
         }}
       >
         <div className="flex flex-col items-center justify-center h-full text-white">
-          {group.units[0].current_models > 1 ? (
+          {isTransport ? (
+            <Users className="w-5 h-5 mb-0.5" />
+          ) : displayUnit.current_models > 1 ? (
             <Users className="w-5 h-5 mb-0.5" />
           ) : (
             <User className="w-5 h-5 mb-0.5" />
           )}
-          <div className="text-[10px] font-bold">
-            {group.units[0].current_models > 1 ? group.units[0].current_models : '1'}
+          <div className="text-[10px] font-bold leading-none">
+            {isTransport
+              ? (embarkedCount > 0 ? `+${embarkedCount}` : 'TR')
+              : (displayUnit.current_models > 1 ? displayUnit.current_models : '1')}
           </div>
         </div>
 
-        {isGroup && (
-          <div className="absolute -top-2 -right-2 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center text-[10px] font-bold text-black border-2 border-slate-900">
-            {group.units.length}
+        {/* Transport passenger badge */}
+        {isTransport && embarkedCount > 0 && (
+          <div className="absolute -top-2 -right-2 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white border-2 border-slate-900">
+            {embarkedCount}
           </div>
         )}
 
-        {group.units[0].fatigued && (
-          <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-500 rounded-full" title="Fatigued" />
+        {/* Model count badge for multi-model ground units */}
+        {!isTransport && displayUnit.current_models > 1 && (
+          <div className="absolute -top-2 -right-2 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center text-[9px] font-bold text-black border-2 border-slate-900">
+            {displayUnit.current_models}
+          </div>
         )}
-        {group.units[0].status === 'shaken' && (
-          <div className="absolute -top-1 -left-1 w-3 h-3 bg-red-500 rounded-full" title="Shaken" />
+
+        {/* Status indicators */}
+        {displayUnit.fatigued && (
+          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-orange-400 rounded-full border border-slate-900" title="Fatigued" />
+        )}
+        {displayUnit.status === 'shaken' && (
+          <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-red-500 rounded-full border border-slate-900" title="Shaken" />
         )}
       </div>
 
-      {showTooltip && isGroup && (
-        <div className="absolute left-full ml-2 top-0 bg-slate-900/95 border border-slate-600 rounded-lg p-2 whitespace-nowrap z-50 pointer-events-none">
-          <div className="text-[10px] font-semibold text-yellow-400 mb-1">{group.units.length} Units:</div>
-          {group.units.map(u => (
-            <div key={u.id} className="text-[10px] text-white">• {u.name} ({u.current_models}/{u.total_models})</div>
-          ))}
-        </div>
-      )}
-
+      {/* Unit name label */}
       <div
-        className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 text-[9px] font-semibold text-white bg-slate-900/90 px-1.5 py-0.5 rounded whitespace-nowrap"
+        className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-white bg-slate-900/90 px-1.5 py-0.5 rounded whitespace-nowrap"
         style={{ maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis' }}
       >
-        {isGroup ? `${group.units.length} units` : group.units[0].name}
+        {isTransport ? `[T] ${displayUnit.name}` : displayUnit.name}
       </div>
+
+      {/* Tooltip */}
+      {showTooltip && (
+        <div className="absolute left-full ml-2 top-0 bg-slate-900/95 border border-slate-600 rounded-lg p-2 whitespace-nowrap z-50 pointer-events-none min-w-[140px]">
+          <div className="text-[10px] font-semibold text-yellow-400 mb-1">{displayUnit.name}</div>
+          <div className="text-[10px] text-slate-300">
+            Models: {displayUnit.current_models}/{displayUnit.total_models}
+          </div>
+          {isTransport && (
+            <>
+              <div className="text-[10px] font-semibold text-cyan-400 mt-2 mb-0.5">
+                Embarked ({embarkedCount}):
+              </div>
+              {group.units.slice(1).map(u => (
+                <div key={u.id} className="text-[10px] text-white">
+                  • {u.name} ({u.current_models}/{u.total_models})
+                </div>
+              ))}
+              {embarkedCount === 0 && (
+                <div className="text-[10px] text-slate-400 italic">Empty transport</div>
+              )}
+            </>
+          )}
+          {displayUnit.special_rules && (
+            <div className="text-[10px] text-slate-400 mt-1 max-w-[200px] whitespace-normal">
+              {displayUnit.special_rules}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -13,20 +13,84 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
   const terrain = gameState?.terrain || [];
   const objectives = gameState?.objectives || [];
 
-  const groupedUnits = React.useMemo(() => {
-    const groups = [];
+  // Build render list: transports absorb their passengers; each ground unit is its own token.
+  // No two tokens share the same position — if they would, nudge them apart on a grid.
+  const renderableUnits = React.useMemo(() => {
+    const tokens = [];
     const processed = new Set();
 
+    // First pass: transports + their embarked passengers
     units.forEach(unit => {
       if (processed.has(unit.id)) return;
-      const group = units.filter(other =>
-        Math.abs(unit.x - other.x) < 3 && Math.abs(unit.y - other.y) < 3
-      );
-      group.forEach(u => processed.add(u.id));
-      groups.push({ x: unit.x, y: unit.y, units: group, owner: group[0].owner });
+      if (!unit.special_rules?.includes('Transport')) return;
+
+      const passengers = units.filter(u => u.embarked_in === unit.id);
+      tokens.push({
+        displayUnit: unit,
+        units: [unit, ...passengers],
+        owner: unit.owner,
+        isTransport: true,
+      });
+      processed.add(unit.id);
+      passengers.forEach(p => processed.add(p.id));
     });
 
-    return groups;
+    // Second pass: ground units (not embarked)
+    units.forEach(unit => {
+      if (processed.has(unit.id)) return;
+      if (unit.embarked_in) return; // still inside a transport that may be destroyed — skip
+      tokens.push({
+        displayUnit: unit,
+        units: [unit],
+        owner: unit.owner,
+        isTransport: false,
+      });
+      processed.add(unit.id);
+    });
+
+    // Resolve overlaps: cluster tokens that land on the same pixel-grid cell and spread them out.
+    const SLOT = 48; // pixels between unit tokens (slightly larger than the 40px token)
+    const placed = []; // { px, py, token }
+
+    tokens.forEach(token => {
+      const rawPx = (token.displayUnit.x / GRID_SIZE) * CELL_SIZE;
+      const rawPy = (token.displayUnit.y / GRID_SIZE) * CELL_SIZE;
+
+      // Find a free slot using a spiral search
+      let placed_px = rawPx;
+      let placed_py = rawPy;
+      let found = false;
+      for (let radius = 0; radius <= 6 && !found; radius++) {
+        const offsets = radius === 0 ? [[0, 0]] : [];
+        if (radius > 0) {
+          for (let dx = -radius; dx <= radius; dx++) {
+            offsets.push([dx * SLOT, -radius * SLOT]);
+            offsets.push([dx * SLOT,  radius * SLOT]);
+          }
+          for (let dy = -radius + 1; dy <= radius - 1; dy++) {
+            offsets.push([-radius * SLOT, dy * SLOT]);
+            offsets.push([ radius * SLOT, dy * SLOT]);
+          }
+        }
+        for (const [ox, oy] of offsets) {
+          const cx = rawPx + ox;
+          const cy = rawPy + oy;
+          const collision = placed.some(p => Math.abs(p.px - cx) < SLOT - 4 && Math.abs(p.py - cy) < SLOT - 4);
+          if (!collision) {
+            placed_px = cx;
+            placed_py = cy;
+            found = true;
+            break;
+          }
+        }
+      }
+
+      placed.push({ px: placed_px, py: placed_py, token });
+      token._px = placed_px;
+      token._py = placed_py;
+    });
+
+    return tokens;
   }, [units]);
 
   return (
@@ -88,7 +152,7 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
         ))}
 
         {/* Units */}
-        {groupedUnits.map((group, idx) => (
+        {renderableUnits.map((group, idx) => (
           <UnitGroupDisplay
             key={`group-${idx}`}
             group={group}
