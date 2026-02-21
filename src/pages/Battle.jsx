@@ -232,14 +232,12 @@ export default function Battle() {
   const deploySecond = deployFirst === tossWinner ? tossLoser : tossWinner;
   const firstActivation = deploySecond;
 
-  // Bug 1 fix: coin toss fires first, then each deploy is staggered by 1.5s for narrative timestamps
   logger?.logCoinToss({
     winner: tossWinner,
     choice: winnerChoice,
     reason: `${tossWinner} wins toss and chooses to ${winnerChoice === 'deploy_second' ? 'deploy second, activating first in Round 1' : 'deploy first for faster board control'}`,
     firstActivation
   });
-  await new Promise(r => setTimeout(r, 1500));
 
   const queueA = units.filter(u => u.owner === deployFirst);
   const queueB = units.filter(u => u.owner === deploySecond);
