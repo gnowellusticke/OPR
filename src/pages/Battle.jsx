@@ -471,7 +471,9 @@ export default function Battle() {
           evs.push({ round, type: 'ability', message: `${unit.name} Overrun — moved 3" after kill`, timestamp: new Date().toLocaleTimeString() });
           logger?.logAbility({ round, unit, ability: 'Overrun', details: { dx: dx.toFixed(1), dy: dy.toFixed(1) } });
         }
-      } else {
+        } // end liveTarget guard
+        } // end charger alive guard
+        } else {
         // No target in range — fall back to rush toward nearest enemy
         const nearest = dmn.findNearestEnemy(unit, enemies);
         if (nearest) {
