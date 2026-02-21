@@ -231,6 +231,7 @@ export class RulesEngine {
   rollToHit(unit, weapon, target, gameState) {
   let quality = unit.quality || 4;
   const specialRulesApplied = [];
+  let bonusHitsFromFurious = 0;
 
   // Thrust: +1 to hit when charging (and +1 AP, handled in melee)
   if (unit.just_charged && weapon.special_rules?.includes('Thrust')) {
@@ -288,6 +289,18 @@ export class RulesEngine {
 
   const rolls = this.dice.rollQualityTest(quality, attacks);
   let successes = rolls.filter(r => r.success).length;
+
+  // Bug 2 fix: Furious — re-roll all misses once, gain bonus hits
+  if (unit.special_rules?.includes('Furious') && !weapon.special_rules?.includes('Furious')) {
+    const misses = rolls.length - successes;
+    if (misses > 0) {
+      const rerolls = this.dice.rollQualityTest(quality, misses);
+      const bonusHits = rerolls.filter(r => r.success).length;
+      successes += bonusHits;
+      bonusHitsFromFurious = bonusHits;
+      specialRulesApplied.push({ rule: 'Furious', value: null, effect: `re-rolled ${misses} misses, ${bonusHits} bonus hits gained` });
+    }
+  }
 
   if (weapon.special_rules?.includes('Deadly')) {
   const deadlyMatch = weapon.special_rules.match(/Deadly\((\d+)\)/);
