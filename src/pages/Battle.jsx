@@ -89,6 +89,9 @@ export default function Battle() {
     const terrain = generateTerrain();
     const objectives = generateObjectives();
     const units = deployArmies(armyA, armyB);
+
+    // Read advance_rules from game_state set at battle creation
+    const advRules = battleData.game_state?.advance_rules || {};
     
     const initialState = {
       units,
@@ -96,7 +99,9 @@ export default function Battle() {
       objectives,
       active_agent: 'agent_a',
       current_round: 1,
-      units_activated: []
+      units_activated: [],
+      advance_rules: advRules,
+      cumulative_score: { agent_a: 0, agent_b: 0 },
     };
     
     setGameState(initialState);
@@ -679,13 +684,22 @@ export default function Battle() {
       u.rounds_without_offense = u.rounds_without_offense || 0;
     });
 
-    // Round summary for JSON log (Bug 7: always generate, including final round)
-    const aScore = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
-    const bScore = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
+    // Round summary — cumulative scoring support (Advance Rule 1)
+    const roundA = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
+    const roundB = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
+    const isCumulative = newState.advance_rules?.cumulativeScoring;
+    const prevCumulative = newState.cumulative_score || { agent_a: 0, agent_b: 0 };
+    if (isCumulative) {
+      newState.cumulative_score = {
+        agent_a: prevCumulative.agent_a + roundA,
+        agent_b: prevCumulative.agent_b + roundB,
+      };
+    }
+    const scoreToLog = isCumulative ? newState.cumulative_score : { agent_a: roundA, agent_b: roundB };
     battleLogger?.logRoundSummary({
       round: gameState.current_round,
       objectives: newState.objectives,
-      score: { agent_a: aScore, agent_b: bScore },
+      score: scoreToLog,
       units: newState.units
     });
     
@@ -701,8 +715,15 @@ export default function Battle() {
   };
 
   const endBattle = async () => {
-    const aScore = gameState.objectives.filter(o => o.controlled_by === 'agent_a').length;
-    const bScore = gameState.objectives.filter(o => o.controlled_by === 'agent_b').length;
+    const isCumulative = gameState.advance_rules?.cumulativeScoring;
+    const roundA = gameState.objectives.filter(o => o.controlled_by === 'agent_a').length;
+    const roundB = gameState.objectives.filter(o => o.controlled_by === 'agent_b').length;
+    // For cumulative, final round score needs to be added to running total
+    const finalCumulative = isCumulative
+      ? { agent_a: (gameState.cumulative_score?.agent_a || 0) + roundA, agent_b: (gameState.cumulative_score?.agent_b || 0) + roundB }
+      : null;
+    const aScore = isCumulative ? finalCumulative.agent_a : roundA;
+    const bScore = isCumulative ? finalCumulative.agent_b : roundB;
     const winner = aScore > bScore ? 'agent_a' : bScore > aScore ? 'agent_b' : 'draw';
     
     await base44.entities.Battle.update(battle.id, {
@@ -733,12 +754,19 @@ export default function Battle() {
       successful_actions: actionTracking.agent_b
     });
     
-    // Bug 7 (Prompt 5): generate final round summary before battle_end
+    // Final round summary before battle_end
     battleLogger?.logRoundSummary({
-      round: 4,
+      round: gameState.current_round,
       objectives: gameState.objectives,
       score: { agent_a: aScore, agent_b: bScore },
       units: gameState.units
+    });
+    // Embed battle_config and advance_rules in log header
+    const advRules = gameState.advance_rules || {};
+    const activeRuleKeys = Object.entries(advRules).filter(([, v]) => v).map(([k]) => k);
+    battleLogger?.setBattleConfig({
+      scoring_mode: advRules.cumulativeScoring ? 'cumulative' : 'per_round',
+      advance_rules: activeRuleKeys,
     });
     battleLogger?.logBattleEnd({ winner, finalScore: { agent_a: aScore, agent_b: bScore } });
     const log = battleLogger?.getFullLog(winner, { agent_a: aScore, agent_b: bScore });
