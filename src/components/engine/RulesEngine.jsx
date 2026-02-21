@@ -236,30 +236,37 @@ export class RulesEngine {
   }
 
   rollDefense(unit, hitCount, weapon, terrain, hitRolls) {
-    let defense = unit.defense || 5;
-    // FIX: AP reduces defence save (makes it harder to save = higher number needed)
-    const ap = weapon.ap || 0;
+  let defense = unit.defense || 5;
+  const ap = weapon.ap || 0;
+  const specialRulesApplied = [];
 
-    if (terrain) {
-      const coverBonus = this.getCoverBonus(unit, terrain);
-      defense -= coverBonus; // cover reduces the target number needed (easier to save)
-    }
+  if (terrain) {
+  const coverBonus = this.getCoverBonus(unit, terrain);
+  if (coverBonus > 0) {
+  defense -= coverBonus;
+  specialRulesApplied.push({ rule: 'Cover', value: coverBonus, effect: `save improved by ${coverBonus} from terrain` });
+  }
+  }
 
-    // AP worsens defence (raises threshold)
-    const modifiedDefense = Math.min(6, Math.max(2, defense + ap));
-    const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
-    let saves = rolls.filter(r => r.success).length;
+  if (ap > 0) {
+  specialRulesApplied.push({ rule: 'AP', value: ap, effect: `enemy saves reduced by ${ap}` });
+  }
 
-    // Rending: Unmodified 6s on hit rolls auto-wound (bypass saves)
-    let autoWounds = 0;
-    if (weapon.special_rules?.includes('Rending') && hitRolls) {
-      autoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length;
-      saves = Math.max(0, saves - autoWounds);
-    }
+  const modifiedDefense = Math.min(6, Math.max(2, defense + ap));
+  const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
+  let saves = rolls.filter(r => r.success).length;
 
-    let wounds = hitCount - saves;
+  // Rending: Unmodified 6s on hit rolls auto-wound (bypass saves)
+  let autoWounds = 0;
+  if (weapon.special_rules?.includes('Rending') && hitRolls) {
+  autoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length;
+  saves = Math.max(0, saves - autoWounds);
+  if (autoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${autoWounds} extra hits from natural 6s, bypassing saves` });
+  }
 
-    return { rolls, saves, wounds };
+  let wounds = hitCount - saves;
+
+  return { rolls, saves, wounds, specialRulesApplied };
   }
 
   // End-of-round regeneration — single roll per unit per round regardless of wounds lost (Bug 2)
