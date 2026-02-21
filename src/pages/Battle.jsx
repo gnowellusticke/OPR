@@ -608,42 +608,40 @@ export default function Battle() {
   // ─── MELEE ────────────────────────────────────────────────────────────────────
 
   const resolveMelee = async (attacker, defender, gs, evs, dmnReason) => {
-    const round = gs.current_round;
-    const rules = rulesRef.current;
-    const logger = loggerRef.current;
+  const round = gs.current_round;
+  const rules = rulesRef.current;
+  const logger = loggerRef.current;
 
-    const result = rules.resolveMelee(attacker, defender, gs);
+  // Guard: attacker must be alive (no phantom overwatch kills)
+  if (attacker.current_models <= 0 || attacker.status === 'destroyed') return false;
 
-    defender.current_models = Math.max(0, defender.current_models - result.attacker_wounds);
-    attacker.current_models = Math.max(0, attacker.current_models - result.defender_wounds);
-    if (defender.current_models <= 0) defender.status = 'destroyed';
-    if (attacker.current_models <= 0) attacker.status = 'destroyed';
+  const result = rules.resolveMelee(attacker, defender, gs);
 
-    evs.push({ round, type: 'combat', message: `⚔ ${attacker.name} vs ${defender.name} — dealt ${result.attacker_wounds}, took ${result.defender_wounds}`, timestamp: new Date().toLocaleTimeString() });
+  const defenderWasAlive = defender.current_models > 0;
+  const attackerWasAlive = attacker.current_models > 0;
+  defender.current_models = Math.max(0, defender.current_models - result.attacker_wounds);
+  attacker.current_models = Math.max(0, attacker.current_models - result.defender_wounds);
+  if (defenderWasAlive && defender.current_models <= 0) defender.status = 'destroyed';
+  if (attackerWasAlive && attacker.current_models <= 0) attacker.status = 'destroyed';
 
-    if (defender.current_models <= 0) {
-      evs.push({ round, type: 'combat', message: `${defender.name} destroyed in melee!`, timestamp: new Date().toLocaleTimeString() });
-      logger?.logDestruction({ round, unit: defender, cause: `melee with ${attacker.name}` });
-    }
-    if (attacker.current_models <= 0) {
-      evs.push({ round, type: 'combat', message: `${attacker.name} destroyed in melee!`, timestamp: new Date().toLocaleTimeString() });
-      logger?.logDestruction({ round, unit: attacker, cause: `melee with ${defender.name}` });
-    }
+  evs.push({ round, type: 'combat', message: `⚔ ${attacker.name} vs ${defender.name} — dealt ${result.attacker_wounds}, took ${result.defender_wounds}`, timestamp: new Date().toLocaleTimeString() });
 
-    // Use stored melee_weapon_name (never 'CCW') — falls back to Fists
-    const atkWpnName = attacker.melee_weapon_name && attacker.melee_weapon_name !== 'CCW' ? attacker.melee_weapon_name : 'Fists';
-    const aRes = result.attacker_results?.results?.[0];
-    const dRes = result.defender_results?.results?.[0];
-    logger?.logMelee({
-      round, actingUnit: attacker, targetUnit: defender,
-      weaponName: atkWpnName,
-      rollResults: {
-        attacker_attacks: aRes?.attacks || 1, attacker_hits: aRes?.hits ?? 0,
-        defender_saves_made: aRes?.saves ?? 0, wounds_dealt: result.attacker_wounds,
-        wounds_taken: result.defender_wounds
-      },
-      gameState: gs, dmnReason
-    });
+  const atkWpnName = attacker.melee_weapon_name && attacker.melee_weapon_name !== 'CCW' ? attacker.melee_weapon_name : 'Fists';
+  logger?.logMelee({
+  round, actingUnit: attacker, targetUnit: defender,
+  weaponName: atkWpnName,
+  rollResults: result.rollResults,
+  gameState: gs, dmnReason
+  });
+
+  if (defender.current_models <= 0 && defenderWasAlive) {
+  evs.push({ round, type: 'combat', message: `${defender.name} destroyed in melee!`, timestamp: new Date().toLocaleTimeString() });
+  logger?.logDestruction({ round, unit: defender, cause: `melee with ${attacker.name}` });
+  }
+  if (attacker.current_models <= 0 && attackerWasAlive) {
+  evs.push({ round, type: 'combat', message: `${attacker.name} destroyed in melee!`, timestamp: new Date().toLocaleTimeString() });
+  logger?.logDestruction({ round, unit: attacker, cause: `melee with ${defender.name}` });
+  }
 
     // Morale on loser
     const loser = result.winner === attacker ? defender : (result.winner === defender ? attacker : null);
