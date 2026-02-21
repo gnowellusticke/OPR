@@ -169,19 +169,11 @@ export class RulesEngine {
   resolveShooting(attacker, defender, weapon, terrain, gameState) {
   const hits = this.rollToHit(attacker, weapon, defender, gameState);
   const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
-  // Bug 4 fix: deduplicate special_rules_applied by rule name — one entry per rule per event
-  const rawRules = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
-  const seen = new Set();
-  const specialRulesApplied = rawRules.filter(r => {
-    if (seen.has(r.rule)) return false;
-    seen.add(r.rule);
-    return true;
-  });
+  const specialRulesApplied = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
   return {
   weapon: weapon.name,
   hit_rolls: hits.rolls,
   hits: hits.successes,
-  saves_forced: hits.successes, // Bug 5: saves_forced = hits (before saves roll)
   defense_rolls: saves.rolls,
   saves: saves.saves,
   wounds: saves.wounds,
@@ -300,59 +292,51 @@ export class RulesEngine {
 
   // Melee
   resolveMelee(attacker, defender, gameState) {
-  const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
-  let defenderResults = null;
-  if (defender.status !== 'shaken' && defender.current_models > 0) {
-  defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
-  }
+    const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
+    let defenderResults = null;
+    if (defender.status !== 'shaken' && defender.current_models > 0) {
+    defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
+    }
 
-  const attackerWounds = attackerResults.total_wounds;
-  const defenderWounds = defenderResults?.total_wounds || 0;
-  const winner = attackerWounds > defenderWounds ? attacker :
-               defenderWounds > attackerWounds ? defender : null;
+    const attackerWounds = attackerResults.total_wounds;
+    const defenderWounds = defenderResults?.total_wounds || 0;
+    const winner = attackerWounds > defenderWounds ? attacker :
+                 defenderWounds > attackerWounds ? defender : null;
 
-  // Build full bidirectional roll_results for the logger
-  const aRes = attackerResults.results?.[0] || {};
-  const dRes = defenderResults?.results?.[0] || null;
-  const specialRulesApplied = [
-  ...(attackerResults.specialRulesApplied || []),
-  ...(defenderResults?.specialRulesApplied || [])
-  ];
+    // Build full bidirectional roll_results for the logger
+    const aRes = attackerResults.results?.[0] || {};
+    const dRes = defenderResults?.results?.[0] || null;
+    const specialRulesApplied = [
+    ...(attackerResults.specialRulesApplied || []),
+    ...(defenderResults?.specialRulesApplied || [])
+    ];
 
-  // Bug 5 fix: populate saves_forced fields
-  const attackerSavesForced = aRes.hits ?? 0;
-  const defenderSavesForced = dRes ? (dRes.hits ?? 0) : 0;
+    // Bug 5 fix: attacker_saves_forced and defender_saves_forced track how many saves each side had to roll
+    const attackerSavesForced = aRes.hits ?? 0;
+    const defenderSavesForced = dRes ? (dRes.hits ?? 0) : 0;
 
-  // Bug 4 fix: deduplicate special_rules_applied for melee events too
-  const seenMelee = new Set();
-  const dedupedMeleeRules = specialRulesApplied.filter(r => {
-    if (seenMelee.has(r.rule)) return false;
-    seenMelee.add(r.rule);
-    return true;
-  });
+    const rollResults = {
+    attacker_attacks: aRes.attacks || 1,
+    attacker_hits: aRes.hits ?? 0,
+    attacker_saves_forced: attackerSavesForced,
+    defender_saves_made: aRes.saves ?? 0,
+    wounds_dealt: attackerWounds,
+    defender_attacks: dRes ? (dRes.attacks || 1) : 0,
+    defender_hits: dRes ? (dRes.hits ?? 0) : 0,
+    defender_saves_forced: defenderSavesForced,
+    attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
+    wounds_taken: defenderWounds,
+    special_rules_applied: specialRulesApplied
+    };
 
-  const rollResults = {
-  attacker_attacks: aRes.attacks || 1,
-  attacker_hits: aRes.hits ?? 0,
-  attacker_saves_forced: attackerSavesForced,
-  defender_saves_made: aRes.saves ?? 0,
-  wounds_dealt: Math.min(attackerWounds, Math.max(0, attackerSavesForced - (aRes.saves ?? 0))),
-  defender_attacks: dRes ? (dRes.attacks || 1) : 0,
-  defender_hits: dRes ? (dRes.hits ?? 0) : 0,
-  defender_saves_forced: defenderSavesForced,
-  attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
-  wounds_taken: dRes ? Math.min(defenderWounds, Math.max(0, defenderSavesForced - (dRes.saves ?? 0))) : 0,
-  special_rules_applied: dedupedMeleeRules
-  };
-
-  return {
-  attacker_results: attackerResults,
-  defender_results: defenderResults,
-  winner,
-  attacker_wounds: attackerWounds,
-  defender_wounds: defenderWounds,
-  rollResults
-  };
+    return {
+    attacker_results: attackerResults,
+    defender_results: defenderResults,
+    winner,
+    attacker_wounds: attackerWounds,
+    defender_wounds: defenderWounds,
+    rollResults
+    };
   }
 
   resolveMeleeStrikes(attacker, defender, isStrikeBack = false, gameState = null) {
