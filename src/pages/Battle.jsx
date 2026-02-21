@@ -883,15 +883,22 @@ export default function Battle() {
     rules.updateObjectives(newState);
     const roundA = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const roundB = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
-    const isCumulative = newState.advance_rules?.cumulativeScoring;
-    const prevScore = newState.cumulative_score || { agent_a: 0, agent_b: 0 };
-    if (isCumulative) {
+
+    // Bug 9 fix: Scoring behavior by mode
+    let scoreToLog;
+    if (isProgressiveScoring) {
+      // Progressive mode: accumulate each round
+      const prevScore = newState.cumulative_score || { agent_a: 0, agent_b: 0 };
       newState.cumulative_score = { agent_a: prevScore.agent_a + roundA, agent_b: prevScore.agent_b + roundB };
+      scoreToLog = { agent_a: newState.cumulative_score.agent_a, agent_b: newState.cumulative_score.agent_b, this_round_a: roundA, this_round_b: roundB, mode: 'progressive' };
+    } else {
+      // Standard mode: only score in final round (after round 4)
+      if (isFinalRound) {
+        scoreToLog = { agent_a: roundA, agent_b: roundB, mode: 'standard' };
+      } else {
+        scoreToLog = { agent_a: 0, agent_b: 0, mode: 'standard', note: 'score counted at Round 4 only' };
+      }
     }
-    // Bug 1 fix: Round summary accumulates per-round scores
-    const scoreToLog = isCumulative
-      ? { agent_a: newState.cumulative_score.agent_a, agent_b: newState.cumulative_score.agent_b, this_round_a: roundA, this_round_b: roundB, mode: 'cumulative' }
-      : { agent_a: roundA, agent_b: roundB, mode: 'per_round' };
 
     logger?.logRoundSummary({ round: gs.current_round, objectives: newState.objectives, score: scoreToLog });
 
