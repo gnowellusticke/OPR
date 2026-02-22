@@ -339,6 +339,15 @@ export class RulesEngine {
       if (natureSixes > 0) specialRulesApplied.push({ rule: 'Surge', value: null, effect: `${natureSixes} extra hits from natural 6s` });
     }
 
+    // Crack: unmodified 6s to hit generate +2 hits instead of 1 (net +1 extra hit each)
+    if (rulesStr.includes('Crack')) {
+      const natureSixes = rolls.filter(r => r.value === 6 && r.success && !r.relentless).length;
+      if (natureSixes > 0) {
+        successes += natureSixes; // +1 extra per natural 6 (the original hit already counted)
+        specialRulesApplied.push({ rule: 'Crack', value: null, effect: `${natureSixes} natural 6s each count as 2 hits (+${natureSixes} extra)` });
+      }
+    }
+
     return { rolls, successes, specialRulesApplied };
   }
 
