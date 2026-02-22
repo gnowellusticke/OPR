@@ -213,10 +213,22 @@ export class ArmyTextParser {
     const apMatch = stats.match(/AP\((\d+)\)/);
     const ap = apMatch ? parseInt(apMatch[1]) : 0;
 
+    // Split stats by ", " respecting nested parens so "AP(1), Blast(3)" splits correctly
+    const splitStats = [];
+    let d = 0, segStart = 0;
+    for (let i = 0; i < stats.length; i++) {
+      if (stats[i] === '(') d++;
+      else if (stats[i] === ')') d--;
+      if (d === 0 && stats[i] === ',' && stats[i + 1] === ' ') {
+        splitStats.push(stats.slice(segStart, i).trim());
+        segStart = i + 2;
+        i++;
+      }
+    }
+    splitStats.push(stats.slice(segStart).trim());
+
     // Extract special rules (everything that isn't range/attacks/AP)
-    const specialParts = stats
-      .split(',')
-      .map(s => s.trim())
+    const specialParts = splitStats
       .filter(s => !/^\d+"$/.test(s) && !/^A\d+$/.test(s) && !/^AP\(\d+\)$/.test(s));
     const special_rules = specialParts.join(', ') || undefined;
 
