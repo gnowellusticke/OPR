@@ -452,17 +452,24 @@ export class RulesEngine {
     return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs: 0, deadlyMultiplier, hasBane, specialRulesApplied };
   }
 
-  applyRegeneration(unit, suppressedByBane = false) {
+  // applyRegeneration: rolls one die per incoming wound; each 5+ ignores that wound.
+  // Returns { finalWounds, ignored, rolls } — caller must use finalWounds instead of original wounds.
+  // Bane suppresses Regeneration entirely.
+  applyRegeneration(unit, incomingWounds = 1, suppressedByBane = false) {
     const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
-    const hasRule = REGEN_RULES.some(r => unit.special_rules?.includes(r));
-    if (!hasRule) return { recovered: 0, roll: null };
-    if (unit.current_models >= unit.total_models) return { recovered: 0, roll: null };
-    // Bane: ignores Regeneration — if the last wound came from a Bane weapon, skip regen
-    if (suppressedByBane) return { recovered: 0, roll: null, suppressedByBane: true };
-    const roll = this.dice.roll();
-    const recovered = roll >= 5 ? 1 : 0;
-    unit.current_models = Math.min(unit.total_models, unit.current_models + recovered);
-    return { recovered, roll };
+    const rulesStr = this._rulesStr(unit.special_rules);
+    const hasRule = REGEN_RULES.some(r => rulesStr.includes(r));
+    if (!hasRule) return { finalWounds: incomingWounds, ignored: 0, rolls: [] };
+    if (suppressedByBane) return { finalWounds: incomingWounds, ignored: 0, rolls: [], suppressedByBane: true };
+
+    const rolls = [];
+    let ignored = 0;
+    for (let i = 0; i < incomingWounds; i++) {
+      const roll = this.dice.roll();
+      rolls.push(roll);
+      if (roll >= 5) ignored++;
+    }
+    return { finalWounds: Math.max(0, incomingWounds - ignored), ignored, rolls };
   }
 
   // Melee
