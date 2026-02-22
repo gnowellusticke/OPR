@@ -223,18 +223,16 @@ export class RulesEngine {
 
     const hits = this.rollToHit(attacker, weapon, defender, gameState);
 
-    // Blast: after resolving hits, multiply each hit by X (capped at number of models in target unit)
+    // Blast: hits are already the blast count from rollToHit — cap them at the number of models in the target.
+    // No multiplication: rollToHit already returned blastX automatic hits; we only cap against model count.
     let finalHits = hits.successes;
-    let blastMultiplied = false;
     const rulesStrBlast = this._rulesStr(weapon.special_rules);
     const blastMultMatch = rulesStrBlast.match(/\bBlast\((\d+)\)/);
     if (blastMultMatch && hits.blast) {
       const blastX = parseInt(blastMultMatch[1]);
       const modelCount = defender.model_count || Math.ceil((defender.current_models || 1) / Math.max(defender.tough_per_model || 1, 1));
-      const cappedMultiplier = Math.min(blastX, modelCount);
-      finalHits = hits.successes * cappedMultiplier;
-      blastMultiplied = true;
-      hits.specialRulesApplied.push({ rule: 'Blast', value: cappedMultiplier, effect: `each hit ×${cappedMultiplier} (capped at ${modelCount} models in target)` });
+      finalHits = Math.min(blastX, modelCount);
+      hits.specialRulesApplied.push({ rule: 'Blast', value: finalHits, effect: `${blastX} automatic hits capped at ${modelCount} model(s) in target` });
     }
 
     const saves = this.rollDefense(defender, finalHits, weapon, terrain, hits.rolls);
