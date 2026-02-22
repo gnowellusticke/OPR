@@ -504,12 +504,11 @@ export default function Battle() {
     let unit;
     if (agentRemaining.length > 0) {
       unit = agentRemaining[0];
+    } else if (otherRemaining.length > 0) {
+      unit = otherRemaining[0];
     } else {
-      // Current agent exhausted — flip and take from other
-      const flipped = gs.active_agent === 'agent_a' ? 'agent_b' : 'agent_a';
-      const flippedRemaining = otherRemaining.filter(u => u.owner === flipped);
-      if (flippedRemaining.length === 0) { await endRound(gs); return; }
-      unit = flippedRemaining[0];
+      await endRound(gs);
+      return;
     }
 
     await activateUnit(unit, gs);
