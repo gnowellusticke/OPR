@@ -641,7 +641,9 @@ export class RulesEngine {
     const hasBane = rulesStr.includes('Bane');
     const hasRending = rulesStr.includes('Rending');
     // toughPerModel caps Deadly damage per model — NOT a general wound multiplier
-    const toughPerModel = defender.tough_per_model || 1;
+    // toughPerModel caps Deadly damage per unsaved hit.
+    // Already set correctly at deploy time — just use it directly (never 0).
+    const toughPerModel = Math.max(defender.tough_per_model || 1, 1);
 
     const defense = defender.defense || 5;
 
