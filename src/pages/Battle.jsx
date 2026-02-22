@@ -1040,13 +1040,24 @@ export default function Battle() {
         const isFinalRound = newRound === 5; // After round 4
 
     // Validation pass: every unit alive at round start must have had exactly one activation.
-    // Log a structured warning event for any that were missed (scheduling bug detection).
+    // Log warnings for any that were missed, and give Shaken units a safety-net recovery roll.
+    const rules = rulesRef.current;
     const liveUnits = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed' && !u.is_in_reserve);
-    const activated = gs.units_activated || [];
-    const notActivated = liveUnits.filter(u => !activated.includes(u.id));
+    const activatedSetEnd = new Set(gs.units_activated || []);
+    const notActivated = liveUnits.filter(u => !activatedSetEnd.has(u.id));
     notActivated.forEach(u => {
       evs.push({ round: gs.current_round, type: 'warning', message: `⚠ SCHEDULING: ${u.name} (${u.owner}) had no activation in round ${gs.current_round}`, timestamp: new Date().toLocaleTimeString() });
       loggerRef.current?.logAbility({ round: gs.current_round, unit: u, ability: 'scheduling_warning', details: { reason: 'no_activation_this_round' } });
+      // Bug 3 fix: Shaken unit skipped by scheduler must still get a recovery roll at round end
+      if (u.status === 'shaken') {
+        const quality = u.quality || 4;
+        const roll = rules.dice.roll();
+        const recovered = roll >= quality;
+        if (recovered) u.status = 'normal';
+        const outcome = recovered ? 'recovered' : 'still_shaken';
+        evs.push({ round: gs.current_round, type: 'morale', message: `${u.name} end-of-round Shaken recovery (not activated): rolled ${roll} vs ${quality}+ — ${recovered ? 'recovered' : 'still shaken'}`, timestamp: new Date().toLocaleTimeString() });
+        loggerRef.current?.logMorale({ round: gs.current_round, unit: u, outcome, roll, qualityTarget: quality, dmnReason: 'end-of-round shaken recovery (unit skipped by scheduler)' });
+      }
     });
 
     // Deploy Ambush/reserve units at the start of each new round.
