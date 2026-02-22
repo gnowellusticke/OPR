@@ -474,12 +474,11 @@ export default function Battle() {
     const bat = battleRef.current;
     if (!gs || !bat || bat.status === 'completed') return;
 
-    // Bug 1 fix: deduplicate units_activated so a unit ID can never be "activated" twice in one round.
-    // This prevents double-activation where the same unit appears multiple times in the activated list.
+    // Build the activation queue fresh from all living non-reserve units every call.
+    // NEVER mutate or carry over a previous round's queue — always re-derive from source of truth.
     const activatedSet = new Set(gs.units_activated || []);
 
-    // Build remaining queue: every living non-reserve unit not yet activated this round.
-    // Deduplicate by id to ensure each unit appears at most once.
+    // Deduplicate by id: each unit can appear at most once in the living pool.
     const seenIds = new Set();
     const allLiving = gs.units.filter(u => {
       if (seenIds.has(u.id)) return false;
@@ -490,6 +489,17 @@ export default function Battle() {
         !u.is_in_reserve
       );
     });
+
+    // Safety net: warn about any living unit that somehow isn't in the pool
+    // (reserve entry edge cases, shaken units, etc.)
+    const missing = allLiving.filter(u => {
+      const inPool = allLiving.some(a => a.id === u.id);
+      return !inPool;
+    });
+    if (missing.length > 0) {
+      console.error(`SCHEDULER: missing units force-added:`, missing.map(u => u.name));
+    }
+
     const remaining = allLiving.filter(u => !activatedSet.has(u.id));
 
     if (remaining.length === 0) {
