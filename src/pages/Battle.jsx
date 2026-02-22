@@ -1071,58 +1071,51 @@ export default function Battle() {
           }
         });
 
-        const newState = {
-      ...gs,
-      current_round: newRound,
-      units_activated: [],
-      active_agent: 'agent_a',
-    };
+            const newState = {
+          ...gs,
+          current_round: newRound,
+          units_activated: [],
+          active_agent: 'agent_a',
+        };
 
-    // Reset per-round flags — NEVER clear shaken here (only morale recovery rolls can do that)
-    newState.units = newState.units.map(u => ({
-      ...u,
-      fatigued: false, just_charged: false,
-      status: u.current_models <= 0 ? 'destroyed' : u.status,
-    }));
+        // Reset per-round flags — NEVER clear shaken here (only morale recovery rolls can do that)
+        newState.units = newState.units.map(u => ({
+          ...u,
+          fatigued: false, just_charged: false,
+          status: u.current_models <= 0 ? 'destroyed' : u.status,
+        }));
 
-    // Replenish Caster spell tokens (capped at 6)
-    newState.units.forEach(u => {
-      const gained = rules.replenishSpellTokens(u);
-      if (gained > 0) {
-        evs.push({ round: newRound, type: 'ability', message: `${u.name} gains ${gained} spell token(s) (now ${u.spell_tokens}/6)`, timestamp: new Date().toLocaleTimeString() });
-        logger?.logAbility({ round: newRound, unit: u, ability: 'Caster', details: { tokens_gained: gained, tokens_total: u.spell_tokens } });
-      }
-    });
+        // Replenish Caster spell tokens (capped at 6)
+        newState.units.forEach(u => {
+          const gained = rules.replenishSpellTokens(u);
+          if (gained > 0) {
+            evs.push({ round: newRound, type: 'ability', message: `${u.name} gains ${gained} spell token(s) (now ${u.spell_tokens}/6)`, timestamp: new Date().toLocaleTimeString() });
+            logger?.logAbility({ round: newRound, unit: u, ability: 'Caster', details: { tokens_gained: gained, tokens_total: u.spell_tokens } });
+          }
+        });
 
-    // Regeneration / Self-Repair / Repair — end-of-round recovery is now handled
-    // inline when wounds are applied (see attemptShooting / resolveMelee).
-    // Nothing to do here.
+        // Objectives
+        rules.updateObjectives(newState);
+        const roundA = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
+        const roundB = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
 
-    // Objectives — exclude n/a slots from scoring (Bug 4 fix)
-    rules.updateObjectives(newState);
-    const roundA = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
-    const roundB = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
+        let scoreToLog;
+        if (isProgressiveScoring) {
+          const prevScore = newState.cumulative_score || { agent_a: 0, agent_b: 0 };
+          newState.cumulative_score = { agent_a: prevScore.agent_a + roundA, agent_b: prevScore.agent_b + roundB };
+          scoreToLog = { agent_a: newState.cumulative_score.agent_a, agent_b: newState.cumulative_score.agent_b, this_round_a: roundA, this_round_b: roundB, mode: 'progressive' };
+        } else {
+          if (isFinalRound) {
+            scoreToLog = { agent_a: roundA, agent_b: roundB, mode: 'standard' };
+          } else {
+            scoreToLog = { agent_a: 0, agent_b: 0, mode: 'standard', note: 'score counted at Round 4 only' };
+          }
+        }
 
-    // Bug 9 fix: Scoring behavior by mode
-    let scoreToLog;
-    if (isProgressiveScoring) {
-      // Progressive mode: accumulate each round
-      const prevScore = newState.cumulative_score || { agent_a: 0, agent_b: 0 };
-      newState.cumulative_score = { agent_a: prevScore.agent_a + roundA, agent_b: prevScore.agent_b + roundB };
-      scoreToLog = { agent_a: newState.cumulative_score.agent_a, agent_b: newState.cumulative_score.agent_b, this_round_a: roundA, this_round_b: roundB, mode: 'progressive' };
-    } else {
-      // Standard mode: only score in final round (after round 4)
-      if (isFinalRound) {
-        scoreToLog = { agent_a: roundA, agent_b: roundB, mode: 'standard' };
-      } else {
-        scoreToLog = { agent_a: 0, agent_b: 0, mode: 'standard', note: 'score counted at Round 4 only' };
-      }
-    }
+        logger?.logRoundSummary({ round: gs.current_round, objectives: newState.objectives, score: scoreToLog });
 
-    logger?.logRoundSummary({ round: gs.current_round, objectives: newState.objectives, score: scoreToLog });
-
-    evs.push({ round: newRound, type: 'round', message: `━━━ Round ${newRound} begins ━━━`, timestamp: new Date().toLocaleTimeString() });
-    commitState(newState, evs);
+        evs.push({ round: newRound, type: 'round', message: `━━━ Round ${newRound} begins ━━━`, timestamp: new Date().toLocaleTimeString() });
+        commitState(newState, evs);
   };
 
   // ─── END BATTLE ───────────────────────────────────────────────────────────────
