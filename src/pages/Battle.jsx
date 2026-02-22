@@ -174,40 +174,40 @@ export default function Battle() {
 
   const generateObjectives = () => {
     // Roll d3+2 for objective count (3–5).
-    // Bug 5 fix: Use fixed deterministic spread positions per count to avoid clustering.
-    // Positions are in the centre band (y=15-45), spread evenly across board width.
     const diceRoll = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
     const numObjectives = diceRoll + 2; // 3, 4, or 5
 
     // Fixed canonical spread positions per count — small jitter (±2) for visual variety only.
     // All pairwise distances >= 15 units guaranteed by these coordinates.
+    // y-coordinates capped to [14, 46] to keep objectives out of deployment strips (y<16, y>48).
     const jitter = () => (Math.random() - 0.5) * 4;
     const SPREAD_POSITIONS = {
       3: [
         { id: 'obj_1', x: 15, y: 30 },
-        { id: 'obj_2', x: 42, y: 12 },
-        { id: 'obj_3', x: 42, y: 48 },
+        { id: 'obj_2', x: 42, y: 17 },
+        { id: 'obj_3', x: 42, y: 43 },
       ],
       4: [
-        { id: 'obj_1', x: 15, y: 12 },
-        { id: 'obj_2', x: 15, y: 48 },
-        { id: 'obj_3', x: 42, y: 12 },
-        { id: 'obj_4', x: 42, y: 48 },
+        { id: 'obj_1', x: 15, y: 17 },
+        { id: 'obj_2', x: 15, y: 43 },
+        { id: 'obj_3', x: 42, y: 17 },
+        { id: 'obj_4', x: 42, y: 43 },
       ],
       5: [
         { id: 'obj_1', x: 10, y: 30 },
-        { id: 'obj_2', x: 27, y: 12 },
-        { id: 'obj_3', x: 27, y: 48 },
-        { id: 'obj_4', x: 47, y: 12 },
-        { id: 'obj_5', x: 47, y: 48 },
+        { id: 'obj_2', x: 27, y: 17 },
+        { id: 'obj_3', x: 27, y: 43 },
+        { id: 'obj_4', x: 47, y: 17 },
+        { id: 'obj_5', x: 47, y: 43 },
       ],
     };
 
     const positions = SPREAD_POSITIONS[numObjectives] || SPREAD_POSITIONS[3];
     const selected = positions.map(pos => ({
       ...pos,
-      x: pos.x + jitter(),
-      y: pos.y + jitter(),
+      // Clamp after jitter: x in [6,64], y in [14,46] — always inside contested band
+      x: Math.max(6, Math.min(64, pos.x + jitter())),
+      y: Math.max(14, Math.min(46, pos.y + jitter())),
       controlled_by: null
     }));
 
