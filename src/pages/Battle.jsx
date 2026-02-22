@@ -630,6 +630,103 @@ export default function Battle() {
     rules.updateObjectives(gs);
   };
 
+  // ─── SPELL CASTING ────────────────────────────────────────────────────────────
+  // Called before attacking for any unit with Caster(X) that has enough tokens.
+  // AI strategy: cast any spell whose cost <= available tokens, targeting nearest enemy.
+  // Allied units within 18" spend their own tokens to boost the roll (+1 each).
+  // Enemy units within 18" of their own caster spend tokens to counter (-1 each).
+
+  const attemptSpellCasting = async (unit, gs, evs) => {
+    const rules = rulesRef.current;
+    const logger = loggerRef.current;
+    const round = gs.current_round;
+
+    if (rules.getCasterTokens(unit) === 0) return; // not a caster
+    const tokens = unit.spell_tokens || 0;
+    if (tokens === 0) return; // no tokens to spend
+
+    // Derive spells from unit weapons with spell_cost field, or a default cost-1 spell
+    const spells = (unit.weapons || [])
+      .filter(w => w.spell_cost != null)
+      .sort((a, b) => (a.spell_cost || 1) - (b.spell_cost || 1));
+
+    // Fallback: treat any remaining tokens as a generic cost-1 offensive spell
+    if (spells.length === 0) spells.push({ name: 'Spell', spell_cost: 1, range: 18, attacks: 1, ap: 0, special_rules: '' });
+
+    const enemies = gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed');
+    if (enemies.length === 0) return;
+
+    const target = enemies.reduce((n, e) => rules.calculateDistance(unit, e) < rules.calculateDistance(unit, n) ? e : n);
+    const dist = rules.calculateDistance(unit, target);
+    const LOS_RANGE = 18;
+
+    for (const spell of spells) {
+      const cost = spell.spell_cost || 1;
+      if ((unit.spell_tokens || 0) < cost) continue;
+      if (dist > (spell.range || LOS_RANGE)) continue;
+
+      // Allied helpers: friendly Casters within 18" — AI spends all their spare tokens to help
+      let friendlyBonus = 0;
+      gs.units.forEach(ally => {
+        if (ally.id === unit.id || ally.owner !== unit.owner || ally.current_models <= 0) return;
+        if (rules.getCasterTokens(ally) === 0) return;
+        if (rules.calculateDistance(unit, ally) > 18) return;
+        const spend = ally.spell_tokens || 0;
+        if (spend > 0) {
+          ally.spell_tokens = 0;
+          friendlyBonus += spend;
+        }
+      });
+
+      // Enemy counters: enemy Casters within 18" of the target — AI spends all their spare tokens to block
+      let hostileBonus = 0;
+      gs.units.forEach(enemy => {
+        if (enemy.owner === unit.owner || enemy.current_models <= 0) return;
+        if (rules.getCasterTokens(enemy) === 0) return;
+        if (rules.calculateDistance(target, enemy) > 18) return;
+        const spend = enemy.spell_tokens || 0;
+        if (spend > 0) {
+          enemy.spell_tokens = 0;
+          hostileBonus += spend;
+        }
+      });
+
+      const castResult = rules.castSpell(unit, target, cost, friendlyBonus, hostileBonus);
+
+      evs.push({
+        round, type: 'ability',
+        message: `🔮 ${unit.name} casts ${spell.name} (cost ${cost}) at ${target.name}: roll ${castResult.roll}${castResult.helpBonus !== 0 ? `${castResult.helpBonus >= 0 ? '+' : ''}${castResult.helpBonus}` : ''} = ${castResult.modifiedRoll} → ${castResult.success ? '✓ SUCCESS' : '✗ FAIL'} (tokens: ${castResult.tokensAfter} left)`,
+        timestamp: new Date().toLocaleTimeString()
+      });
+      logger?.logAbility({ round, unit, ability: 'Caster', details: { spell: spell.name, cost, target: target.name, roll: castResult.roll, modified_roll: castResult.modifiedRoll, success: castResult.success, tokens_before: castResult.tokensBefore, tokens_after: castResult.tokensAfter, friendly_bonus: friendlyBonus, hostile_bonus: hostileBonus } });
+
+      if (castResult.success) {
+        // Resolve spell as a ranged attack (1 automatic hit, AP from spell)
+        const spellWeapon = { name: spell.name, range: spell.range || 18, attacks: 1, ap: spell.ap || 0, special_rules: spell.special_rules || '' };
+        const shootResult = rules.resolveShooting(unit, target, spellWeapon, gs.terrain, gs);
+        const woundsDealt = shootResult.wounds;
+
+        // Regeneration check
+        const regenResult = rules.applyRegeneration(target, woundsDealt, false);
+        const finalWounds = regenResult.finalWounds;
+        if (regenResult.ignored > 0) {
+          evs.push({ round, type: 'regen', message: `${target.name} Regeneration: ignored ${regenResult.ignored}/${woundsDealt} spell wounds`, timestamp: new Date().toLocaleTimeString() });
+        }
+
+        target.current_models = Math.max(0, target.current_models - finalWounds);
+        if (target.current_models <= 0) {
+          target.status = 'destroyed';
+          evs.push({ round, type: 'combat', message: `${target.name} destroyed by ${spell.name}!`, timestamp: new Date().toLocaleTimeString() });
+          logger?.logDestruction({ round, unit: target, cause: `spell (${spell.name}) by ${unit.name}` });
+        } else if (finalWounds > 0) {
+          evs.push({ round, type: 'combat', message: `${spell.name} deals ${finalWounds} wound(s) to ${target.name}`, timestamp: new Date().toLocaleTimeString() });
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 400));
+    }
+  };
+
   // ─── SHOOTING ─────────────────────────────────────────────────────────────────
   // Iterates unit.ranged_weapons exactly once — one shoot event per distinct weapon,
   // never the same weapon twice. Blast(X) uses X automatic hits with no quality roll.
