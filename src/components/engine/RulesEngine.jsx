@@ -541,10 +541,11 @@ export class RulesEngine {
     });
     const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
 
-    // Bug 1 fix: fresh model count snapshot per activation — never accumulate across rounds
-    // toughPerModel=0 means 1-wound-per-model units; treat as 1 for division purposes
+    // Bug 3 fix: model count = floor(wounds_remaining / tough_per_model).
+    // tough_per_model=0 means 1-wound models → treat as 1 for division.
+    // This ensures Robot Lord A (T4, 4 wounds) = 1 model, not 4.
     const effectiveToughPerModel = Math.max(attacker.tough_per_model || 1, 1);
-    const currentModelCount = Math.floor(attacker.current_models / effectiveToughPerModel);
+    const currentModelCount = Math.max(1, Math.floor(attacker.current_models / effectiveToughPerModel));
 
     weaponsToUse.forEach(weapon => {
       // Always normalise special_rules to a string before any processing
