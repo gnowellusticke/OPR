@@ -263,8 +263,10 @@ export default function Battle() {
   };
   });
 
-  const aUnits = disambiguateUnitNames(build(armyA, 'agent_a'));
-  const bUnits = disambiguateUnitNames(build(armyB, 'agent_b'));
+  const rawA = disambiguateUnitNames(build(armyA, 'agent_a'));
+  const rawB = disambiguateUnitNames(build(armyB, 'agent_b'));
+  const aUnits = attachFactionSpells(rawA, armyA.faction || armyA.name);
+  const bUnits = attachFactionSpells(rawB, armyB.faction || armyB.name);
   return [...aUnits, ...bUnits];
   };
 
