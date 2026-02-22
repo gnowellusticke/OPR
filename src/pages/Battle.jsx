@@ -1059,10 +1059,8 @@ export default function Battle() {
           }
         });
 
-    // Deploy Ambush/reserve units at the start of each new round.
-    // Bug 5 fix: After deploying, clear is_in_reserve so the unit is registered in the activation
-    // pool for ALL subsequent rounds (not just the one they enter play in).
-    gs.units.forEach(u => {
+        // Deploy Ambush/reserve units at the start of each new round.
+        gs.units.forEach(u => {
       if (u.is_in_reserve && u.current_models > 0) {
         const deployed = rules.deployAmbush(u, gs);
         if (deployed) {
