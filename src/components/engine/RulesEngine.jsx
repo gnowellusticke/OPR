@@ -318,11 +318,18 @@ export class RulesEngine {
       }
     }
 
-    // Relentless: extra hit on 6 at 9"+ range
-    if (rulesStr.includes('Relentless') && this.calculateDistance(unit, target) > 9) {
+    // Relentless: unmodified 6s to hit at 9"+ range deal 1 extra hit each.
+    // The extra hit does NOT itself count as a 6 for any other special rules.
+    if (rulesStr.includes('Relentless') && target && this.calculateDistance(unit, target) > 9) {
       const natureSixes = rolls.filter(r => r.value === 6 && r.success).length;
-      successes += natureSixes;
-      if (natureSixes > 0) specialRulesApplied.push({ rule: 'Relentless', value: null, effect: `${natureSixes} extra hits from natural 6s at 9"+ range` });
+      if (natureSixes > 0) {
+        // Add extra hits as value=1 rolls (explicitly not 6s) so Furious/Surge/Rending don't trigger on them
+        for (let i = 0; i < natureSixes; i++) {
+          rolls.push({ value: 1, success: true, relentless: true });
+        }
+        successes += natureSixes;
+        specialRulesApplied.push({ rule: 'Relentless', value: null, effect: `${natureSixes} extra hits from natural 6s at 9"+ range (extra hits don't count as 6s)` });
+      }
     }
 
     // Surge: extra hit on natural 6
