@@ -872,16 +872,9 @@ export default function Battle() {
       status: u.current_models <= 0 ? 'destroyed' : u.status,
     }));
 
-    // Regeneration / Self-Repair / Repair
-    const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
-    newState.units.forEach(u => {
-      const rule = REGEN_RULES.find(r => u.special_rules?.includes(r));
-      if (u.current_models > 0 && rule && u.current_models < u.total_models) {
-        const { recovered, roll } = rules.applyRegeneration(u);
-        evs.push({ round: gs.current_round, type: 'regen', message: `${u.name} ${rule}: roll ${roll} — ${recovered ? 'recovered 1 wound' : 'no recovery'}`, timestamp: new Date().toLocaleTimeString() });
-        logger?.logRegeneration({ round: gs.current_round, unit: u, recovered, roll, ruleName: rule });
-      }
-    });
+    // Regeneration / Self-Repair / Repair — end-of-round recovery is now handled
+    // inline when wounds are applied (see attemptShooting / resolveMelee).
+    // Nothing to do here.
 
     // Objectives
     rules.updateObjectives(newState);
