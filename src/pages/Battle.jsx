@@ -750,13 +750,14 @@ export default function Battle() {
   const logger = loggerRef.current;
   let shotFired = false;
 
-  // Deduplicate weapons by name to guarantee one event per distinct weapon, not per attack
-  const seen = new Set();
+  // Bug 1 fix: Deduplicate weapons by name — one fire event per distinct weapon per activation.
+  // Use a fresh Set created here (not persisted) so it resets each time this function is called.
+  const firedThisActivation = new Set();
   const rangedWeapons = (unit.weapons || []).filter(w => {
-  if ((w.range ?? 2) <= 2) return false;
-  if (seen.has(w.name)) return false;
-  seen.add(w.name);
-  return true;
+    if ((w.range ?? 2) <= 2) return false;
+    if (firedThisActivation.has(w.name)) return false;
+    firedThisActivation.add(w.name);
+    return true;
   });
 
   if (rangedWeapons.length === 0) return false;
