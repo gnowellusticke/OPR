@@ -330,13 +330,8 @@ export class RulesEngine {
     }
   }
 
-  if (weapon.special_rules?.includes('Deadly')) {
-  const deadlyMatch = weapon.special_rules.match(/Deadly\((\d+)\)/);
-  const deadlyThreshold = deadlyMatch ? parseInt(deadlyMatch[1]) : 6;
-  const extra = rolls.filter(r => r.value >= deadlyThreshold).length;
-  successes += extra;
-  if (extra > 0) specialRulesApplied.push({ rule: 'Deadly', value: deadlyThreshold, effect: `${extra} extra hits on ${deadlyThreshold}+` });
-  }
+  // NOTE: Deadly(X) is a wound multiplier only — it does NOT add extra hits.
+  // Wound multiplication is handled in rollDefense. Nothing to do here.
 
   // Relentless: extra hit on 6 at 9"+ range
   if (weapon.special_rules?.includes('Relentless') && this.calculateDistance(unit, target) > 9) {
