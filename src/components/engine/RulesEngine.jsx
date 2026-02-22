@@ -259,6 +259,7 @@ export class RulesEngine {
   rollToHit(unit, weapon, target, gameState) {
     let quality = unit.quality || 4;
     const specialRulesApplied = [];
+    // Always normalise special_rules to a plain string — handles arrays and objects from parsed lists
     const rulesStr = this._rulesStr(weapon.special_rules);
 
     if (unit.just_charged && rulesStr.includes('Thrust')) {
