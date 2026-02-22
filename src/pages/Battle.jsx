@@ -11,6 +11,7 @@ import { base44 } from "@/api/base44Client";
 import { BPMNEngine, DMNEngine, CMMNEngine } from '../components/engine/GameEngine';
 import { RulesEngine } from '../components/engine/RulesEngine';
 import { BattleLogger } from '../components/engine/BattleLogger';
+import { verifyRuleCompliance } from '../components/engine/RuleComplianceVerifier';
 
 export default function Battle() {
   const navigate = useNavigate();
