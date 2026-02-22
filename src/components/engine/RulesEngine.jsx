@@ -323,37 +323,25 @@ export class RulesEngine {
   rollDefense(unit, hitCount, weapon, terrain, hitRolls) {
     let defense = unit.defense || 5;
     const specialRulesApplied = [];
-    let baneProcs = 0;
 
-    // Parse AP using strict helper — never bleeds into Deadly
     const ap = this._parseAP(weapon);
-
-    // Parse Deadly using strict whole-word helper — never triggered by AP strings
     const deadlyMultiplier = this._parseDeadly(weapon);
-
-    // Bane: natural 6s auto-wound, bypassing saves
     const rulesStr = this._rulesStr(weapon.special_rules);
-    const baneHits = rulesStr.includes('Bane') && hitRolls
-      ? hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length
-      : 0;
-    if (baneHits > 0) {
-      baneProcs = baneHits;
-      hitCount = Math.max(0, hitCount - baneHits);
-      specialRulesApplied.push({ rule: 'Bane', value: baneHits, effect: `${baneHits} natural 6s bypass saves (auto-wound)` });
-    }
+    const hasBane = rulesStr.includes('Bane');
+    const hasBlast = rulesStr.includes('Blast') || (weapon.blast === true);
 
-    if (terrain) {
+    // Blast: ignores cover
+    if (!hasBlast && terrain) {
       const coverBonus = this.getCoverBonus(unit, terrain);
       if (coverBonus > 0) {
         defense -= coverBonus;
         specialRulesApplied.push({ rule: 'Cover', value: coverBonus, effect: `save improved by ${coverBonus} from terrain` });
       }
-    }
-
-    // Damage(X) is NOT a wound multiplier — do not use it in the wound formula
-
-    if (deadlyMultiplier > 1) {
-      specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `unsaved wounds multiplied by ${deadlyMultiplier}` });
+    } else if (hasBlast && terrain) {
+      const coverBonus = this.getCoverBonus(unit, terrain);
+      if (coverBonus > 0) {
+        specialRulesApplied.push({ rule: 'Blast', value: null, effect: 'Blast ignores cover bonus' });
+      }
     }
 
     // Unstoppable: ignores negative AP modifiers
@@ -362,43 +350,84 @@ export class RulesEngine {
       effectiveAp = 0;
       specialRulesApplied.push({ rule: 'Unstoppable', value: null, effect: 'ignores negative AP modifiers' });
     }
-
     if (effectiveAp > 0) {
       specialRulesApplied.push({ rule: 'AP', value: effectiveAp, effect: `defense reduced by ${effectiveAp}` });
     }
 
     const modifiedDefense = Math.min(6, Math.max(2, defense - effectiveAp));
 
-    console.log(`[DEFENSE] weapon="${weapon.name}" rules="${this._rulesStr(weapon.special_rules)}" ap=${ap} effectiveAp=${effectiveAp} defense=${defense}→${modifiedDefense} deadly=${deadlyMultiplier} hits=${hitCount}`);
+    // ── Deadly: resolve Deadly hits first, separately from normal hits ───────────
+    // Deadly hits come from the first N unsaved saves; each unsaved Deadly hit deals
+    // deadlyMultiplier wounds to ONE model (no carry-over — capped at toughPerModel or 1).
+    const toughPerModel = unit.tough_per_model || 1;
 
-    const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
-    let saves = rolls.filter(r => r.success).length;
+    // Split hits: if Deadly, ALL hits from this weapon are Deadly hits
+    let deadlyWounds = 0;
+    let normalWounds = 0;
+    let rolls = [];
+    let saves = 0;
 
-    // Rending: unmodified 6s on hit rolls auto-wound
-    if (rulesStr.includes('Rending') && hitRolls) {
-      const rendingAutoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto && r.baneProc !== true).length;
-      saves = Math.max(0, saves - rendingAutoWounds);
-      if (rendingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingAutoWounds} natural 6s bypass saves` });
+    if (deadlyMultiplier > 1) {
+      // Roll defense for each hit individually to honour no-carry-over rule
+      // Bane: defender must re-roll unmodified 6s on defense
+      let remainingHits = hitCount;
+      for (let i = 0; i < remainingHits; i++) {
+        let defRoll = this.dice.roll();
+        // Bane: re-roll unmodified 6s on defense
+        if (hasBane && defRoll === 6) {
+          const reroll = this.dice.roll();
+          rolls.push({ value: defRoll, success: defRoll >= modifiedDefense, baneReroll: reroll, finalValue: reroll });
+          defRoll = reroll;
+        } else {
+          rolls.push({ value: defRoll, success: defRoll >= modifiedDefense });
+        }
+        const saved = defRoll >= modifiedDefense;
+        if (saved) {
+          saves++;
+        } else {
+          // Unsaved Deadly hit: deals deadlyMultiplier wounds to one model, capped at that model's wounds
+          deadlyWounds += Math.min(deadlyMultiplier, toughPerModel);
+        }
+      }
+      if (deadlyMultiplier > 1) {
+        specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `each unsaved hit deals ${Math.min(deadlyMultiplier, toughPerModel)} wounds to one model (no carry-over)` });
+      }
+    } else {
+      // Normal hits — roll defense for all at once
+      // Bane: defender must re-roll unmodified 6s on defense
+      if (hasBane) {
+        for (let i = 0; i < hitCount; i++) {
+          let defRoll = this.dice.roll();
+          if (defRoll === 6) {
+            const reroll = this.dice.roll();
+            rolls.push({ value: defRoll, success: reroll >= modifiedDefense, baneReroll: reroll, finalValue: reroll });
+            if (reroll >= modifiedDefense) saves++;
+          } else {
+            const success = defRoll >= modifiedDefense;
+            rolls.push({ value: defRoll, success });
+            if (success) saves++;
+          }
+        }
+        if (hitCount > 0) specialRulesApplied.push({ rule: 'Bane', value: null, effect: 'defender must re-roll unmodified defense 6s' });
+      } else {
+        rolls = this.dice.rollDefense(modifiedDefense, hitCount);
+        saves = rolls.filter(r => r.success).length;
+      }
+
+      // Rending: unmodified 6s on hit rolls auto-wound (bypass saves)
+      if (rulesStr.includes('Rending') && hitRolls) {
+        const rendingAutoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length;
+        saves = Math.max(0, saves - rendingAutoWounds);
+        if (rendingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingAutoWounds} natural 6s bypass saves` });
+      }
+
+      normalWounds = Math.max(0, hitCount - saves);
     }
 
-    // Core wound formula
-    const unsavedHits = Math.max(0, hitCount - saves);
-    const totalUnsaved = unsavedHits + baneProcs;
-    let wounds = totalUnsaved > 0 ? totalUnsaved * deadlyMultiplier : 0;
+    const wounds = deadlyWounds + normalWounds;
 
-    // Absolute guards
-    const originalHitCount = hitCount + baneProcs;
-    if (originalHitCount === 0 && wounds > 0) {
-      console.error(`[MELEE BUG] 0 total hits but wounds=${wounds}. Clamping to 0.`);
-      wounds = 0;
-    }
-    if (totalUnsaved === 0 && wounds > 0) {
-      console.error(`[MELEE BUG] All hits saved but wounds=${wounds}. Clamping to 0.`);
-      wounds = 0;
-    }
-
-    console.log(`[DMG] totalHits=${originalHitCount} saveable=${hitCount} saves=${saves} unsaved=${unsavedHits} bane=${baneProcs} totalUnsaved=${totalUnsaved} deadlyX=${deadlyMultiplier} → wounds=${wounds}`);
-    return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, deadlyMultiplier, specialRulesApplied };
+    console.log(`[DMG] weapon="${weapon.name}" hits=${hitCount} saves=${saves} deadlyWounds=${deadlyWounds} normalWounds=${normalWounds} → wounds=${wounds}`);
+    return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs: 0, deadlyMultiplier, specialRulesApplied };
   }
 
   applyRegeneration(unit) {
