@@ -993,11 +993,14 @@ export default function Battle() {
       loggerRef.current?.logAbility({ round: gs.current_round, unit: u, ability: 'scheduling_warning', details: { reason: 'no_activation_this_round' } });
     });
 
-    // Deploy Ambush units from reserve at the start of each new round
+    // Deploy Ambush/reserve units at the start of each new round.
+    // Bug 5 fix: After deploying, clear is_in_reserve so the unit is registered in the activation
+    // pool for ALL subsequent rounds (not just the one they enter play in).
     gs.units.forEach(u => {
       if (u.is_in_reserve && u.current_models > 0) {
         const deployed = rules.deployAmbush(u, gs);
         if (deployed) {
+          u.is_in_reserve = false; // ← critical: now visible to scheduler every future round
           evs.push({ round: newRound, type: 'ability', message: `${u.name} deploys from Ambush!`, timestamp: new Date().toLocaleTimeString() });
           loggerRef.current?.logAbility({ round: newRound, unit: u, ability: 'Ambush', details: { x: u.x.toFixed(1), y: u.y.toFixed(1) } });
         }
