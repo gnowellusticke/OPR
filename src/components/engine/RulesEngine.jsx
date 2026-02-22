@@ -476,8 +476,14 @@ export class RulesEngine {
     const winner = attackerWoundsForComparison > defenderWoundsForComparison ? attacker :
                    defenderWoundsForComparison > attackerWoundsForComparison ? defender : null;
 
-    const aRes = attackerResults.results?.[0] || {};
-    const dRes = defenderResults?.results?.[0] || null;
+    // Sum stats across ALL weapon results (not just the first weapon)
+    const atkTotalAttacks = (attackerResults.results || []).reduce((s, r) => s + (r.attacks || 0), 0);
+    const atkTotalHits    = (attackerResults.results || []).reduce((s, r) => s + (r.hits ?? 0), 0);
+    const atkTotalSaves   = (attackerResults.results || []).reduce((s, r) => s + (r.saves ?? 0), 0);
+    const defTotalAttacks = (defenderResults?.results || []).reduce((s, r) => s + (r.attacks || 0), 0);
+    const defTotalHits    = (defenderResults?.results || []).reduce((s, r) => s + (r.hits ?? 0), 0);
+    const defTotalSaves   = (defenderResults?.results || []).reduce((s, r) => s + (r.saves ?? 0), 0);
+
     const specialRulesApplied = [
       ...(attackerResults.specialRulesApplied || []),
       ...(defenderResults?.specialRulesApplied || [])
@@ -491,15 +497,15 @@ export class RulesEngine {
     });
 
     const rollResults = {
-      attacker_attacks: aRes.attacks || 1,
-      attacker_hits: aRes.hits ?? 0,
-      attacker_saves_forced: aRes.hits ?? 0,
-      defender_saves_made: aRes.saves ?? 0,
+      attacker_attacks: atkTotalAttacks,
+      attacker_hits: atkTotalHits,
+      attacker_saves_forced: atkTotalHits,
+      defender_saves_made: atkTotalSaves,
       wounds_dealt: attackerRealWounds,
-      defender_attacks: dRes ? (dRes.attacks || 1) : 0,
-      defender_hits: dRes ? (dRes.hits ?? 0) : 0,
-      defender_saves_forced: dRes ? (dRes.hits ?? 0) : 0,
-      attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
+      defender_attacks: defTotalAttacks,
+      defender_hits: defTotalHits,
+      defender_saves_forced: defTotalHits,
+      attacker_saves_made: defTotalSaves,
       wounds_taken: defenderRealWounds,
       melee_resolution: {
         attacker_wounds_for_comparison: attackerWoundsForComparison,
