@@ -546,9 +546,13 @@ export class RulesEngine {
     const currentModelCount = Math.floor(attacker.current_models / effectiveToughPerModel);
 
     weaponsToUse.forEach(weapon => {
-      let modifiedWeapon = { ...weapon };
+      // Always normalise special_rules to a string before any processing
+      const normWeaponSr = Array.isArray(weapon.special_rules)
+        ? weapon.special_rules.join(' ')
+        : (weapon.special_rules || '');
+      let modifiedWeapon = { ...weapon, special_rules: normWeaponSr };
       const weaponSpecialRules = [];
-      const rulesStr = this._rulesStr(weapon.special_rules);
+      const rulesStr = normWeaponSr;
 
       if (attacker.just_charged && rulesStr.includes('Thrust')) {
         modifiedWeapon.ap = (weapon.ap || 0) + 1;
