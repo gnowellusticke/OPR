@@ -168,11 +168,11 @@ export default function Battle() {
   };
 
   const generateObjectives = () => {
-    // Bug 5 fix: d3+2 random objective count (3, 4, or 5), randomised positions within centre zone
-    const rollD3 = () => Math.floor(Math.random() * 3) + 1;
-    const numObjectives = rollD3() + 2; // 3, 4, or 5
+    // Bug 4 fix: Roll d3+2 for objective count (3–5), randomised positions in centre band.
+    // Returns only the generated objectives; n/a slots are filled in BattleLogger.logRoundSummary.
+    const diceRoll = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+    const numObjectives = diceRoll + 2; // 3, 4, or 5
 
-    // 5 candidate positions spread across the centre band (y=18–42, x=8–62)
     const allPositions = [
       { x: 10 + Math.random() * 6,  y: 22 + Math.random() * 6, id: 'obj_1' },
       { x: 32 + Math.random() * 8,  y: 14 + Math.random() * 6, id: 'obj_2' },
@@ -182,8 +182,10 @@ export default function Battle() {
     ];
 
     const selected = allPositions.slice(0, numObjectives).map(pos => ({ ...pos, controlled_by: null }));
-    // Log the count so it's visible in the battle log
-    console.log(`[OBJECTIVES] d3+2 = ${numObjectives} objectives placed`);
+    console.log(`[OBJECTIVES] d3(${diceRoll})+2 = ${numObjectives} objectives placed`);
+    // Store dice roll on first objective for logger access
+    selected._diceRoll = diceRoll;
+    selected._numObjectives = numObjectives;
     return selected;
   };
 
