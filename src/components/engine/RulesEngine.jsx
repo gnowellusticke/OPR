@@ -356,6 +356,9 @@ export class RulesEngine {
     const rulesStr = this._rulesStr(weapon.special_rules);
     const hasBane = rulesStr.includes('Bane');
     const hasBlast = rulesStr.includes('Blast') || (weapon.blast === true);
+    const hasRending = rulesStr.includes('Rending');
+    // toughPerModel caps Deadly damage — never a general wound multiplier
+    const toughPerModel = unit.tough_per_model || 1;
 
     // Blast: ignores cover
     if (!hasBlast && terrain) {
@@ -381,79 +384,47 @@ export class RulesEngine {
       specialRulesApplied.push({ rule: 'AP', value: effectiveAp, effect: `defense reduced by ${effectiveAp}` });
     }
 
-    const modifiedDefense = Math.min(6, Math.max(2, defense - effectiveAp));
+    const baseModifiedDefense = Math.min(6, Math.max(2, defense - effectiveAp));
 
-    // ── Deadly: resolve Deadly hits first, separately from normal hits ───────────
-    // Deadly hits come from the first N unsaved saves; each unsaved Deadly hit deals
-    // deadlyMultiplier wounds to ONE model (no carry-over — capped at toughPerModel or 1).
-    const toughPerModel = unit.tough_per_model || 1;
-
-    // Split hits: if Deadly, ALL hits from this weapon are Deadly hits
-    let deadlyWounds = 0;
-    let normalWounds = 0;
-    let rolls = [];
+    // Process each hit individually — single source of truth for wound generation
+    const rolls = [];
     let saves = 0;
+    let wounds = 0;
+    let rendingCount = 0;
 
-    if (deadlyMultiplier > 1) {
-      // Roll defense for each hit individually to honour no-carry-over rule
-      // Bane: defender must re-roll unmodified 6s on defense
-      let remainingHits = hitCount;
-      for (let i = 0; i < remainingHits; i++) {
-        let defRoll = this.dice.roll();
-        // Bane: re-roll unmodified 6s on defense
-        if (hasBane && defRoll === 6) {
-          const reroll = this.dice.roll();
-          rolls.push({ value: defRoll, success: defRoll >= modifiedDefense, baneReroll: reroll, finalValue: reroll });
-          defRoll = reroll;
-        } else {
-          rolls.push({ value: defRoll, success: defRoll >= modifiedDefense });
-        }
-        const saved = defRoll >= modifiedDefense;
-        if (saved) {
-          saves++;
-        } else {
-          // Unsaved Deadly hit: deals deadlyMultiplier wounds to one model, capped at that model's wounds
-          deadlyWounds += Math.min(deadlyMultiplier, toughPerModel);
-        }
-      }
-      if (deadlyMultiplier > 1) {
-        specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `each unsaved hit deals ${Math.min(deadlyMultiplier, toughPerModel)} wounds to one model (no carry-over)` });
-      }
-    } else {
-      // Normal hits — roll defense for all at once
-      // Bane: defender must re-roll unmodified 6s on defense
-      if (hasBane) {
-        for (let i = 0; i < hitCount; i++) {
-          let defRoll = this.dice.roll();
-          if (defRoll === 6) {
-            const reroll = this.dice.roll();
-            rolls.push({ value: defRoll, success: reroll >= modifiedDefense, baneReroll: reroll, finalValue: reroll });
-            if (reroll >= modifiedDefense) saves++;
-          } else {
-            const success = defRoll >= modifiedDefense;
-            rolls.push({ value: defRoll, success });
-            if (success) saves++;
-          }
-        }
-        if (hitCount > 0) specialRulesApplied.push({ rule: 'Bane', value: null, effect: 'defender must re-roll unmodified defense 6s' });
+    for (let i = 0; i < hitCount; i++) {
+      const hitRoll = hitRolls?.[i];
+      // Rending: natural 6 to hit → AP(+4) for this hit (still requires a save roll)
+      const isRendingHit = hasRending && hitRoll && hitRoll.value === 6 && hitRoll.success && !hitRoll.auto;
+      const hitAp = isRendingHit ? effectiveAp + 4 : effectiveAp;
+      const modifiedDefense = Math.min(6, Math.max(2, defense - hitAp));
+      if (isRendingHit) rendingCount++;
+
+      let defRoll = this.dice.roll();
+      let finalRoll = defRoll;
+
+      if (hasBane && defRoll === 6) {
+        const reroll = this.dice.roll();
+        rolls.push({ value: defRoll, success: reroll >= modifiedDefense, baneReroll: reroll, finalValue: reroll });
+        finalRoll = reroll;
       } else {
-        rolls = this.dice.rollDefense(modifiedDefense, hitCount);
-        saves = rolls.filter(r => r.success).length;
+        rolls.push({ value: defRoll, success: defRoll >= modifiedDefense });
       }
 
-      // Rending: unmodified 6s on hit rolls auto-wound (bypass saves)
-      if (rulesStr.includes('Rending') && hitRolls) {
-        const rendingAutoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length;
-        saves = Math.max(0, saves - rendingAutoWounds);
-        if (rendingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingAutoWounds} natural 6s bypass saves` });
+      const saved = finalRoll >= modifiedDefense;
+      if (saved) {
+        saves++;
+      } else {
+        // Deadly(X): min(X, toughPerModel) wounds per unsaved hit. No Deadly: exactly 1 wound.
+        wounds += deadlyMultiplier > 1 ? Math.min(deadlyMultiplier, toughPerModel) : 1;
       }
-
-      normalWounds = Math.max(0, hitCount - saves);
     }
 
-    const wounds = deadlyWounds + normalWounds;
+    if (hasBane && hitCount > 0) specialRulesApplied.push({ rule: 'Bane', value: null, effect: 'defender must re-roll unmodified defense 6s' });
+    if (hasRending && rendingCount > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingCount} natural 6s to hit gained AP(+4)` });
+    if (deadlyMultiplier > 1) specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `each unsaved hit deals ${Math.min(deadlyMultiplier, toughPerModel)} wounds (no carry-over)` });
 
-    console.log(`[DMG] weapon="${weapon.name}" hits=${hitCount} saves=${saves} deadlyWounds=${deadlyWounds} normalWounds=${normalWounds} → wounds=${wounds}`);
+    console.log(`[DMG] weapon="${weapon.name}" hits=${hitCount} saves=${saves} wounds=${wounds}`);
     return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs: 0, deadlyMultiplier, hasBane, specialRulesApplied };
   }
 
