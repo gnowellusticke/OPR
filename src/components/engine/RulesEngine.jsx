@@ -352,7 +352,18 @@ export class RulesEngine {
 
   rollDefense(unit, hitCount, weapon, terrain, hitRolls) {
   let defense = unit.defense || 5;
-  const ap = weapon.ap || 0;
+
+  // Parse AP: first use weapon.ap field, then fall back to special_rules string.
+  // Handles both "AP(4)" (well-formed) and "AP(4" (malformed, missing closing paren).
+  let ap = weapon.ap || 0;
+  if (!ap && weapon.special_rules) {
+    const rulesStr = Array.isArray(weapon.special_rules)
+      ? weapon.special_rules.map(r => (typeof r === 'string' ? r : (r?.rule || ''))).join(' ')
+      : (typeof weapon.special_rules === 'string' ? weapon.special_rules : '');
+    const apMatch = rulesStr.match(/AP\((\d+)/i); // tolerates missing closing paren
+    if (apMatch) ap = parseInt(apMatch[1]);
+  }
+
   const specialRulesApplied = [];
   let baneProcs = 0;
 
