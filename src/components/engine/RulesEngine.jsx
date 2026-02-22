@@ -358,8 +358,8 @@ export class RulesEngine {
     const hasBane = rulesStr.includes('Bane');
     const hasBlast = rulesStr.includes('Blast') || (weapon.blast === true);
     const hasRending = rulesStr.includes('Rending');
-    // toughPerModel caps Deadly damage — never a general wound multiplier
-    const toughPerModel = unit.tough_per_model || 1;
+    // toughPerModel caps Deadly damage per unsaved hit — never 0.
+    const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
 
     // Blast: ignores cover
     if (!hasBlast && terrain) {
