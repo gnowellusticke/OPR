@@ -601,10 +601,14 @@ export default function Battle() {
     // Bug 6 fix: clear just_charged so the unit is NOT excluded from next round
     liveUnit.just_charged = false;
     const nextAgent = liveUnit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
+    // Bug 1 fix: use a Set to guarantee each unit ID appears at most once in units_activated
+    const prevActivated = gsRef.current.units_activated || [];
+    const activatedSetFinal = new Set(prevActivated);
+    activatedSetFinal.add(liveUnit.id);
     const updatedGs = {
-    ...gsRef.current,
-    units_activated: [...(gsRef.current.units_activated || []), liveUnit.id],
-    active_agent: nextAgent,
+      ...gsRef.current,
+      units_activated: Array.from(activatedSetFinal),
+      active_agent: nextAgent,
     };
     commitState(updatedGs, evRef.current);
     setActiveUnit(null);
