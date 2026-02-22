@@ -384,7 +384,7 @@ export class RulesEngine {
     // Core wound formula
     const unsavedHits = Math.max(0, hitCount - saves);
     const totalUnsaved = unsavedHits + baneProcs;
-    let wounds = totalUnsaved > 0 ? totalUnsaved * deadlyMultiplier * damageValue : 0;
+    let wounds = totalUnsaved > 0 ? totalUnsaved * deadlyMultiplier : 0;
 
     // Absolute guards
     const originalHitCount = hitCount + baneProcs;
