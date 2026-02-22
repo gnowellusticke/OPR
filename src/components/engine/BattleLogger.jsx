@@ -368,14 +368,16 @@ export class BattleLogger {
       units_destroyed_this_round: [...this.roundDestroyed],
       units_shaken_this_round: [...this.roundShaken]
     };
-    // Populate all 5 objectives regardless of how many exist in gameState
+    // Bug 4 fix: objectives present on the board show their state; objectives not generated
+    // this game show 'n/a' — distinct from 'uncontrolled' (generated but uncaptured).
+    const numOnBoard = this._numObjectives || objectives.length;
     for (let i = 0; i < Math.min(objectives.length, 5); i++) {
       const obj = objectives[i];
       summary.objectives[`objective_${i + 1}`] = obj.controlled_by || 'uncontrolled';
     }
-    // Fill any remaining slots as uncontrolled if fewer than 5 objectives generated
+    // Any slot beyond what was generated this game → 'n/a'
     for (let i = objectives.length; i < 5; i++) {
-      summary.objectives[`objective_${i + 1}`] = 'uncontrolled';
+      summary.objectives[`objective_${i + 1}`] = 'n/a';
     }
     this.events.push(summary);
     // Reset per-round tracking
