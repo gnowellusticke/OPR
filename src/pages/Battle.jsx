@@ -1031,7 +1031,7 @@ export default function Battle() {
     // inline when wounds are applied (see attemptShooting / resolveMelee).
     // Nothing to do here.
 
-    // Objectives
+    // Objectives — exclude n/a slots from scoring (Bug 4 fix)
     rules.updateObjectives(newState);
     const roundA = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const roundB = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
