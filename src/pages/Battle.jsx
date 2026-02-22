@@ -801,8 +801,9 @@ export default function Battle() {
       // Ensure the weapon object always has special_rules as a string for RulesEngine
       const normWeapon = { ...weapon, special_rules: weaponSpecialStr };
 
-      // Bug 2 fix: Multi-model units fire once per model
-      const currentModelCount = Math.ceil(unit.current_models / Math.max(unit.tough_per_model, 1));
+      // Multi-model units fire once per model (use floor, not ceil, for consistency with melee)
+      const effectiveTpm = Math.max(unit.tough_per_model || 1, 1);
+      const currentModelCount = Math.max(1, Math.floor(unit.current_models / effectiveTpm));
       const baseAttacks = weapon.attacks || 1;
       const totalAttacks = baseAttacks * currentModelCount;
 
