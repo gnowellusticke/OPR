@@ -480,7 +480,8 @@ export default function Battle() {
     const quality = liveUnit.quality || 4;
     const roll = rules.dice.roll();
     const recovered = roll >= quality;
-    if (recovered) {
+    if (recovered && liveUnit.current_models > 0) {
+      // Bug 2 fix: only clear shaken if still alive — destroyed units always stay 'destroyed'
       liveUnit.status = 'normal';
     } else {
       canAct = false;
