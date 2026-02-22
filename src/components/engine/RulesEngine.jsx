@@ -456,23 +456,31 @@ export class RulesEngine {
     }
   }
 
-  // CORE FORMULA: wounds = (unsaved hits × deadly_multiplier) + bane_auto_wounds
-  // Unsaved hits = max(0, hitCount - saves)
-  // hitCount=0 → wounds=0, always.
+  // CORE FORMULA (OPR GDF 3.5.1):
+  //   unsavedHits = max(0, hitCount - saves)   [hitCount already excludes Bane hits]
+  //   baneProcs bypass saves, so they are always "unsaved"
+  //   totalUnsaved = unsavedHits + baneProcs
+  //   wounds = totalUnsaved × deadlyMultiplier
+  //
+  // Deadly only multiplies wounds, never adds phantom wounds from zero hits.
   const unsavedHits = Math.max(0, hitCount - saves);
-  const wounds = unsavedHits * deadlyMultiplier + baneProcs;
+  const totalUnsaved = unsavedHits + baneProcs;
 
-  // Hard guard: wounds can never come from zero hits or fully saved attacks
-  if (hitCount === 0 && wounds > 0) {
-    console.error(`[MELEE BUG] hitCount=0 but wounds=${wounds}. Clamping to 0.`);
-    return { rolls, saves, wounds: 0, wounds_dealt: 0, baneProcs, deadlyMultiplier, specialRulesApplied };
+  // Hard clamp: no wounds if nothing got through
+  let wounds = totalUnsaved > 0 ? totalUnsaved * deadlyMultiplier : 0;
+
+  // Absolute guards — log and clamp impossible states
+  const originalHitCount = hitCount + baneProcs; // reconstruct total hits before Bane removal
+  if (originalHitCount === 0 && wounds > 0) {
+    console.error(`[MELEE BUG] 0 total hits but wounds=${wounds}. Clamping to 0.`);
+    wounds = 0;
   }
-  if (unsavedHits === 0 && wounds > 0) {
-    console.error(`[MELEE BUG] All hits saved but wounds=${wounds}. Clamping to 0.`);
-    return { rolls, saves, wounds: 0, wounds_dealt: 0, baneProcs, deadlyMultiplier, specialRulesApplied };
+  if (totalUnsaved === 0 && wounds > 0) {
+    console.error(`[MELEE BUG] All hits saved (totalUnsaved=0) but wounds=${wounds}. Clamping to 0.`);
+    wounds = 0;
   }
 
-  console.log(`[DMG] hits=${hitCount} saves=${saves} unsaved=${unsavedHits} deadlyX=${deadlyMultiplier} bane=${baneProcs} → wounds=${wounds}`);
+  console.log(`[DMG] totalHits=${originalHitCount} saveable=${hitCount} saves=${saves} unsaved=${unsavedHits} bane=${baneProcs} totalUnsaved=${totalUnsaved} deadlyX=${deadlyMultiplier} → wounds=${wounds}`);
   return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, deadlyMultiplier, specialRulesApplied };
   }
 
