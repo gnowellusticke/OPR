@@ -1049,11 +1049,15 @@ export default function Battle() {
         const isProgressiveScoring = gs.advance_rules?.progressiveScoring === true;
         const isFinalRound = newRound === 5; // After round 4
 
-        // Validation pass: every unit alive at round start must have had exactly one activation.
-        // Log warnings for any that were missed, and give Shaken units a safety-net recovery roll.
+        // Round-end validation: every living unit must have activated exactly once.
+        // Any unit found missing here is a scheduler bug — log it and give shaken units their recovery.
         const liveUnits = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed' && !u.is_in_reserve);
         const activatedSetEnd = new Set(gs.units_activated || []);
+        // Round-start assertion: log any living unit not in the activated set
         const notActivated = liveUnits.filter(u => !activatedSetEnd.has(u.id));
+        if (notActivated.length > 0) {
+          console.error(`SCHEDULER END-OF-ROUND: ${notActivated.length} unit(s) never activated:`, notActivated.map(u => u.name));
+        }
         notActivated.forEach(u => {
           evs.push({ round: gs.current_round, type: 'warning', message: `⚠ SCHEDULING: ${u.name} (${u.owner}) had no activation in round ${gs.current_round}`, timestamp: new Date().toLocaleTimeString() });
           loggerRef.current?.logAbility({ round: gs.current_round, unit: u, ability: 'scheduling_warning', details: { reason: 'no_activation_this_round' } });
