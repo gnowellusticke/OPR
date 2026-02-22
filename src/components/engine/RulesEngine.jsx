@@ -197,16 +197,14 @@ export class RulesEngine {
 
   // ─── HELPER: parse Deadly(X) value from weapon ──────────────────────────────
   // STRICT: only matches the exact word "Deadly" followed by "(X)".
-  // Never matches substrings of other rules. Returns 1 if not present.
+  // Returns 1 (no multiplication) if Deadly is absent.
+  // IMPORTANT: returns 1, never toughPerModel or any other unit stat.
   _parseDeadly(weapon) {
     const rulesStr = this._rulesStr(weapon.special_rules);
-    // Must be a whole-word match for "Deadly" followed immediately by "("
     const deadlyMatch = rulesStr.match(/\bDeadly\((\d+)\)/);
-    const value = deadlyMatch ? parseInt(deadlyMatch[1]) : 1;
-    // Sanity check: log if Deadly was somehow detected from a rules string that also has AP
-    if (value > 1) {
-      console.log(`[DEADLY] Weapon "${weapon.name}" has Deadly(${value}). Rules string: "${rulesStr}"`);
-    }
+    if (!deadlyMatch) return 1; // no Deadly — always exactly 1 wound per unsaved hit
+    const value = parseInt(deadlyMatch[1]);
+    console.log(`[DEADLY] Weapon "${weapon.name}" has Deadly(${value}). Rules string: "${rulesStr}"`);
     return value;
   }
 
