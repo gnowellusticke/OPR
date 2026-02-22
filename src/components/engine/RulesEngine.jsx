@@ -792,7 +792,9 @@ export class RulesEngine {
   }
 
   updateObjectives(gameState) {
+    // Only update objectives that actually exist on the board (never n/a slots)
     gameState.objectives?.forEach(obj => {
+      if (obj.controlled_by === 'n/a') return; // not generated this game
       const unitsNear = gameState.units.filter(u =>
         this.calculateDistance(u, obj) <= 3 && u.current_models > 0 && !u.embarked_in
       );
