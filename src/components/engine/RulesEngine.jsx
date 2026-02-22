@@ -651,13 +651,59 @@ export class RulesEngine {
     return penalty;
   }
 
+  // ─── CASTER ──────────────────────────────────────────────────────────────────
+
+  // Returns how many tokens Caster(X) grants per round (0 if not a caster).
   getCasterTokens(unit) {
-    const casterMatch = unit.special_rules?.match(/Caster\((\d+)\)/);
+    const rulesStr = this._rulesStr(unit.special_rules);
+    const casterMatch = rulesStr.match(/\bCaster\((\d+)\)/);
     return casterMatch ? parseInt(casterMatch[1]) : 0;
   }
 
+  // Replenish spell tokens at the start of a round. Tokens cap at 6.
+  replenishSpellTokens(unit) {
+    const gain = this.getCasterTokens(unit);
+    if (gain === 0) return 0;
+    const current = unit.spell_tokens || 0;
+    const after = Math.min(6, current + gain);
+    unit.spell_tokens = after;
+    return after - current; // actual amount gained
+  }
+
+  // Cast one spell:
+  //   spellCost   — token cost of the spell
+  //   alliedHelpers — array of friendly units within 18" that spend tokens to boost the roll
+  //                   Each helper can spend any number of their own spell_tokens;
+  //                   positive spend = +1/token to roll, negative spend = -1/token (opposing).
+  //                   In AI context we pass friendly spend as positive, enemy as negative.
+  //   Returns { success, roll, modifiedRoll, tokensBefore, tokensAfter, helpBonus, specialRulesApplied }
+  castSpell(caster, target, spellCost, friendlyBonus = 0, hostileBonus = 0) {
+    const specialRulesApplied = [];
+    const tokensBefore = caster.spell_tokens || 0;
+
+    if (tokensBefore < spellCost) {
+      return { success: false, roll: null, modifiedRoll: null, tokensBefore, tokensAfter: tokensBefore, helpBonus: 0, reason: 'not enough tokens', specialRulesApplied };
+    }
+
+    // Spend tokens
+    caster.spell_tokens = tokensBefore - spellCost;
+
+    // Roll one die, apply helper modifiers (+1 per friendly token spent, -1 per enemy token spent)
+    const roll = this.dice.roll();
+    const helpBonus = friendlyBonus - hostileBonus;
+    const modifiedRoll = roll + helpBonus;
+    const success = modifiedRoll >= 4;
+
+    specialRulesApplied.push({ rule: 'Caster', value: spellCost, effect: `spent ${spellCost} token(s), rolled ${roll}${helpBonus !== 0 ? ` ${helpBonus >= 0 ? '+' : ''}${helpBonus} (helpers)` : ''} = ${modifiedRoll} → ${success ? 'SUCCESS' : 'FAIL'}` });
+
+    if (friendlyBonus > 0) specialRulesApplied.push({ rule: 'Caster helper', value: friendlyBonus, effect: `${friendlyBonus} allied token(s) spent for +${friendlyBonus} to cast roll` });
+    if (hostileBonus > 0) specialRulesApplied.push({ rule: 'Caster counter', value: hostileBonus, effect: `${hostileBonus} enemy token(s) spent for -${hostileBonus} to cast roll` });
+
+    return { success, roll, modifiedRoll, tokensBefore, tokensAfter: caster.spell_tokens, helpBonus, specialRulesApplied };
+  }
+
   canCast(unit, spellValue, currentTokens) {
-    return currentTokens >= spellValue;
+    return (currentTokens ?? unit.spell_tokens ?? 0) >= spellValue;
   }
 
   canUseTakedown(unit, weapon) {
