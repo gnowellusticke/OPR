@@ -820,8 +820,7 @@ export default function Battle() {
   const logger = loggerRef.current;
   let shotFired = false;
 
-  // Deduplicate by weapon name — weapons are already deduplicated at deploy time,
-  // but guard here too in case of late mutation. Fresh set per activation call.
+  // Unconditionally initialise dedup set — catches ALL code paths including R1 first activations.
   const firedThisActivation = new Set();
   const rangedWeapons = (unit.weapons || []).filter(w => {
     if ((w.range ?? 2) <= 2) return false;
