@@ -273,6 +273,7 @@ export default function Battle() {
   // Placeholder positions — real positions set during alternating deployment phase
   return {
   ...unit,
+  weapons: deduplicatedWeapons, // use deduplicated weapon list everywhere
   id: `${owner === 'agent_a' ? 'a' : 'b'}_${id++}`,
   owner,
   x: owner === 'agent_a' ? 10 : 60,
