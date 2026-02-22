@@ -242,12 +242,12 @@ export class DMNEngine {
   scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState) {
     let score = 0.5;
 
-    // Melee-primary units within charge range should strongly prefer Charge, not Advance
+    // Melee-primary units within or near charge range prefer Charge/Rush over Advance
     if (this.isMeleePrimary(unit) && nearestEnemy) {
       const dist = this.getDistance(unit, nearestEnemy);
       const chargeRange = this.maxChargeDistance(unit);
-      if (dist <= chargeRange) score -= 0.6; // decisive penalty — Charge will win
-      else if (dist <= chargeRange + 6) score -= 0.2; // getting close — still prefer Rush
+      if (dist <= chargeRange) score -= 1.5; // decisive penalty — Charge will win decisively
+      else if (dist <= chargeRange + 8) score -= 0.6; // getting close — Rush preferred
     }
     
     // Bonus for moving toward objectives
