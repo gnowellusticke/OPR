@@ -12,6 +12,7 @@ import { BPMNEngine, DMNEngine, CMMNEngine } from '../components/engine/GameEngi
 import { RulesEngine } from '../components/engine/RulesEngine';
 import { BattleLogger } from '../components/engine/BattleLogger';
 import { verifyRuleCompliance } from '../components/engine/RuleComplianceVerifier';
+import { attachFactionSpells } from '../components/engine/spells/SpellRegistry';
 
 export default function Battle() {
   const navigate = useNavigate();
