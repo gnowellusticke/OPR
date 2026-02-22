@@ -823,7 +823,8 @@ export default function Battle() {
       // Ensure the weapon object always has special_rules as a string for RulesEngine
       const normWeapon = { ...weapon, special_rules: weaponSpecialStr };
 
-      // Multi-model units fire once per model (use floor, not ceil, for consistency with melee)
+      // Model count for attack scaling = floor(current wounds / wounds-per-model).
+      // tough_per_model is set correctly at deploy time (1 for standard, X for multi-Tough, X+1 for heroes).
       const effectiveTpm = Math.max(unit.tough_per_model || 1, 1);
       const currentModelCount = Math.max(1, Math.floor(unit.current_models / effectiveTpm));
       const baseAttacks = weapon.attacks || 1;
