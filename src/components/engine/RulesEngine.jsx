@@ -392,13 +392,15 @@ export class RulesEngine {
   specialRulesApplied.push({ rule: 'Damage', value: damageValue, effect: `each unsaved wound deals ${damageValue} damage` });
   }
 
-  // Deadly(X): only applies if weapon explicitly has the rule
+  // Deadly(X): only applies if weapon EXPLICITLY has the rule.
+  // Must match "Deadly(" — never infer from AP strings.
   let deadlyMultiplier = 1;
   if (weapon.special_rules) {
-    const weaponRulesStr = Array.isArray(weapon.special_rules) 
-      ? weapon.special_rules.join(' ') 
+    const weaponRulesStr = Array.isArray(weapon.special_rules)
+      ? weapon.special_rules.map(r => (typeof r === 'string' ? r : (r?.rule || ''))).join(' ')
       : (typeof weapon.special_rules === 'string' ? weapon.special_rules : '');
-    const deadlyMatch = weaponRulesStr.match(/Deadly\((\d+)\)/i);
+    // Require explicit "Deadly(" — must NOT match substrings of other rules
+    const deadlyMatch = weaponRulesStr.match(/(?<![A-Za-z])Deadly\((\d+)\)/i);
     if (deadlyMatch) {
       deadlyMultiplier = parseInt(deadlyMatch[1]);
       specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `unsaved wounds multiplied by ${deadlyMultiplier}` });
