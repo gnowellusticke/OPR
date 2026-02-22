@@ -584,12 +584,27 @@ export class RulesEngine {
       const scaledAttacks = baseAttacks * Math.max(currentModelCount, 1);
       const scaledWeapon = { ...modifiedWeapon, attacks: scaledAttacks };
 
-      const result = this.resolveShooting(attacker, defender, scaledWeapon, null, gameState);
-      result.hits = result.hits ?? 0;
-      result.saves = result.saves ?? 0;
-      result.attacks = scaledAttacks;
+      // ── Step 1: Roll to hit (returns actual hit count) ─────────────────────
+      const hitResult = this.rollToHit(attacker, scaledWeapon, defender, gameState);
+      const actualHits = hitResult.successes;
 
-      const validatedWounds = Math.max(0, result.wounds || 0);
+      // ── Step 2: Roll defense against ACTUAL hits only ──────────────────────
+      const defResult = this._resolveMeleeDefense(defender, actualHits, scaledWeapon, hitResult.rolls);
+
+      const wounds = defResult.wounds;
+
+      console.log(`[MELEE] ${attacker.name} → ${defender.name} | weapon=${scaledWeapon.name} attacks=${scaledAttacks} hits=${actualHits} saves=${defResult.saves} wounds=${wounds}`);
+
+      const result = {
+        weapon: scaledWeapon.name,
+        hit_rolls: hitResult.rolls,
+        hits: actualHits,
+        defense_rolls: defResult.rolls,
+        saves: defResult.saves,
+        wounds,
+        attacks: scaledAttacks,
+        specialRulesApplied: [...(hitResult.specialRulesApplied || []), ...(defResult.specialRulesApplied || [])]
+      };
 
       if (attacker.special_rules?.includes('Fear')) {
         const fearMatch = attacker.special_rules.match(/Fear\((\d+)\)/);
@@ -599,7 +614,7 @@ export class RulesEngine {
       }
 
       const rangedOnlyRules = ['Blast', 'Relentless', 'Indirect', 'Artillery'];
-      const filtered = (result.specialRulesApplied || []).filter(rule => !rangedOnlyRules.includes(rule.rule));
+      const filtered = result.specialRulesApplied.filter(rule => !rangedOnlyRules.includes(rule.rule));
       const combined = [...weaponSpecialRules, ...filtered];
       const seenRules = new Set();
       result.specialRulesApplied = combined.filter(rule => {
@@ -610,7 +625,7 @@ export class RulesEngine {
 
       allSpecialRules.push(...result.specialRulesApplied);
       results.push(result);
-      totalWounds += validatedWounds;
+      totalWounds += Math.max(0, wounds);
     });
 
     if (isStrikeBack || attacker.just_charged) {
@@ -618,6 +633,69 @@ export class RulesEngine {
     }
 
     return { results, total_wounds: totalWounds, specialRulesApplied: allSpecialRules };
+  }
+
+  // ── Dedicated melee defense resolver ──────────────────────────────────────
+  // Rolls defense for exactly `hitCount` hits. Returns { rolls, saves, wounds }.
+  // wounds = sum of per-hit damage after failed saves, applying Deadly(X) if present.
+  _resolveMeleeDefense(defender, hitCount, weapon, hitRolls) {
+    if (hitCount <= 0) return { rolls: [], saves: 0, wounds: 0, specialRulesApplied: [] };
+
+    const specialRulesApplied = [];
+    const ap = this._parseAP(weapon);
+    const deadlyMultiplier = this._parseDeadly(weapon);
+    const rulesStr = this._rulesStr(weapon.special_rules);
+    const hasBane = rulesStr.includes('Bane');
+    const toughPerModel = defender.tough_per_model || 1;
+
+    let defense = defender.defense || 5;
+    const modifiedDefense = Math.min(6, Math.max(2, defense - ap));
+
+    if (ap > 0) specialRulesApplied.push({ rule: 'AP', value: ap, effect: `defense reduced by ${ap}` });
+
+    const rolls = [];
+    let saves = 0;
+    let wounds = 0;
+
+    // Process each hit individually for correctness
+    for (let i = 0; i < hitCount; i++) {
+      let defRoll = this.dice.roll();
+      let finalRoll = defRoll;
+
+      if (hasBane && defRoll === 6) {
+        const reroll = this.dice.roll();
+        rolls.push({ value: defRoll, success: reroll >= modifiedDefense, baneReroll: reroll, finalValue: reroll });
+        finalRoll = reroll;
+      } else {
+        rolls.push({ value: defRoll, success: defRoll >= modifiedDefense });
+      }
+
+      const saved = finalRoll >= modifiedDefense;
+      if (saved) {
+        saves++;
+      } else {
+        // Deadly: each unsaved hit deals min(deadlyMultiplier, toughPerModel) wounds (no carry-over)
+        wounds += deadlyMultiplier > 1 ? Math.min(deadlyMultiplier, toughPerModel) : 1;
+      }
+    }
+
+    if (hasBane && hitCount > 0) specialRulesApplied.push({ rule: 'Bane', value: null, effect: 'defender must re-roll unmodified defense 6s' });
+    if (deadlyMultiplier > 1) specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `each unsaved hit deals ${Math.min(deadlyMultiplier, toughPerModel)} wounds (no carry-over)` });
+
+    // Rending: natural 6s on hit rolls bypass saves entirely (1 auto-wound each)
+    if (rulesStr.includes('Rending') && hitRolls) {
+      const rendingAutoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length;
+      if (rendingAutoWounds > 0) {
+        // These were already counted in the per-hit loop as saves; correct by removing those saves and adding wounds
+        saves = Math.max(0, saves - rendingAutoWounds);
+        wounds += rendingAutoWounds;
+        specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingAutoWounds} natural 6s bypass saves` });
+      }
+    }
+
+    console.log(`[MELEE-DEF] weapon=${weapon.name} ap=${ap} defense=${defender.defense}→${modifiedDefense} hits=${hitCount} saves=${saves} deadly=${deadlyMultiplier} wounds=${wounds}`);
+
+    return { rolls, saves, wounds, specialRulesApplied };
   }
 
   checkMorale(unit, reason = 'wounds') {
