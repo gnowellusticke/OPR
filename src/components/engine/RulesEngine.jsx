@@ -3,14 +3,14 @@ import { DiceRoller } from './GameEngine';
 export class RulesEngine {
   constructor() {
     this.dice = new DiceRoller();
-    this.limitedWeaponsUsed = new Map(); // Track Limited(1) weapons: weaponId -> used count
+    this.limitedWeaponsUsed = new Map();
   }
 
   trackLimitedWeapon(weapon, unitId) {
     if (!weapon.special_rules?.includes('Limited')) return false;
     const key = `${unitId}_${weapon.name}`;
     const used = this.limitedWeaponsUsed.get(key) || 0;
-    if (used > 0) return true; // already used
+    if (used > 0) return true;
     this.limitedWeaponsUsed.set(key, 1);
     return false;
   }
@@ -96,13 +96,10 @@ export class RulesEngine {
     return { success: true, distance: moveDistance };
   }
 
-  // Ambush: check if a unit has the Ambush rule and is currently in reserve
   isAmbushUnit(unit) {
     return unit.special_rules?.includes('Ambush');
   }
 
-  // Deploy an Ambush unit from reserve — places it anywhere on the table > 9" from all enemies.
-  // Returns true if a valid position was found and the unit was placed, false otherwise.
   deployAmbush(unit, gameState) {
     const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
     let attempts = 0;
@@ -124,7 +121,6 @@ export class RulesEngine {
     return false;
   }
 
-  // Teleport: redeploy anywhere outside 9" of all enemies
   executeTeleport(unit, gameState) {
     const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
     let attempts = 0;
@@ -146,17 +142,11 @@ export class RulesEngine {
   }
 
   getMoveDistance(unit, action, terrain) {
-    // Immobile: can only use Hold
-    if (unit.special_rules?.includes('Immobile') && action !== 'Hold') {
-      return 0;
-    }
-
-    // Aircraft: can only use Advance, add 30" bonus
+    if (unit.special_rules?.includes('Immobile') && action !== 'Hold') return 0;
     if (unit.special_rules?.includes('Aircraft')) {
       if (action !== 'Advance') return 0;
-      return 6 + 30; // 36" total
+      return 36;
     }
-
     let base = 0;
     switch (action) {
       case 'Hold': base = 0; break;
@@ -173,7 +163,6 @@ export class RulesEngine {
     return Math.max(0, base);
   }
 
-  // Check if any friendly unit within 6" has Stealth Aura
   hasStealth(unit, gameState) {
     if (unit.special_rules?.includes('Stealth')) return true;
     if (!gameState) return false;
@@ -186,443 +175,349 @@ export class RulesEngine {
     );
   }
 
+  // ─── HELPER: normalise special_rules to a plain string ──────────────────────
+  _rulesStr(special_rules) {
+    if (!special_rules) return '';
+    if (Array.isArray(special_rules)) {
+      return special_rules.map(r => (typeof r === 'string' ? r : (r?.rule || ''))).join(' ');
+    }
+    return typeof special_rules === 'string' ? special_rules : '';
+  }
+
+  // ─── HELPER: parse AP value from weapon ─────────────────────────────────────
+  // Uses weapon.ap field first, then looks for AP(X) in special_rules.
+  // STRICT: only matches the AP rule, never Deadly or other rules.
+  _parseAP(weapon) {
+    if (weapon.ap && weapon.ap > 0) return weapon.ap;
+    const rulesStr = this._rulesStr(weapon.special_rules);
+    // Match AP( followed by digits — strict prefix so it won't catch other rules
+    const apMatch = rulesStr.match(/\bAP\((\d+)\)?/i);
+    return apMatch ? parseInt(apMatch[1]) : 0;
+  }
+
+  // ─── HELPER: parse Deadly(X) value from weapon ──────────────────────────────
+  // STRICT: only matches the exact word "Deadly" followed by "(X)".
+  // Never matches substrings of other rules. Returns 1 if not present.
+  _parseDeadly(weapon) {
+    const rulesStr = this._rulesStr(weapon.special_rules);
+    // Must be a whole-word match for "Deadly" followed immediately by "("
+    const deadlyMatch = rulesStr.match(/\bDeadly\((\d+)\)/);
+    const value = deadlyMatch ? parseInt(deadlyMatch[1]) : 1;
+    // Sanity check: log if Deadly was somehow detected from a rules string that also has AP
+    if (value > 1) {
+      console.log(`[DEADLY] Weapon "${weapon.name}" has Deadly(${value}). Rules string: "${rulesStr}"`);
+    }
+    return value;
+  }
+
   // Shooting
   resolveShooting(attacker, defender, weapon, terrain, gameState) {
-  // Limited: may only be used once per game
-  if (this.trackLimitedWeapon(weapon, attacker.id)) {
+    if (this.trackLimitedWeapon(weapon, attacker.id)) {
+      return {
+        weapon: weapon.name, hit_rolls: [], hits: 0,
+        defense_rolls: [], saves: 0, wounds: 0,
+        blast: false, baneProcs: 0,
+        specialRulesApplied: [{ rule: 'Limited', value: null, effect: 'weapon already used once this game' }]
+      };
+    }
+
+    const hits = this.rollToHit(attacker, weapon, defender, gameState);
+    const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
+    const allRules = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
+
+    const seenRules = new Set();
+    const specialRulesApplied = allRules.filter(rule => {
+      if (seenRules.has(rule.rule)) return false;
+      seenRules.add(rule.rule);
+      return true;
+    });
+
     return {
       weapon: weapon.name,
-      hit_rolls: [],
-      hits: 0,
-      defense_rolls: [],
-      saves: 0,
-      wounds: 0,
-      blast: false,
-      baneProcs: 0,
-      specialRulesApplied: [{ rule: 'Limited', value: null, effect: 'weapon already used once this game' }]
+      hit_rolls: hits.rolls,
+      hits: hits.successes,
+      defense_rolls: saves.rolls,
+      saves: saves.saves,
+      wounds: saves.wounds,
+      blast: hits.blast || false,
+      baneProcs: saves.baneProcs || 0,
+      specialRulesApplied
     };
   }
 
-  const hits = this.rollToHit(attacker, weapon, defender, gameState);
-  const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
-  const allRules = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
-
-  // Global deduplication: max one entry per rule name
-  const seenRules = new Set();
-  const specialRulesApplied = allRules.filter(rule => {
-    if (seenRules.has(rule.rule)) return false;
-    seenRules.add(rule.rule);
-    return true;
-  });
-
-  return {
-  weapon: weapon.name,
-  hit_rolls: hits.rolls,
-  hits: hits.successes,
-  defense_rolls: saves.rolls,
-  saves: saves.saves,
-  wounds: saves.wounds,
-  blast: hits.blast || false,
-  baneProcs: saves.baneProcs || 0,
-  specialRulesApplied
-  };
-  }
-
   rollToHit(unit, weapon, target, gameState) {
-  let quality = unit.quality || 4;
-  const specialRulesApplied = [];
-  let bonusHitsFromFurious = 0;
+    let quality = unit.quality || 4;
+    const specialRulesApplied = [];
+    const rulesStr = this._rulesStr(weapon.special_rules);
 
-  // Thrust: +1 to hit when charging (and +1 AP, handled in melee)
-  if (unit.just_charged && weapon.special_rules?.includes('Thrust')) {
-  quality = Math.max(2, quality - 1);
-  specialRulesApplied.push({ rule: 'Thrust', value: null, effect: 'quality -1 (easier) on charge' });
-  }
+    if (unit.just_charged && rulesStr.includes('Thrust')) {
+      quality = Math.max(2, quality - 1);
+      specialRulesApplied.push({ rule: 'Thrust', value: null, effect: 'quality -1 (easier) on charge' });
+    }
+    if (unit.status === 'shaken') {
+      quality = Math.min(6, quality + 1);
+      specialRulesApplied.push({ rule: 'Shaken', value: null, effect: 'quality +1 (harder to hit)' });
+    }
+    if (target?.special_rules?.includes('Machine-Fog')) {
+      quality = Math.min(6, quality + 1);
+      specialRulesApplied.push({ rule: 'Machine-Fog', value: null, effect: 'quality +1 vs target' });
+    }
+    if (target && this.hasStealth(target, gameState) && weapon.range > 2) {
+      quality = Math.min(6, quality + 1);
+      specialRulesApplied.push({ rule: 'Stealth', value: null, effect: 'quality +1 vs stealthed target' });
+    }
+    if (rulesStr.includes('Indirect')) {
+      quality = Math.min(6, quality + 1);
+      specialRulesApplied.push({ rule: 'Indirect', value: null, effect: 'quality +1 after moving' });
+    }
+    if (rulesStr.includes('Artillery') && this.calculateDistance(unit, target) > 9) {
+      quality = Math.max(2, quality - 1);
+      specialRulesApplied.push({ rule: 'Artillery', value: null, effect: 'quality -1 at 9"+ range' });
+    }
+    if (rulesStr.includes('Reliable')) {
+      quality = 2;
+      specialRulesApplied.push({ rule: 'Reliable', value: null, effect: 'attacks at Quality 2+' });
+    }
 
-  // Shaken: -1 to Quality (higher number = harder to hit)
-  if (unit.status === 'shaken') {
-  quality = Math.min(6, quality + 1);
-  specialRulesApplied.push({ rule: 'Shaken', value: null, effect: 'quality +1 (harder to hit)' });
-  }
+    // Blast(X) — X automatic hits, no quality roll
+    const blastMatch = rulesStr.match(/\bBlast\((\d+)\)/i)
+      || (weapon.blast === true && weapon.blast_x ? [``, weapon.blast_x] : null)
+      || (weapon.name || '').match(/Blast[\s-]?(\d+)/i);
+    if (blastMatch) {
+      const blastCount = parseInt(blastMatch[1]);
+      const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
+      specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
+      return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
+    }
 
-  // Machine-Fog on target: +1 to quality needed to hit
-  if (target?.special_rules?.includes('Machine-Fog')) {
-  quality = Math.min(6, quality + 1);
-  specialRulesApplied.push({ rule: 'Machine-Fog', value: null, effect: 'quality +1 vs target' });
-  }
+    const attacks = weapon.attacks || 1;
+    const rolls = this.dice.rollQualityTest(quality, attacks);
+    let successes = rolls.filter(r => r.success).length;
 
-  // Stealth on target (direct or via Stealth Aura): +1 to quality needed
-  if (target && this.hasStealth(target, gameState) && weapon.range > 2) {
-  quality = Math.min(6, quality + 1);
-  specialRulesApplied.push({ rule: 'Stealth', value: null, effect: 'quality +1 vs stealthed target' });
-  }
-
-  // Indirect: -1 to hit after moving
-  if (weapon.special_rules?.includes('Indirect')) {
-  quality = Math.min(6, quality + 1);
-  specialRulesApplied.push({ rule: 'Indirect', value: null, effect: 'quality +1 after moving' });
-  }
-
-  // Artillery: +1 to hit at range > 9" (lower quality = better)
-  if (weapon.special_rules?.includes('Artillery') && this.calculateDistance(unit, target) > 9) {
-  quality = Math.max(2, quality - 1);
-  specialRulesApplied.push({ rule: 'Artillery', value: null, effect: 'quality -1 at 9"+ range' });
-  }
-
-  // Reliable: attacks at Quality 2+ (override quality)
-  if (weapon.special_rules?.includes('Reliable')) {
-  quality = 2;
-  specialRulesApplied.push({ rule: 'Reliable', value: null, effect: 'attacks at Quality 2+' });
-  }
-
-  let attacks = weapon.attacks || 1;
-
-  // Blast(X) — X automatic hits, no quality roll
-  // Bug 1 fix: Check weapon.blast field, special_rules array, and weapon name
-  let blastCount = null;
-
-  // Check weapon.blast field first
-  if (weapon.blast === true && weapon.blast_x) {
-    blastCount = weapon.blast_x;
-  }
-
-  // Check special_rules array
-  if (!blastCount && Array.isArray(weapon.special_rules)) {
-    for (const sr of weapon.special_rules) {
-      const srStr = typeof sr === 'string' ? sr : (sr.rule || '');
-      const match = srStr.match(/Blast\((\d+)\)/i);
-      if (match) {
-        blastCount = parseInt(match[1]);
-        break;
+    // Furious: +1 hit per unmodified 6
+    if (unit.special_rules?.includes('Furious') && !rulesStr.includes('Furious')) {
+      const naturalSixes = rolls.filter(r => r.value === 6 && r.success).length;
+      if (naturalSixes > 0) {
+        successes += naturalSixes;
+        specialRulesApplied.push({ rule: 'Furious', value: null, effect: `${naturalSixes} unmodified 6s generated ${naturalSixes} extra hits` });
       }
     }
-  }
 
-  // Check special_rules string
-  if (!blastCount && weapon.special_rules && typeof weapon.special_rules === 'string') {
-    const match = weapon.special_rules.match(/Blast\((\d+)\)/i);
-    if (match) blastCount = parseInt(match[1]);
-  }
-
-  // Check weapon name
-  if (!blastCount) {
-    const nameMatch = (weapon.name || '').match(/Blast[\s\-]?(\d+)/i);
-    if (nameMatch) blastCount = parseInt(nameMatch[1]);
-  }
-
-  // If Blast found, use it
-  if (blastCount) {
-    const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
-    specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
-    return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
-  }
-
-  const rolls = this.dice.rollQualityTest(quality, attacks);
-  let successes = rolls.filter(r => r.success).length;
-
-  // Bug 1 fix: Furious — add 1 extra hit per unmodified 6, do NOT re-roll misses
-  if (unit.special_rules?.includes('Furious') && !weapon.special_rules?.includes('Furious')) {
-    const naturalSixes = rolls.filter(r => r.value === 6 && r.success).length;
-    if (naturalSixes > 0) {
-      successes += naturalSixes;
-      bonusHitsFromFurious = naturalSixes;
-      specialRulesApplied.push({ rule: 'Furious', value: null, effect: `${naturalSixes} unmodified 6s generated ${naturalSixes} extra hits` });
+    // Relentless: extra hit on 6 at 9"+ range
+    if (rulesStr.includes('Relentless') && this.calculateDistance(unit, target) > 9) {
+      const natureSixes = rolls.filter(r => r.value === 6 && r.success).length;
+      successes += natureSixes;
+      if (natureSixes > 0) specialRulesApplied.push({ rule: 'Relentless', value: null, effect: `${natureSixes} extra hits from natural 6s at 9"+ range` });
     }
-  }
 
-  // NOTE: Deadly(X) is a wound multiplier only — it does NOT add extra hits.
-  // Wound multiplication is handled in rollDefense. Nothing to do here.
+    // Surge: extra hit on natural 6
+    if (rulesStr.includes('Surge')) {
+      const natureSixes = rolls.filter(r => r.value === 6 && r.success).length;
+      successes += natureSixes;
+      if (natureSixes > 0) specialRulesApplied.push({ rule: 'Surge', value: null, effect: `${natureSixes} extra hits from natural 6s` });
+    }
 
-  // Relentless: extra hit on 6 at 9"+ range
-  if (weapon.special_rules?.includes('Relentless') && this.calculateDistance(unit, target) > 9) {
-  const natureSixes = rolls.filter(r => r.value === 6 && r.success).length;
-  successes += natureSixes;
-  if (natureSixes > 0) specialRulesApplied.push({ rule: 'Relentless', value: null, effect: `${natureSixes} extra hits from natural 6s at 9"+ range` });
-  }
-
-  // Surge: extra hit on natural 6
-  if (weapon.special_rules?.includes('Surge')) {
-  const natureSixes = rolls.filter(r => r.value === 6 && r.success).length;
-  successes += natureSixes;
-  if (natureSixes > 0) specialRulesApplied.push({ rule: 'Surge', value: null, effect: `${natureSixes} extra hits from natural 6s` });
-  }
-
-  return { rolls, successes, specialRulesApplied };
+    return { rolls, successes, specialRulesApplied };
   }
 
   rollDefense(unit, hitCount, weapon, terrain, hitRolls) {
-  let defense = unit.defense || 5;
+    let defense = unit.defense || 5;
+    const specialRulesApplied = [];
+    let baneProcs = 0;
 
-  // Parse AP: first use weapon.ap field, then fall back to special_rules string.
-  // Handles both "AP(4)" (well-formed) and "AP(4" (malformed, missing closing paren).
-  let ap = weapon.ap || 0;
-  if (!ap && weapon.special_rules) {
-    const rulesStr = Array.isArray(weapon.special_rules)
-      ? weapon.special_rules.map(r => (typeof r === 'string' ? r : (r?.rule || ''))).join(' ')
-      : (typeof weapon.special_rules === 'string' ? weapon.special_rules : '');
-    const apMatch = rulesStr.match(/AP\((\d+)/i); // tolerates missing closing paren
-    if (apMatch) ap = parseInt(apMatch[1]);
-  }
+    // Parse AP using strict helper — never bleeds into Deadly
+    const ap = this._parseAP(weapon);
 
-  const specialRulesApplied = [];
-  let baneProcs = 0;
+    // Parse Deadly using strict whole-word helper — never triggered by AP strings
+    const deadlyMultiplier = this._parseDeadly(weapon);
 
-  // Bane: natural 6s on hit rolls auto-wound, bypassing saves.
-  // These hits are ALREADY included in hits.successes (hitCount), so we:
-  //   1. Record how many are Bane auto-wounds (baneProcs)
-  //   2. Remove them from the save pool (they bypass saves)
-  //   3. Do NOT add them again later — they are counted as unsaved hits automatically
-  //      because they are removed from hitCount but not from the unsaved calculation base.
-  // IMPORTANT: baneProcs are NOT added to wounds separately — they contribute via unsavedHits.
-  const baneHits = weapon.special_rules?.includes('Bane') && hitRolls
-    ? hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length
-    : 0;
-  if (baneHits > 0) {
-    baneProcs = baneHits;
-    hitCount = Math.max(0, hitCount - baneHits); // Remove from save pool — they bypass saves
-    specialRulesApplied.push({ rule: 'Bane', value: baneHits, effect: `${baneHits} natural 6s bypass saves (auto-wound)` });
-  }
+    // Bane: natural 6s auto-wound, bypassing saves
+    const rulesStr = this._rulesStr(weapon.special_rules);
+    const baneHits = rulesStr.includes('Bane') && hitRolls
+      ? hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length
+      : 0;
+    if (baneHits > 0) {
+      baneProcs = baneHits;
+      hitCount = Math.max(0, hitCount - baneHits);
+      specialRulesApplied.push({ rule: 'Bane', value: baneHits, effect: `${baneHits} natural 6s bypass saves (auto-wound)` });
+    }
 
-  if (terrain) {
-  const coverBonus = this.getCoverBonus(unit, terrain);
-  if (coverBonus > 0) {
-  defense -= coverBonus;
-  specialRulesApplied.push({ rule: 'Cover', value: coverBonus, effect: `save improved by ${coverBonus} from terrain` });
-  }
-  }
+    if (terrain) {
+      const coverBonus = this.getCoverBonus(unit, terrain);
+      if (coverBonus > 0) {
+        defense -= coverBonus;
+        specialRulesApplied.push({ rule: 'Cover', value: coverBonus, effect: `save improved by ${coverBonus} from terrain` });
+      }
+    }
 
-  // Damage(X): each unsaved wound deals X damage (only on weapons, not melee Fists)
-  const damageMatch = weapon.special_rules?.match(/Damage\((\d+)\)/);
-  const damageValue = damageMatch ? parseInt(damageMatch[1]) : 1;
-  if (damageMatch) {
-  specialRulesApplied.push({ rule: 'Damage', value: damageValue, effect: `each unsaved wound deals ${damageValue} damage` });
-  }
+    // Damage(X): each unsaved wound deals X damage
+    const damageMatch = rulesStr.match(/\bDamage\((\d+)\)/);
+    const damageValue = damageMatch ? parseInt(damageMatch[1]) : 1;
+    if (damageMatch) {
+      specialRulesApplied.push({ rule: 'Damage', value: damageValue, effect: `each unsaved wound deals ${damageValue} damage` });
+    }
 
-  // Deadly(X): only applies if weapon EXPLICITLY has the rule.
-  // Must match "Deadly(" — never infer from AP strings.
-  let deadlyMultiplier = 1;
-  if (weapon.special_rules) {
-    const weaponRulesStr = Array.isArray(weapon.special_rules)
-      ? weapon.special_rules.map(r => (typeof r === 'string' ? r : (r?.rule || ''))).join(' ')
-      : (typeof weapon.special_rules === 'string' ? weapon.special_rules : '');
-    // Require explicit "Deadly(" — must NOT match substrings of other rules
-    const deadlyMatch = weaponRulesStr.match(/(?<![A-Za-z])Deadly\((\d+)\)/i);
-    if (deadlyMatch) {
-      deadlyMultiplier = parseInt(deadlyMatch[1]);
+    if (deadlyMultiplier > 1) {
       specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `unsaved wounds multiplied by ${deadlyMultiplier}` });
     }
-  }
 
-  // Unstoppable: ignores negative AP modifiers
-  let effectiveAp = ap;
-  if (weapon.special_rules && 
-      (Array.isArray(weapon.special_rules) ? weapon.special_rules.includes('Unstoppable') : weapon.special_rules.includes('Unstoppable'))) {
-    if (ap < 0) {
+    // Unstoppable: ignores negative AP modifiers
+    let effectiveAp = ap;
+    if (rulesStr.includes('Unstoppable') && ap < 0) {
       effectiveAp = 0;
       specialRulesApplied.push({ rule: 'Unstoppable', value: null, effect: 'ignores negative AP modifiers' });
     }
-  }
 
-  // Bug 3 fix: AP is applied to defense modifier, not to saved hits
-  // Modified defense = base defense - AP (AP reduces how hard it is to save)
-  if (effectiveAp > 0) {
-    specialRulesApplied.push({ rule: 'AP', value: effectiveAp, effect: `defense reduced by ${effectiveAp}` });
-  }
-
-  const modifiedDefense = Math.min(6, Math.max(2, defense - effectiveAp));
-
-  // Bug 5 fix: Debug logging for AP and defense rolls
-  if (hitCount > 0) {
-    console.log(`[AP DEBUG] Base Defense: ${defense}, AP: ${effectiveAp}, Modified Defense: ${modifiedDefense}, Hits to save: ${hitCount}`);
-  }
-
-  const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
-  let saves = rolls.filter(r => r.success).length;
-
-  if (hitCount > 0) {
-    console.log(`[AP DEBUG] Defense rolls: [${rolls.map(r => `${r.value}${r.success ? '✓' : '✗'}`).join(', ')}] = ${saves} saves out of ${hitCount}`);
-  }
-
-  // Rending: Unmodified 6s on hit rolls auto-wound (bypass saves)
-  let renderingAutoWounds = 0;
-  if (weapon.special_rules && hitRolls) {
-    const hasRending = Array.isArray(weapon.special_rules) 
-      ? weapon.special_rules.includes('Rending')
-      : weapon.special_rules.includes('Rending');
-    if (hasRending) {
-      renderingAutoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto && r.baneProc !== true).length;
-      saves = Math.max(0, saves - renderingAutoWounds);
-      if (renderingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${renderingAutoWounds} natural 6s bypass saves` });
+    if (effectiveAp > 0) {
+      specialRulesApplied.push({ rule: 'AP', value: effectiveAp, effect: `defense reduced by ${effectiveAp}` });
     }
+
+    const modifiedDefense = Math.min(6, Math.max(2, defense - effectiveAp));
+
+    console.log(`[DEFENSE] weapon="${weapon.name}" rules="${this._rulesStr(weapon.special_rules)}" ap=${ap} effectiveAp=${effectiveAp} defense=${defense}→${modifiedDefense} deadly=${deadlyMultiplier} hits=${hitCount}`);
+
+    const rolls = this.dice.rollDefense(modifiedDefense, hitCount);
+    let saves = rolls.filter(r => r.success).length;
+
+    // Rending: unmodified 6s on hit rolls auto-wound
+    if (rulesStr.includes('Rending') && hitRolls) {
+      const rendingAutoWounds = hitRolls.filter(r => r.value === 6 && r.success && !r.auto && r.baneProc !== true).length;
+      saves = Math.max(0, saves - rendingAutoWounds);
+      if (rendingAutoWounds > 0) specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingAutoWounds} natural 6s bypass saves` });
+    }
+
+    // Core wound formula
+    const unsavedHits = Math.max(0, hitCount - saves);
+    const totalUnsaved = unsavedHits + baneProcs;
+    let wounds = totalUnsaved > 0 ? totalUnsaved * deadlyMultiplier * damageValue : 0;
+
+    // Absolute guards
+    const originalHitCount = hitCount + baneProcs;
+    if (originalHitCount === 0 && wounds > 0) {
+      console.error(`[MELEE BUG] 0 total hits but wounds=${wounds}. Clamping to 0.`);
+      wounds = 0;
+    }
+    if (totalUnsaved === 0 && wounds > 0) {
+      console.error(`[MELEE BUG] All hits saved but wounds=${wounds}. Clamping to 0.`);
+      wounds = 0;
+    }
+
+    console.log(`[DMG] totalHits=${originalHitCount} saveable=${hitCount} saves=${saves} unsaved=${unsavedHits} bane=${baneProcs} totalUnsaved=${totalUnsaved} deadlyX=${deadlyMultiplier} damageX=${damageValue} → wounds=${wounds}`);
+    return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, deadlyMultiplier, specialRulesApplied };
   }
 
-  // CORE FORMULA (OPR GDF 3.5.1):
-  //   unsavedHits = max(0, hitCount - saves)   [hitCount already excludes Bane hits]
-  //   baneProcs bypass saves, so they are always "unsaved"
-  //   totalUnsaved = unsavedHits + baneProcs
-  //   wounds = totalUnsaved × deadlyMultiplier
-  //
-  // Deadly only multiplies wounds, never adds phantom wounds from zero hits.
-  const unsavedHits = Math.max(0, hitCount - saves);
-  const totalUnsaved = unsavedHits + baneProcs;
-
-  // Hard clamp: no wounds if nothing got through
-  let wounds = totalUnsaved > 0 ? totalUnsaved * deadlyMultiplier : 0;
-
-  // Absolute guards — log and clamp impossible states
-  const originalHitCount = hitCount + baneProcs; // reconstruct total hits before Bane removal
-  if (originalHitCount === 0 && wounds > 0) {
-    console.error(`[MELEE BUG] 0 total hits but wounds=${wounds}. Clamping to 0.`);
-    wounds = 0;
-  }
-  if (totalUnsaved === 0 && wounds > 0) {
-    console.error(`[MELEE BUG] All hits saved (totalUnsaved=0) but wounds=${wounds}. Clamping to 0.`);
-    wounds = 0;
-  }
-
-  console.log(`[DMG] totalHits=${originalHitCount} saveable=${hitCount} saves=${saves} unsaved=${unsavedHits} bane=${baneProcs} totalUnsaved=${totalUnsaved} deadlyX=${deadlyMultiplier} → wounds=${wounds}`);
-  return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, deadlyMultiplier, specialRulesApplied };
-  }
-
-  // End-of-round regeneration/self-repair — unified for Regeneration, Self-Repair and Repair.
-  // NEVER touches unit.status — only modifies current_models.
   applyRegeneration(unit) {
     const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
     const hasRule = REGEN_RULES.some(r => unit.special_rules?.includes(r));
     if (!hasRule) return { recovered: 0, roll: null };
     if (unit.current_models >= unit.total_models) return { recovered: 0, roll: null };
-    const roll = this.dice.roll(); // always an integer 1-6
+    const roll = this.dice.roll();
     const recovered = roll >= 5 ? 1 : 0;
-    // Only heal wounds — never touch status
     unit.current_models = Math.min(unit.total_models, unit.current_models + recovered);
     return { recovered, roll };
   }
 
   // Melee
   resolveMelee(attacker, defender, gameState) {
-     const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
-     let defenderResults = null;
-     if (defender.status !== 'shaken' && defender.current_models > 0) {
-     defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
-     }
+    const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
+    let defenderResults = null;
+    if (defender.status !== 'shaken' && defender.current_models > 0) {
+      defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
+    }
 
-     // Bug 1+2 fix: LOCK wounds from dice FIRST, before any other calculations
-     // wounds_dealt = (hits - saves) × damage_x + bane_procs
-     // wounds_taken = (defender_hits - attacker_saves) × defender_damage_x + defender_bane_procs
-     let attackerRealWounds = attackerResults.total_wounds;
-     let defenderRealWounds = defenderResults?.total_wounds || 0;
+    let attackerRealWounds = attackerResults.total_wounds;
+    let defenderRealWounds = defenderResults?.total_wounds || 0;
 
-     // Bug 1 fix: Apply Fear(X) ONLY if unit actually has Fear rule
-     let attackerFearBonus = 0;
-     if (attacker.special_rules?.includes('Fear')) {
-       const fearMatch = attacker.special_rules.match(/Fear\((\d+)\)/);
-       attackerFearBonus = fearMatch ? parseInt(fearMatch[1]) : 0;
-     }
+    let attackerFearBonus = 0;
+    if (attacker.special_rules?.includes('Fear')) {
+      const fearMatch = attacker.special_rules.match(/Fear\((\d+)\)/);
+      attackerFearBonus = fearMatch ? parseInt(fearMatch[1]) : 0;
+    }
+    let defenderFearBonus = 0;
+    if (defender.special_rules?.includes('Fear')) {
+      const fearMatch = defender.special_rules.match(/Fear\((\d+)\)/);
+      defenderFearBonus = fearMatch ? parseInt(fearMatch[1]) : 0;
+    }
 
-     let defenderFearBonus = 0;
-     if (defender.special_rules?.includes('Fear')) {
-       const fearMatch = defender.special_rules.match(/Fear\((\d+)\)/);
-       defenderFearBonus = fearMatch ? parseInt(fearMatch[1]) : 0;
-     }
+    const attackerWoundsForComparison = attackerRealWounds + attackerFearBonus;
+    const defenderWoundsForComparison = defenderRealWounds + defenderFearBonus;
 
-     // For winner determination: use Fear-adjusted wounds (for comparison only)
-     const attackerWoundsForComparison = attackerRealWounds + attackerFearBonus;
-     const defenderWoundsForComparison = defenderRealWounds + defenderFearBonus;
+    const winner = attackerWoundsForComparison > defenderWoundsForComparison ? attacker :
+                   defenderWoundsForComparison > attackerWoundsForComparison ? defender : null;
 
-     // Assertion: wounds_dealt must always be <= attacker_wounds_for_comparison
-     if (attackerRealWounds > attackerWoundsForComparison) {
-       console.error(`[MELEE BUG] attackerRealWounds(${attackerRealWounds}) > comp(${attackerWoundsForComparison})`);
-     }
-     if (defenderRealWounds > defenderWoundsForComparison) {
-       console.error(`[MELEE BUG] defenderRealWounds(${defenderRealWounds}) > comp(${defenderWoundsForComparison})`);
-     }
+    const aRes = attackerResults.results?.[0] || {};
+    const dRes = defenderResults?.results?.[0] || null;
+    const specialRulesApplied = [
+      ...(attackerResults.specialRulesApplied || []),
+      ...(defenderResults?.specialRulesApplied || [])
+    ];
 
-     const winner = attackerWoundsForComparison > defenderWoundsForComparison ? attacker :
-                    defenderWoundsForComparison > attackerWoundsForComparison ? defender : null;
+    const seenRules = new Set();
+    const deduplicatedRules = specialRulesApplied.filter(rule => {
+      if (seenRules.has(rule.rule)) return false;
+      seenRules.add(rule.rule);
+      return true;
+    });
 
-     // Build full bidirectional roll_results for the logger
-     const aRes = attackerResults.results?.[0] || {};
-     const dRes = defenderResults?.results?.[0] || null;
-     const specialRulesApplied = [
-     ...(attackerResults.specialRulesApplied || []),
-     ...(defenderResults?.specialRulesApplied || [])
-     ];
+    const rollResults = {
+      attacker_attacks: aRes.attacks || 1,
+      attacker_hits: aRes.hits ?? 0,
+      attacker_saves_forced: aRes.hits ?? 0,
+      defender_saves_made: aRes.saves ?? 0,
+      wounds_dealt: attackerRealWounds,
+      defender_attacks: dRes ? (dRes.attacks || 1) : 0,
+      defender_hits: dRes ? (dRes.hits ?? 0) : 0,
+      defender_saves_forced: dRes ? (dRes.hits ?? 0) : 0,
+      attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
+      wounds_taken: defenderRealWounds,
+      melee_resolution: {
+        attacker_wounds_for_comparison: attackerWoundsForComparison,
+        fear_bonus_attacker: attackerFearBonus,
+        defender_wounds_for_comparison: defenderWoundsForComparison,
+        fear_bonus_defender: defenderFearBonus,
+        winner: winner?.name || 'tie'
+      },
+      special_rules_applied: deduplicatedRules
+    };
 
-     // Bug 4 fix: Global SRA deduplication — max one entry per rule name
-     const seenRules = new Set();
-     const deduplicatedRules = specialRulesApplied.filter(rule => {
-       if (seenRules.has(rule.rule)) return false;
-       seenRules.add(rule.rule);
-       return true;
-     });
-
-     // Bug 1+2 fix: attacker_saves_forced and defender_saves_forced track non-Bane hits only
-     const attackerSavesForced = aRes.hits ?? 0;
-     const defenderSavesForced = dRes ? (dRes.hits ?? 0) : 0;
-
-     const rollResults = {
-     attacker_attacks: aRes.attacks || 1,
-     attacker_hits: aRes.hits ?? 0,
-     attacker_saves_forced: attackerSavesForced,
-     defender_saves_made: aRes.saves ?? 0,
-     wounds_dealt: attackerRealWounds,  // LOCKED from dice, no modifications after (Bug 1+2)
-     defender_attacks: dRes ? (dRes.attacks || 1) : 0,
-     defender_hits: dRes ? (dRes.hits ?? 0) : 0,
-     defender_saves_forced: defenderSavesForced,
-     attacker_saves_made: dRes ? (dRes.saves ?? 0) : 0,
-     wounds_taken: defenderRealWounds,  // LOCKED from dice, no modifications after (Bug 2)
-     melee_resolution: {
-       attacker_wounds_for_comparison: attackerWoundsForComparison,
-       fear_bonus_attacker: attackerFearBonus,
-       defender_wounds_for_comparison: defenderWoundsForComparison,
-       fear_bonus_defender: defenderFearBonus,
-       winner: winner?.name || 'tie'
-     },
-     special_rules_applied: deduplicatedRules
-     };
-
-     return {
-     attacker_results: attackerResults,
-     defender_results: defenderResults,
-     winner,
-     attacker_wounds: attackerRealWounds,
-     defender_wounds: defenderRealWounds,
-     rollResults
-     };
-   }
+    return {
+      attacker_results: attackerResults,
+      defender_results: defenderResults,
+      winner,
+      attacker_wounds: attackerRealWounds,
+      defender_wounds: defenderRealWounds,
+      rollResults
+    };
+  }
 
   resolveMeleeStrikes(attacker, defender, isStrikeBack = false, gameState = null) {
-      const results = [];
-      let totalWounds = 0;
-      const allSpecialRules = [];
+    const results = [];
+    let totalWounds = 0;
+    const allSpecialRules = [];
 
-      const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
-      const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
+    const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
+    const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
 
-      // Multi-model units strike once per model
-      const currentModelCount = Math.ceil(attacker.current_models / Math.max(attacker.tough_per_model, 1));
+    const currentModelCount = Math.ceil(attacker.current_models / Math.max(attacker.tough_per_model || 1, 1));
 
-      weaponsToUse.forEach(weapon => {
+    weaponsToUse.forEach(weapon => {
       let modifiedWeapon = { ...weapon };
       const weaponSpecialRules = [];
+      const rulesStr = this._rulesStr(weapon.special_rules);
 
-      // Thrust: +1 to hit and AP(+1) when charging
-      if (attacker.just_charged && weapon.special_rules?.includes('Thrust')) {
-      modifiedWeapon.ap = (weapon.ap || 0) + 1;
-      // Note: +1 to hit handled in rollToHit via quality modification
-      weaponSpecialRules.push({ rule: 'Thrust', value: null, effect: '+1 to hit and AP(+1) on charge' });
+      if (attacker.just_charged && rulesStr.includes('Thrust')) {
+        modifiedWeapon.ap = (weapon.ap || 0) + 1;
+        weaponSpecialRules.push({ rule: 'Thrust', value: null, effect: '+1 to hit and AP(+1) on charge' });
       }
 
-      // Impact(X): Roll X dice on charge attack (unless fatigued)
-      if (attacker.just_charged && !attacker.fatigued && weapon.special_rules?.includes('Impact')) {
-      const impactMatch = weapon.special_rules.match(/Impact\((\d+)\)/);
-      const impactDice = impactMatch ? parseInt(impactMatch[1]) : 1;
-      const impactHits = Array.from({ length: impactDice }, () => this.dice.roll()).filter(r => r >= 2).length;
-      modifiedWeapon.attacks = (weapon.attacks || 1) + impactHits;
-      weaponSpecialRules.push({ rule: 'Impact', value: impactDice, effect: `${impactHits} extra hits from Impact(${impactDice})` });
+      if (attacker.just_charged && !attacker.fatigued && rulesStr.includes('Impact')) {
+        const impactMatch = rulesStr.match(/Impact\((\d+)\)/);
+        const impactDice = impactMatch ? parseInt(impactMatch[1]) : 1;
+        const impactHits = Array.from({ length: impactDice }, () => this.dice.roll()).filter(r => r >= 2).length;
+        modifiedWeapon.attacks = (weapon.attacks || 1) + impactHits;
+        weaponSpecialRules.push({ rule: 'Impact', value: impactDice, effect: `${impactHits} extra hits from Impact(${impactDice})` });
       }
 
-      // Scale attacks by model count
       const baseAttacks = modifiedWeapon.attacks || 1;
       const scaledAttacks = baseAttacks * Math.max(currentModelCount, 1);
       const scaledWeapon = { ...modifiedWeapon, attacks: scaledAttacks };
@@ -632,31 +527,17 @@ export class RulesEngine {
       result.saves = result.saves ?? 0;
       result.attacks = scaledAttacks;
 
-      // Lock wounds_dealt BEFORE building melee_resolution
-      // wounds_dealt = max(0, hits - saves) × damage_multiplier × deadly_multiplier
-      const realWounds = result.wounds || 0;
+      const validatedWounds = Math.max(0, result.wounds || 0);
 
-      // CRITICAL: Ensure realWounds is NEVER negative and never includes Fear bonus
-      if (realWounds < 0) {
-        console.error(`[MELEE BUG] realWounds is negative: ${realWounds}. Setting to 0.`);
-      }
-      const validatedWounds = Math.max(0, realWounds);
-
-      // Fear(X): attacker counts as dealing +X wounds when checking who won melee
-      // Fear bonus goes ONLY into melee_resolution, NOT into wounds_dealt
       if (attacker.special_rules?.includes('Fear')) {
-      const fearMatch = attacker.special_rules.match(/Fear\((\d+)\)/);
-      const fearBonus = fearMatch ? parseInt(fearMatch[1]) : 1;
-      result.fearBonus = fearBonus;
-      weaponSpecialRules.push({ rule: 'Fear', value: fearBonus, effect: `+${fearBonus} wounds for melee victory check` });
+        const fearMatch = attacker.special_rules.match(/Fear\((\d+)\)/);
+        const fearBonus = fearMatch ? parseInt(fearMatch[1]) : 1;
+        result.fearBonus = fearBonus;
+        weaponSpecialRules.push({ rule: 'Fear', value: fearBonus, effect: `+${fearBonus} wounds for melee victory check` });
       }
 
-      // Only include rules from THIS melee weapon, not all weapons on the unit
-      // Filter out ranged-only rules (Blast) and rules from other weapons
       const rangedOnlyRules = ['Blast', 'Relentless', 'Indirect', 'Artillery'];
       const filtered = (result.specialRulesApplied || []).filter(rule => !rangedOnlyRules.includes(rule.rule));
-
-      // Merge melee-specific rules and weapon rules
       const combined = [...weaponSpecialRules, ...filtered];
       const seenRules = new Set();
       result.specialRulesApplied = combined.filter(rule => {
@@ -668,49 +549,44 @@ export class RulesEngine {
       allSpecialRules.push(...result.specialRulesApplied);
       results.push(result);
       totalWounds += validatedWounds;
-      });
+    });
 
-      if (isStrikeBack || attacker.just_charged) {
+    if (isStrikeBack || attacker.just_charged) {
       attacker.fatigued = true;
-      }
+    }
 
-      return { results, total_wounds: totalWounds, specialRulesApplied: allSpecialRules };
-      }
+    return { results, total_wounds: totalWounds, specialRulesApplied: allSpecialRules };
+  }
 
-  // Morale — never called on already-shaken units (callers must guard), but defensively roll anyway
   checkMorale(unit, reason = 'wounds') {
-  const quality = unit.quality || 4;
-  const roll = this.dice.roll();
-  const specialRulesApplied = [];
+    const quality = unit.quality || 4;
+    const roll = this.dice.roll();
+    const specialRulesApplied = [];
 
-  if (unit.status === 'shaken') {
-  return { passed: false, roll, reason: 'Already Shaken', specialRulesApplied };
-  }
-  const passed = roll >= quality;
+    if (unit.status === 'shaken') {
+      return { passed: false, roll, reason: 'Already Shaken', specialRulesApplied };
+    }
+    const passed = roll >= quality;
 
-  // Bug 1 fix: Fearless re-roll only applies if unit actually has Fearless rule
-  if (!passed && unit.special_rules?.includes('Fearless')) {
-  const reroll = this.dice.roll();
-  specialRulesApplied.push({ rule: 'Fearless', value: null, effect: `re-rolled on 4+ (re-roll: ${reroll})` });
-  if (reroll >= 4) {
-  return { passed: true, roll, reroll, reason: 'Fearless reroll', specialRulesApplied };
-  }
+    if (!passed && unit.special_rules?.includes('Fearless')) {
+      const reroll = this.dice.roll();
+      specialRulesApplied.push({ rule: 'Fearless', value: null, effect: `re-rolled on 4+ (re-roll: ${reroll})` });
+      if (reroll >= 4) {
+        return { passed: true, roll, reroll, reason: 'Fearless reroll', specialRulesApplied };
+      }
+    }
+
+    return { passed, roll, reason, specialRulesApplied };
   }
 
-  return { passed, roll, reason, specialRulesApplied };
-  }
-
-  // Counter: defender strikes first when charged, charging unit gets -1 Impact per model with Counter
   applyCounterToCharger(charger, defender) {
     let penalty = 0;
-    const counterModels = (defender.current_models || 0);
     if (defender.special_rules?.includes('Counter')) {
-      penalty = counterModels;
+      penalty = defender.current_models || 0;
     }
     return penalty;
   }
 
-  // Caster(X): manages spell tokens and casting
   getCasterTokens(unit) {
     const casterMatch = unit.special_rules?.match(/Caster\((\d+)\)/);
     return casterMatch ? parseInt(casterMatch[1]) : 0;
@@ -720,7 +596,6 @@ export class RulesEngine {
     return currentTokens >= spellValue;
   }
 
-  // Takedown: pick individual model as target (treated as unit of 1)
   canUseTakedown(unit, weapon) {
     return weapon.special_rules?.includes('Takedown');
   }
@@ -740,7 +615,6 @@ export class RulesEngine {
     return 'passed';
   }
 
-  // Objectives
   updateObjectives(gameState) {
     gameState.objectives?.forEach(obj => {
       const unitsNear = gameState.units.filter(u =>
@@ -754,7 +628,6 @@ export class RulesEngine {
     });
   }
 
-  // Utilities
   calculateDistance(a, b) {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
@@ -773,7 +646,6 @@ export class RulesEngine {
     return (unitTerrain && unitTerrain.type === 'cover') ? 1 : 0;
   }
 
-  // Zone helper for JSON log
   getZone(x, y) {
     const col = x < 24 ? 'left' : x < 48 ? 'centre' : 'right';
     const row = y < 16 ? 'north' : y < 32 ? 'centre' : 'south';
