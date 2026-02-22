@@ -621,15 +621,17 @@ export default function Battle() {
     // (handled inside executeAction after melee kill)
 
     // ── Mark activated, flip agent ────────────────────────────────────────────
-    // Bug 6 fix: clear just_charged so the unit is NOT excluded from next round
     liveUnit.just_charged = false;
     const nextAgent = liveUnit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-    // Bug 1 fix: use a Set to guarantee each unit ID appears at most once in units_activated
-    const prevActivated = gsRef.current.units_activated || [];
-    const activatedSetFinal = new Set(prevActivated);
+    // Always read the very latest gs from ref to avoid losing activations written
+    // by concurrent state updates (e.g. melee targeting the same unit mid-turn).
+    const latestGs = gsRef.current;
+    const activatedSetFinal = new Set(latestGs.units_activated || []);
     activatedSetFinal.add(liveUnit.id);
+    // Also ensure every unit that was in a charge/melee during this activation
+    // is NOT re-added to the queue — they were already registered as targets, not activators.
     const updatedGs = {
-      ...gsRef.current,
+      ...latestGs,
       units_activated: Array.from(activatedSetFinal),
       active_agent: nextAgent,
     };
