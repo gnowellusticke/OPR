@@ -556,6 +556,8 @@ export default function Battle() {
     const topOption = dmnOptions.sort((a, b) => b.score - a.score)[0];
     const dmnReason = topOption ? `${topOption.action} scored ${topOption.score.toFixed(2)}` : action;
 
+    if (canAct) await attemptSpellCasting(unit, gs, evs);
+
     if (action === 'Hold') {
       if (canAct) await attemptShooting(unit, gs, evs, dmnReason);
       else evs.push({ round, type: 'movement', message: `${unit.name} holds (shaken — cannot shoot)`, timestamp: new Date().toLocaleTimeString() });
