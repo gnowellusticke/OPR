@@ -699,7 +699,14 @@ export default function Battle() {
         result = rules.resolveShooting(unit, target, shootWeapon, gs.terrain, gs);
         loggedAttacks = totalAttacks;
       }
-      const woundsDealt = result.wounds;
+      let woundsDealt = result.wounds;
+      // Regeneration: roll one die per incoming wound, 5+ ignores it (suppressed by Bane)
+      const hasBaneWeapon = result.specialRulesApplied?.some(r => r.rule === 'Bane');
+      const regenResult = rules.applyRegeneration(target, woundsDealt, hasBaneWeapon);
+      if (regenResult.ignored > 0) {
+        evs.push({ round, type: 'regen', message: `${target.name} Regeneration: ignored ${regenResult.ignored}/${woundsDealt} wounds (rolls: ${regenResult.rolls.join(',')})`, timestamp: new Date().toLocaleTimeString() });
+        woundsDealt = regenResult.finalWounds;
+      }
       const targetWasPreviouslyAlive = target.current_models > 0;
       target.current_models = Math.max(0, target.current_models - woundsDealt);
       if (target.current_models <= 0 && targetWasPreviouslyAlive) target.status = 'destroyed';
