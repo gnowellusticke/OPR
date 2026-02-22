@@ -532,10 +532,18 @@ export class RulesEngine {
     let totalWounds = 0;
     const allSpecialRules = [];
 
-    const meleeWeapons = attacker.weapons?.filter(w => w.range <= 2) || [];
+    const meleeWeapons = (attacker.weapons || []).filter(w => {
+      // Normalise special_rules to string for Blast/ranged-only checks
+      const sr = Array.isArray(w.special_rules) ? w.special_rules.join(' ') : (w.special_rules || '');
+      if ((w.range ?? 2) > 2) return false; // strictly ranged
+      return true;
+    });
     const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
 
-    const currentModelCount = Math.ceil(attacker.current_models / Math.max(attacker.tough_per_model || 1, 1));
+    // Bug 1 fix: fresh model count snapshot per activation — never accumulate across rounds
+    // toughPerModel=0 means 1-wound-per-model units; treat as 1 for division purposes
+    const effectiveToughPerModel = Math.max(attacker.tough_per_model || 1, 1);
+    const currentModelCount = Math.floor(attacker.current_models / effectiveToughPerModel);
 
     weaponsToUse.forEach(weapon => {
       let modifiedWeapon = { ...weapon };
