@@ -266,11 +266,14 @@ export default function Battle() {
   const isAmbush = unit.special_rules?.includes('Ambush') || unit.special_rules?.includes('Teleport') || unit.special_rules?.includes('Infiltrate');
   const isScout = unit.special_rules?.includes('Scout') && advRules?.scoutingDeployment;
 
-  // Deduplicate weapons by name to prevent double-shoot at source
-  const seenWeaponNames = new Set();
+  // Deduplicate weapons by name AND by (name+range+attacks) fingerprint to catch
+  // parser duplicates where the same weapon appears twice with slightly different objects.
+  // Use a canonical key so Doom Tank's Gauss Rifle Array / Heavy Doom Cannon are deduped at source.
+  const seenWeaponKeys = new Set();
   const deduplicatedWeapons = (unit.weapons || []).filter(w => {
-    if (seenWeaponNames.has(w.name)) return false;
-    seenWeaponNames.add(w.name);
+    const key = `${w.name}|${w.range}|${w.attacks}`;
+    if (seenWeaponKeys.has(key)) return false;
+    seenWeaponKeys.add(key);
     return true;
   });
   const ranged_weapons = deduplicatedWeapons.filter(w => (w.range ?? 2) > 2);
