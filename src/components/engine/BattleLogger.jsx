@@ -75,6 +75,28 @@ export class BattleLogger {
     });
   }
 
+  logObjectivesPlaced({ diceRoll, numObjectives, objectives }) {
+    const objMap = {};
+    for (let i = 1; i <= 5; i++) {
+      const obj = objectives[i - 1];
+      if (obj) {
+        objMap[`objective_${i}`] = { x: parseFloat(obj.x.toFixed(1)), y: parseFloat(obj.y.toFixed(1)) };
+      } else {
+        objMap[`objective_${i}`] = 'n/a';
+      }
+    }
+    this._numObjectives = numObjectives; // remember for round summaries
+    this.events.push({
+      round: 0,
+      timestamp: this._timestamp(),
+      event_type: 'objectives_placed',
+      acting_unit: null, target_unit: null, weapon_used: null, zone: null, range_bracket: null,
+      roll_results: { dice_roll: diceRoll, num_objectives: numObjectives, objectives: objMap },
+      unit_state_after: {}, dmn_reason: `d3(${diceRoll})+2 = ${numObjectives} objectives`,
+      flags: { turning_point: false, first_blood: false, unit_destroyed: false }
+    });
+  }
+
   logDeploymentSummary({ agentADeployed, agentBDeployed, reserves, firstActivation, dmnReason }) {
     this.events.push({
       round: 0,
