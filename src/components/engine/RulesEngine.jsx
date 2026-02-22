@@ -397,7 +397,7 @@ export class RulesEngine {
       wounds = 0;
     }
 
-    console.log(`[DMG] totalHits=${originalHitCount} saveable=${hitCount} saves=${saves} unsaved=${unsavedHits} bane=${baneProcs} totalUnsaved=${totalUnsaved} deadlyX=${deadlyMultiplier} damageX=${damageValue} → wounds=${wounds}`);
+    console.log(`[DMG] totalHits=${originalHitCount} saveable=${hitCount} saves=${saves} unsaved=${unsavedHits} bane=${baneProcs} totalUnsaved=${totalUnsaved} deadlyX=${deadlyMultiplier} → wounds=${wounds}`);
     return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, deadlyMultiplier, specialRulesApplied };
   }
 
