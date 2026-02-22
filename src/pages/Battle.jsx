@@ -391,39 +391,45 @@ export default function Battle() {
     } else {
       const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain, myUsedZones);
 
-      // Bug 9 fix: enforce max 2 units per zone at deployment time
-      const zoneCol = decision.x < 24 ? 'left' : decision.x < 48 ? 'centre' : 'right';
+      // Enforce max 2 units per zone at deployment time.
+      // Count which zone the DMN decision lands in, then find a free zone if needed.
       const zoneRow = isAgentA ? 'south' : 'north';
-      const decidedZone = `${zoneRow}-${zoneCol}`;
-      const unitsInZone = myDeployed.filter(u => {
-        const fCol = u.x < 24 ? 'left' : u.x < 48 ? 'centre' : 'right';
-        const fRow = isAgentA ? 'south' : 'north';
-        return `${fRow}-${fCol}` === decidedZone;
-      }).length;
+      const yMin = isAgentA ? 3 : 32;
+      const yMax = isAgentA ? 16 : 45;
 
-      // If zone is full (2+ units), find next preferred zone
-      let finalX = decision.x, finalY = decision.y, finalZone = decidedZone;
-      if (unitsInZone >= 2) {
-        const zones = [
-          { col: 'left', x: 12 },
-          { col: 'centre', x: 36 },
-          { col: 'right', x: 60 }
-        ];
-        for (const zone of zones) {
-          const testZone = `${zoneRow}-${zone.col}`;
-          const count = myDeployed.filter(u => {
-            const fCol = u.x < 24 ? 'left' : u.x < 48 ? 'centre' : 'right';
-            const fRow = isAgentA ? 'south' : 'north';
-            return `${fRow}-${fCol}` === testZone;
-          }).length;
-          if (count < 2) {
-            finalX = zone.x + (Math.random() - 0.5) * 8;
-            finalY = isAgentA ? (3 + Math.random() * 13) : (32 + Math.random() * 13);
-            finalZone = testZone;
+      const getZoneCol = (x) => x < 24 ? 'left' : x < 48 ? 'centre' : 'right';
+      const countInZone = (col) => myDeployed.filter(u => getZoneCol(u.x) === col).length;
+
+      const ZONE_X = { left: 10, centre: 34, right: 58 };
+      const decidedCol = getZoneCol(decision.x);
+      const decidedZone = `${zoneRow}-${decidedCol}`;
+
+      let finalCol = decidedCol;
+      let finalZone = decidedZone;
+
+      if (countInZone(decidedCol) >= 2) {
+        // Try each zone in preference order: desired, then others
+        const ordered = ['left', 'centre', 'right'].filter(c => c !== decidedCol);
+        ordered.unshift(decidedCol); // put preferred first (already full, will skip)
+        for (const col of ['left', 'centre', 'right']) {
+          if (countInZone(col) < 2) {
+            finalCol = col;
+            finalZone = `${zoneRow}-${col}`;
             break;
           }
         }
+        // If all zones are full (> 6 units per side), just use the least-full zone
+        if (finalCol === decidedCol) {
+          finalCol = ['left', 'centre', 'right'].reduce((best, col) =>
+            countInZone(col) < countInZone(best) ? col : best, 'left');
+          finalZone = `${zoneRow}-${finalCol}`;
+        }
       }
+
+      // Place within chosen zone — jitter within x-band + random y in deployment strip
+      const baseX = ZONE_X[finalCol];
+      const finalX = Math.max(4, Math.min(68, baseX + (Math.random() - 0.5) * 10));
+      const finalY = yMin + Math.random() * (yMax - yMin);
 
       unit.x = finalX;
       unit.y = finalY;
