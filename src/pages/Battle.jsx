@@ -1061,17 +1061,17 @@ export default function Battle() {
 
         // Deploy Ambush/reserve units at the start of each new round.
         gs.units.forEach(u => {
-      if (u.is_in_reserve && u.current_models > 0) {
-        const deployed = rules.deployAmbush(u, gs);
-        if (deployed) {
-          u.is_in_reserve = false; // ← critical: now visible to scheduler every future round
-          evs.push({ round: newRound, type: 'ability', message: `${u.name} deploys from Ambush!`, timestamp: new Date().toLocaleTimeString() });
-          loggerRef.current?.logAbility({ round: newRound, unit: u, ability: 'Ambush', details: { x: u.x.toFixed(1), y: u.y.toFixed(1) } });
-        }
-      }
-    });
+          if (u.is_in_reserve && u.current_models > 0) {
+            const deployed = rules.deployAmbush(u, gs);
+            if (deployed) {
+              u.is_in_reserve = false;
+              evs.push({ round: newRound, type: 'ability', message: `${u.name} deploys from Ambush!`, timestamp: new Date().toLocaleTimeString() });
+              loggerRef.current?.logAbility({ round: newRound, unit: u, ability: 'Ambush', details: { x: u.x.toFixed(1), y: u.y.toFixed(1) } });
+            }
+          }
+        });
 
-    const newState = {
+        const newState = {
       ...gs,
       current_round: newRound,
       units_activated: [],
