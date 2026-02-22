@@ -246,6 +246,7 @@ export default function Battle() {
   model_count: modelCount,
   tough_per_model: toughPerModel,
   status: 'normal', fatigued: false, just_charged: false, rounds_without_offense: 0,
+  spell_tokens: 0,
   melee_weapon_name: resolveMeleeWeaponName(unit),
   ranged_weapons,
   heroic_action_used: false,
