@@ -179,26 +179,27 @@ export default function Battle() {
     const diceRoll = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
     const numObjectives = diceRoll + 2; // 3, 4, or 5
 
-    // Fixed spread positions per count — small jitter (±2) for visual variety only
+    // Fixed canonical spread positions per count — small jitter (±2) for visual variety only.
+    // All pairwise distances >= 15 units guaranteed by these coordinates.
     const jitter = () => (Math.random() - 0.5) * 4;
     const SPREAD_POSITIONS = {
       3: [
-        { id: 'obj_1', x: 18, y: 30 },
-        { id: 'obj_2', x: 36, y: 15 },
-        { id: 'obj_3', x: 36, y: 45 },
+        { id: 'obj_1', x: 15, y: 30 },
+        { id: 'obj_2', x: 42, y: 12 },
+        { id: 'obj_3', x: 42, y: 48 },
       ],
       4: [
-        { id: 'obj_1', x: 18, y: 18 },
-        { id: 'obj_2', x: 18, y: 42 },
-        { id: 'obj_3', x: 54, y: 18 },
-        { id: 'obj_4', x: 54, y: 42 },
+        { id: 'obj_1', x: 15, y: 12 },
+        { id: 'obj_2', x: 15, y: 48 },
+        { id: 'obj_3', x: 42, y: 12 },
+        { id: 'obj_4', x: 42, y: 48 },
       ],
       5: [
-        { id: 'obj_1', x: 12, y: 30 },
-        { id: 'obj_2', x: 28, y: 15 },
-        { id: 'obj_3', x: 28, y: 45 },
-        { id: 'obj_4', x: 48, y: 15 },
-        { id: 'obj_5', x: 48, y: 45 },
+        { id: 'obj_1', x: 10, y: 30 },
+        { id: 'obj_2', x: 27, y: 12 },
+        { id: 'obj_3', x: 27, y: 48 },
+        { id: 'obj_4', x: 47, y: 12 },
+        { id: 'obj_5', x: 47, y: 48 },
       ],
     };
 
