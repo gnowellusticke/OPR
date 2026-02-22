@@ -474,17 +474,23 @@ export default function Battle() {
     const bat = battleRef.current;
     if (!gs || !bat || bat.status === 'completed') return;
 
-    const activated = gs.units_activated || [];
+    // Bug 1 fix: deduplicate units_activated so a unit ID can never be "activated" twice in one round.
+    // This prevents double-activation where the same unit appears multiple times in the activated list.
+    const activatedSet = new Set(gs.units_activated || []);
 
-    // Bug 4 fix: Build activation queue with safety net — every living unit must be included
-    const allLiving = gs.units.filter(u =>
-      u.current_models > 0 &&
-      u.status !== 'destroyed' && u.status !== 'routed' &&
-      !u.is_in_reserve
-    );
-    // Force-add any living units that somehow slipped out of the activation queue
-    const missingFromQueue = allLiving.filter(u => !activated.includes(u.id));
-    const remaining = missingFromQueue; // these are the units still needing activation this round
+    // Build remaining queue: every living non-reserve unit not yet activated this round.
+    // Deduplicate by id to ensure each unit appears at most once.
+    const seenIds = new Set();
+    const allLiving = gs.units.filter(u => {
+      if (seenIds.has(u.id)) return false;
+      seenIds.add(u.id);
+      return (
+        u.current_models > 0 &&
+        u.status !== 'destroyed' && u.status !== 'routed' &&
+        !u.is_in_reserve
+      );
+    });
+    const remaining = allLiving.filter(u => !activatedSet.has(u.id));
 
     if (remaining.length === 0) {
       await endRound(gs);
