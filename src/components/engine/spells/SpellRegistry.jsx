@@ -24,12 +24,20 @@ const ALL_SPELL_BOOKS = [
   },
   {
     faction: "Elf",
-    aliases: ["High Elf", "Elves", "Elven", "High Elves", "Wood Elves"],
+    aliases: ["High Elf", "Elves", "Elven", "High Elves", "High Elf Fleets", "Elven Fleets"],
     spells: [
-      { name: "Arrow Storm",       spell_cost: 1, range: 24, attacks: 4, ap: 0, effect: "damage", description: "A barrage of ethereal arrows rains down on the enemy.", special_rules: "" },
-      { name: "Wind Walk",         spell_cost: 1, range: 12, attacks: 0, ap: 0, effect: "buff",   description: "Friendly unit within 12\" may immediately move 6\".", special_rules: "" },
-      { name: "Ethereal Shackles", spell_cost: 2, range: 18, attacks: 2, ap: 0, effect: "damage", description: "Binds the target in spectral chains.", special_rules: "" },
-      { name: "Starfall",          spell_cost: 3, range: 30, attacks: 3, ap: 2, effect: "damage", description: "Calls down a cascade of starfire on a distant foe.", special_rules: "AP(2), Indirect" }
+      // Creator of Illusions (1): debuff — modelled as a low-damage hit to represent the Unwieldy debuff
+      { name: "Creator of Illusions", spell_cost: 1, range: 18, attacks: 1, ap: 0, effect: "debuff",  description: "Target enemy unit gets Unwieldy in melee once.", special_rules: "" },
+      // Elemental Seeker (1): 1 hit with Blast(3) on target within 18"
+      { name: "Elemental Seeker",     spell_cost: 1, range: 18, attacks: 1, ap: 0, effect: "damage",  description: "Target enemy unit takes 1 hit with Blast(3).", special_rules: "Blast(3)" },
+      // Hidden Spirits (2): buff — no direct damage
+      { name: "Hidden Spirits",       spell_cost: 2, range: 12, attacks: 0, ap: 0, effect: "buff",    description: "Up to two friendly units within 12\" get Unpredictable Shooter once.", special_rules: "" },
+      // Psy-Destruction (2): 2 hits with AP(4) on one enemy model within 24"
+      { name: "Psy-Destruction",      spell_cost: 2, range: 24, attacks: 2, ap: 4, effect: "damage",  description: "One enemy model within 24\" takes 2 hits with AP(4).", special_rules: "AP(4)" },
+      // Blessing of Souls (3): buff — no direct damage
+      { name: "Blessing of Souls",    spell_cost: 3, range: 12, attacks: 0, ap: 0, effect: "buff",    description: "Up to three friendly units within 12\" get Highborn Boost once.", special_rules: "" },
+      // Shattering Curse (3): 6 hits with AP(1) and Crack on target within 12"
+      { name: "Shattering Curse",     spell_cost: 3, range: 12, attacks: 6, ap: 1, effect: "damage",  description: "Target enemy unit within 12\" takes 6 hits with AP(1) and Crack.", special_rules: "AP(1), Crack" }
     ]
   },
   {
