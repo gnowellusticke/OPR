@@ -350,12 +350,7 @@ export class RulesEngine {
       }
     }
 
-    // Damage(X): each unsaved wound deals X damage
-    const damageMatch = rulesStr.match(/\bDamage\((\d+)\)/);
-    const damageValue = damageMatch ? parseInt(damageMatch[1]) : 1;
-    if (damageMatch) {
-      specialRulesApplied.push({ rule: 'Damage', value: damageValue, effect: `each unsaved wound deals ${damageValue} damage` });
-    }
+    // Damage(X) is NOT a wound multiplier — do not use it in the wound formula
 
     if (deadlyMultiplier > 1) {
       specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `unsaved wounds multiplied by ${deadlyMultiplier}` });
