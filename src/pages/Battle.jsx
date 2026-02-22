@@ -119,6 +119,11 @@ export default function Battle() {
       advance_rules: activeRuleKeys,
     });
 
+    // Log objectives_placed event (Bug 4 fix)
+    const diceRoll = objectives._diceRoll || 3;
+    const numObjectives = objectives._numObjectives || objectives.length;
+    logger.logObjectivesPlaced({ diceRoll, numObjectives, objectives });
+
     // Run alternating deployment phase (mutates unit positions, logs coin toss + deploy events)
     const { firstActivation } = await runDeploymentPhase(units, objectives, terrain, logger, advRules);
 
