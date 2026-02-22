@@ -168,21 +168,23 @@ export default function Battle() {
   };
 
   const generateObjectives = () => {
-    // Bug 8 fix: Roll d3+2 for number of objectives, place in centre zone only
+    // Bug 5 fix: d3+2 random objective count (3, 4, or 5), randomised positions within centre zone
     const rollD3 = () => Math.floor(Math.random() * 3) + 1;
-    const numObjectives = rollD3() + 2; // Result: 3, 4, or 5
+    const numObjectives = rollD3() + 2; // 3, 4, or 5
 
-    // Fixed positions in centre zone (neutral, outside deployment strips)
+    // 5 candidate positions spread across the centre band (y=18–42, x=8–62)
     const allPositions = [
-      { x: 12, y: 24, id: 'obj_1' },   // left-centre
-      { x: 36, y: 12, id: 'obj_2' },   // centre-north
-      { x: 36, y: 36, id: 'obj_3' },   // centre
-      { x: 36, y: 48, id: 'obj_4' },   // centre-south
-      { x: 60, y: 24, id: 'obj_5' }    // right-centre
+      { x: 10 + Math.random() * 6,  y: 22 + Math.random() * 6, id: 'obj_1' },
+      { x: 32 + Math.random() * 8,  y: 14 + Math.random() * 6, id: 'obj_2' },
+      { x: 34 + Math.random() * 8,  y: 30 + Math.random() * 6, id: 'obj_3' },
+      { x: 34 + Math.random() * 8,  y: 42 + Math.random() * 4, id: 'obj_4' },
+      { x: 56 + Math.random() * 6,  y: 22 + Math.random() * 6, id: 'obj_5' },
     ];
 
-    // Take first numObjectives
-    return allPositions.slice(0, numObjectives).map(pos => ({ ...pos, controlled_by: null }));
+    const selected = allPositions.slice(0, numObjectives).map(pos => ({ ...pos, controlled_by: null }));
+    // Log the count so it's visible in the battle log
+    console.log(`[OBJECTIVES] d3+2 = ${numObjectives} objectives placed`);
+    return selected;
   };
 
   // ─── DEPLOY ──────────────────────────────────────────────────────────────────
