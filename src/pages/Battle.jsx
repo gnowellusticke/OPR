@@ -483,18 +483,22 @@ export default function Battle() {
   // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 
   const processNextAction = async () => {
+    // Always read from ref — never use a stale closure variable.
     const gs = gsRef.current;
     const bat = battleRef.current;
     if (!gs || !bat || bat.status === 'completed') return;
 
-    // Build the activation queue fresh from all living non-reserve units every call.
-    // NEVER mutate or carry over a previous round's queue — always re-derive from source of truth.
-    const activatedSet = new Set(gs.units_activated || []);
+    // Build activation queue fresh from the live unit list every single call.
+    // Source of truth is gsRef.current.units, re-read here to catch any mid-turn mutations.
+    const activatedSet = new Set(gsRef.current.units_activated || []);
 
-    // Deduplicate by id: each unit can appear at most once in the living pool.
+    // Deduplicate by id: each unit appears at most once in the living pool.
     const seenIds = new Set();
-    const allLiving = gs.units.filter(u => {
-      if (seenIds.has(u.id)) return false;
+    const allLiving = gsRef.current.units.filter(u => {
+      if (seenIds.has(u.id)) { 
+        console.warn(`SCHEDULER: duplicate unit id ${u.id} (${u.name}) in gs.units — skipped`);
+        return false; 
+      }
       seenIds.add(u.id);
       return (
         u.current_models > 0 &&
@@ -503,17 +507,11 @@ export default function Battle() {
       );
     });
 
-    // Safety net: warn about any living unit that somehow isn't in the pool
-    // (reserve entry edge cases, shaken units, etc.)
-    const missing = allLiving.filter(u => {
-      const inPool = allLiving.some(a => a.id === u.id);
-      return !inPool;
-    });
-    if (missing.length > 0) {
-      console.error(`SCHEDULER: missing units force-added:`, missing.map(u => u.name));
-    }
+    // Safety net: log any living unit not yet activated this round
+    const notYetActivated = allLiving.filter(u => !activatedSet.has(u.id));
+    console.log(`[SCHEDULER R${gsRef.current.current_round}] living=${allLiving.length} activated=${activatedSet.size} remaining=${notYetActivated.length}`);
 
-    const remaining = allLiving.filter(u => !activatedSet.has(u.id));
+    const remaining = notYetActivated;
 
     if (remaining.length === 0) {
       await endRound(gs);
