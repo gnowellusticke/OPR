@@ -450,18 +450,23 @@ export class RulesEngine {
     }
   }
 
-  // Bug 2 fix: Calculate wounds ONLY from unsaved hits, apply multipliers only once
-  // wounds = (hits_not_saved) × deadly_multiplier + bane_procs
-  const unsavedWounds = Math.max(0, hitCount - saves);
-  const wounds = unsavedWounds * deadlyMultiplier + baneProcs;
+  // CORE FORMULA: wounds = (unsaved hits × deadly_multiplier) + bane_auto_wounds
+  // Unsaved hits = max(0, hitCount - saves)
+  // hitCount=0 → wounds=0, always.
+  const unsavedHits = Math.max(0, hitCount - saves);
+  const wounds = unsavedHits * deadlyMultiplier + baneProcs;
 
-  // CRITICAL VALIDATION: ensure wounds never exceed initial hit count (can happen if multipliers applied incorrectly)
-  // Also ensure if hitCount = 0, then wounds = 0
+  // Hard guard: wounds can never come from zero hits or fully saved attacks
   if (hitCount === 0 && wounds > 0) {
-    console.error(`[MELEE BUG] hitCount=0 but wounds=${wounds}. This is impossible. Setting to 0.`);
+    console.error(`[MELEE BUG] hitCount=0 but wounds=${wounds}. Clamping to 0.`);
+    return { rolls, saves, wounds: 0, wounds_dealt: 0, baneProcs, deadlyMultiplier, specialRulesApplied };
+  }
+  if (unsavedHits === 0 && wounds > 0) {
+    console.error(`[MELEE BUG] All hits saved but wounds=${wounds}. Clamping to 0.`);
     return { rolls, saves, wounds: 0, wounds_dealt: 0, baneProcs, deadlyMultiplier, specialRulesApplied };
   }
 
+  console.log(`[DMG] hits=${hitCount} saves=${saves} unsaved=${unsavedHits} deadlyX=${deadlyMultiplier} bane=${baneProcs} → wounds=${wounds}`);
   return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs, deadlyMultiplier, specialRulesApplied };
   }
 
