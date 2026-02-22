@@ -173,22 +173,44 @@ export default function Battle() {
   };
 
   const generateObjectives = () => {
-    // Bug 4 fix: Roll d3+2 for objective count (3–5), randomised positions in centre band.
-    // Returns only the generated objectives; n/a slots are filled in BattleLogger.logRoundSummary.
+    // Roll d3+2 for objective count (3–5).
+    // Bug 5 fix: Use fixed deterministic spread positions per count to avoid clustering.
+    // Positions are in the centre band (y=15-45), spread evenly across board width.
     const diceRoll = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
     const numObjectives = diceRoll + 2; // 3, 4, or 5
 
-    const allPositions = [
-      { x: 10 + Math.random() * 6,  y: 22 + Math.random() * 6, id: 'obj_1' },
-      { x: 32 + Math.random() * 8,  y: 14 + Math.random() * 6, id: 'obj_2' },
-      { x: 34 + Math.random() * 8,  y: 30 + Math.random() * 6, id: 'obj_3' },
-      { x: 34 + Math.random() * 8,  y: 42 + Math.random() * 4, id: 'obj_4' },
-      { x: 56 + Math.random() * 6,  y: 22 + Math.random() * 6, id: 'obj_5' },
-    ];
+    // Fixed spread positions per count — small jitter (±2) for visual variety only
+    const jitter = () => (Math.random() - 0.5) * 4;
+    const SPREAD_POSITIONS = {
+      3: [
+        { id: 'obj_1', x: 18, y: 30 },
+        { id: 'obj_2', x: 36, y: 15 },
+        { id: 'obj_3', x: 36, y: 45 },
+      ],
+      4: [
+        { id: 'obj_1', x: 18, y: 18 },
+        { id: 'obj_2', x: 18, y: 42 },
+        { id: 'obj_3', x: 54, y: 18 },
+        { id: 'obj_4', x: 54, y: 42 },
+      ],
+      5: [
+        { id: 'obj_1', x: 12, y: 30 },
+        { id: 'obj_2', x: 28, y: 15 },
+        { id: 'obj_3', x: 28, y: 45 },
+        { id: 'obj_4', x: 48, y: 15 },
+        { id: 'obj_5', x: 48, y: 45 },
+      ],
+    };
 
-    const selected = allPositions.slice(0, numObjectives).map(pos => ({ ...pos, controlled_by: null }));
+    const positions = SPREAD_POSITIONS[numObjectives] || SPREAD_POSITIONS[3];
+    const selected = positions.map(pos => ({
+      ...pos,
+      x: pos.x + jitter(),
+      y: pos.y + jitter(),
+      controlled_by: null
+    }));
+
     console.log(`[OBJECTIVES] d3(${diceRoll})+2 = ${numObjectives} objectives placed`);
-    // Store dice roll on first objective for logger access
     selected._diceRoll = diceRoll;
     selected._numObjectives = numObjectives;
     return selected;
