@@ -101,25 +101,30 @@ export class RulesEngine {
   }
 
   deployAmbush(unit, gameState) {
-    const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
-    let attempts = 0;
-    while (attempts < 100) {
-      const x = Math.random() * 66 + 3;
-      const y = Math.random() * 42 + 3;
-      const tooClose = enemies.some(e => {
-        const dx = e.x - x; const dy = e.y - y;
-        return Math.sqrt(dx * dx + dy * dy) < 9;
-      });
-      if (!tooClose) {
-        unit.x = x;
-        unit.y = y;
-        unit.is_in_reserve = false;
-        return true;
+      // Valid board area: x in [5,55], y in [12,48] — excludes deployment strips and table edges.
+      const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
+      let attempts = 0;
+      while (attempts < 100) {
+        const x = Math.random() * 50 + 5;  // [5, 55]
+        const y = Math.random() * 36 + 12; // [12, 48]
+        const tooClose = enemies.some(e => {
+          const dx = e.x - x; const dy = e.y - y;
+          return Math.sqrt(dx * dx + dy * dy) < 9;
+        });
+        if (!tooClose) {
+          unit.x = x;
+          unit.y = y;
+          unit.is_in_reserve = false;
+          return true;
+        }
+        attempts++;
       }
-      attempts++;
+      // Fallback: place in centre of board regardless
+      unit.x = 30 + (Math.random() - 0.5) * 10;
+      unit.y = 30 + (Math.random() - 0.5) * 10;
+      unit.is_in_reserve = false;
+      return true;
     }
-    return false;
-  }
 
   executeTeleport(unit, gameState) {
     const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
