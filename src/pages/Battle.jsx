@@ -242,12 +242,33 @@ export default function Battle() {
   const maxWounds = computeWounds(unit);
   const isAmbush = unit.special_rules?.includes('Ambush') || unit.special_rules?.includes('Teleport') || unit.special_rules?.includes('Infiltrate');
   const isScout = unit.special_rules?.includes('Scout') && advRules?.scoutingDeployment;
-  const ranged_weapons = (unit.weapons || []).filter(w => (w.range ?? 2) > 2);
 
-  // Bug 5 fix: store model count and tough per model for scaling
+  // Deduplicate weapons by name to prevent double-shoot at source
+  const seenWeaponNames = new Set();
+  const deduplicatedWeapons = (unit.weapons || []).filter(w => {
+    if (seenWeaponNames.has(w.name)) return false;
+    seenWeaponNames.add(w.name);
+    return true;
+  });
+  const ranged_weapons = deduplicatedWeapons.filter(w => (w.range ?? 2) > 2);
+
+  // tough_per_model = wounds per model (for scaling attacks and model count)
+  // Heroes with Tough(X): 1 model with X+1 wounds → tough_per_model = X+1
+  // Multi-model with Tough(X): each model has X wounds → tough_per_model = X
+  // Standard units (no Tough): each model = 1 wound → tough_per_model = 1
   const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
-  const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 0;
+  const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
+  const isHero = unit.special_rules?.toLowerCase?.().includes('hero');
   const modelCount = unit.models || 1;
+  // toughPerModel is wounds-per-model for attack scaling purposes
+  let toughPerModel;
+  if (isHero && toughValue > 0) {
+    toughPerModel = toughValue + 1; // hero has 1+toughValue total wounds, 1 model
+  } else if (toughValue > 0) {
+    toughPerModel = toughValue; // multi-model: X wounds each
+  } else {
+    toughPerModel = 1; // standard: 1 wound per model
+  }
 
   // Placeholder positions — real positions set during alternating deployment phase
   return {
