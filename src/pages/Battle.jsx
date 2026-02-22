@@ -794,8 +794,27 @@ export default function Battle() {
 
   const defenderWasAlive = defender.current_models > 0;
   const attackerWasAlive = attacker.current_models > 0;
-  defender.current_models = Math.max(0, defender.current_models - result.attacker_wounds);
-  attacker.current_models = Math.max(0, attacker.current_models - result.defender_wounds);
+
+  // Regeneration on defender (check if attacker's weapon had Bane)
+  const atkHasBane = result.attacker_results?.results?.some(r => r.specialRulesApplied?.some(s => s.rule === 'Bane'));
+  let attackerWoundsToApply = result.attacker_wounds;
+  const defRegenResult = rules.applyRegeneration(defender, attackerWoundsToApply, atkHasBane);
+  if (defRegenResult.ignored > 0) {
+    evs.push({ round, type: 'regen', message: `${defender.name} Regeneration: ignored ${defRegenResult.ignored}/${attackerWoundsToApply} wounds`, timestamp: new Date().toLocaleTimeString() });
+    attackerWoundsToApply = defRegenResult.finalWounds;
+  }
+
+  // Regeneration on attacker (check if defender's weapon had Bane)
+  const defHasBane = result.defender_results?.results?.some(r => r.specialRulesApplied?.some(s => s.rule === 'Bane'));
+  let defenderWoundsToApply = result.defender_wounds;
+  const atkRegenResult = rules.applyRegeneration(attacker, defenderWoundsToApply, defHasBane);
+  if (atkRegenResult.ignored > 0) {
+    evs.push({ round, type: 'regen', message: `${attacker.name} Regeneration: ignored ${atkRegenResult.ignored}/${defenderWoundsToApply} wounds`, timestamp: new Date().toLocaleTimeString() });
+    defenderWoundsToApply = atkRegenResult.finalWounds;
+  }
+
+  defender.current_models = Math.max(0, defender.current_models - attackerWoundsToApply);
+  attacker.current_models = Math.max(0, attacker.current_models - defenderWoundsToApply);
   if (defenderWasAlive && defender.current_models <= 0) defender.status = 'destroyed';
   if (attackerWasAlive && attacker.current_models <= 0) attacker.status = 'destroyed';
 
