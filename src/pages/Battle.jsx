@@ -964,17 +964,20 @@ export default function Battle() {
 
       // Trigger rule compliance verification
       try {
-        const { default: verifyRuleCompliance } = await import('../functions/verifyRuleCompliance.js');
         const complianceReport = await verifyRuleCompliance(log);
-        console.log('=== COMPLIANCE REPORT ===');
-        console.log(JSON.stringify(complianceReport, null, 2));
+        console.log('=== COMPLIANCE REPORT ===', complianceReport);
         evs.push({ 
           round: 4, type: 'system', 
-          message: `Compliance check complete: ${complianceReport.summary.total_violations} violations found (Score: ${complianceReport.summary.compliance_score}/100)`,
+          message: `✅ Compliance check: ${complianceReport.summary.total_violations} violation(s) | Score: ${complianceReport.summary.compliance_score}/100`,
           timestamp: new Date().toLocaleTimeString()
         });
       } catch (err) {
         console.error('Compliance verification failed:', err);
+        evs.push({ 
+          round: 4, type: 'system', 
+          message: `⚠ Compliance check failed: ${err.message}`,
+          timestamp: new Date().toLocaleTimeString()
+        });
       }
 
     const aUnits = gs.units.filter(u => u.owner === 'agent_a' && u.current_models > 0).length;
