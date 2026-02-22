@@ -121,6 +121,10 @@ export default function Battle() {
     // Run alternating deployment phase (mutates unit positions, logs coin toss + deploy events)
     const { firstActivation } = await runDeploymentPhase(units, objectives, terrain, logger, advRules);
 
+    // Grant initial spell tokens to all Caster units before round 1
+    const rules = rulesRef.current;
+    units.forEach(u => rules.replenishSpellTokens(u));
+
     const initialState = {
     units,
     terrain,
