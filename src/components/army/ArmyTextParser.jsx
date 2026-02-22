@@ -175,18 +175,31 @@ export class ArmyTextParser {
   }
 
   static parseWeapon(line) {
-    // Parse weapon: Energy Spear (A2, AP(4))
-    // Or: 9x Shard Carbine (18", A2, Crack)
-    const weaponMatch = line.match(/^(\d+)x\s+(.+?)\s*\(([^)]+)\)|^(.+?)\s*\(([^)]+)\)/);
+    // Find the outermost ( ... ) block — handles nested parens like AP(1), Blast(3), Deadly(3)
+    const outerParenStart = line.indexOf('(');
+    if (outerParenStart === -1) return null;
 
-    if (!weaponMatch) {
-      return null;
+    // Walk to find the matching closing paren
+    let depth = 0;
+    let outerParenEnd = -1;
+    for (let i = outerParenStart; i < line.length; i++) {
+      if (line[i] === '(') depth++;
+      else if (line[i] === ')') {
+        depth--;
+        if (depth === 0) { outerParenEnd = i; break; }
+      }
     }
+    if (outerParenEnd === -1) return null; // unmatched paren
 
-    // Group 1/2/3 = multiplier form; group 4/5 = plain form
-    const count = weaponMatch[1] ? parseInt(weaponMatch[1]) : 1;
-    const name = (weaponMatch[2] || weaponMatch[4]).trim();
-    const stats = weaponMatch[3] || weaponMatch[5];
+    const prefix = line.slice(0, outerParenStart).trim(); // e.g. "9x Shard Carbine" or "Energy Spear"
+    const stats = line.slice(outerParenStart + 1, outerParenEnd); // contents inside outer parens
+
+    // Parse optional leading multiplier "Nx "
+    const multiplierMatch = prefix.match(/^(\d+)x\s+(.+)/);
+    const count = multiplierMatch ? parseInt(multiplierMatch[1]) : 1;
+    const name = (multiplierMatch ? multiplierMatch[2] : prefix).trim();
+
+    if (!name) return null;
 
     // Extract range
     const rangeMatch = stats.match(/(\d+)"/);
