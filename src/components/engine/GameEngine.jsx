@@ -297,48 +297,51 @@ export class DMNEngine {
   }
 
   scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState) {
-    // Base score — deliberately high so melee-primary units almost always pick Charge
-    // when an enemy is within charge range.
-    let score = 1.0;
-
+    // Base score — high enough that melee-primary units almost always charge when in range.
+    // Ranged units have a low base and no melee bonuses so they rarely beat Advance/Hold.
     const meleeWeapons = (unit.weapons || []).filter(w => w.range <= 2);
     const hasMelee = meleeWeapons.length > 0;
     const meleePrimary = this.isMeleePrimary(unit);
+
+    // Pure-ranged units: very low charge score so they never charge
+    if (!hasMelee) return 0.2;
+
+    let score = 1.2; // raised base so charge competes firmly with advance/hold
     const chargeRange = this.maxChargeDistance(unit);
     const dist = nearestEnemy ? this.getDistance(unit, nearestEnemy) : 99;
 
     // Hard gate: never score Charge if enemy is outside max charge distance
-    // (evaluateActionOptions already filters this, but guard defensively)
     if (dist > chargeRange) return -99;
 
-    // Melee-primary archetype bonus — ensures Orc Warriors / Buggies / Cyborgs charge reliably
-    if (meleePrimary) score += 1.0;
+    // Melee-primary archetype: decisive bonus — Tri-Scorpions, Spider Walker, Eternals etc.
+    if (meleePrimary) score += 1.5;
 
     // Named rule bonuses
-    if (unit.special_rules?.includes('Furious')) score += 0.5;
-    if (unit.special_rules?.includes('Rage')) score += 0.4;
+    if (unit.special_rules?.includes('Furious')) score += 0.6;
+    if (unit.special_rules?.includes('Rage')) score += 0.5;
+    if (unit.special_rules?.includes('Hatred')) score += 0.4;
+    if (unit.special_rules?.includes('Fear')) score += 0.3; // scary units like to charge
 
-    // Any melee weapon is better than nothing
-    if (hasMelee) score += 0.4;
+    // Melee weapon bonus
+    if (hasMelee) score += 0.5;
 
-    // Distance scaling: closer = better (normalised to 0–0.8 range)
-    score += ((chargeRange - dist) / chargeRange) * 0.8;
+    // Distance scaling: closer = much better (0–1.0 range)
+    score += ((chargeRange - dist) / chargeRange) * 1.0;
 
     // Finish off weak targets
     const enemyHealthRatio = nearestEnemy.current_models / (nearestEnemy.total_models || 1);
-    if (enemyHealthRatio < 0.5) score += 0.3;
+    if (enemyHealthRatio < 0.5) score += 0.4;
+    if (enemyHealthRatio < 0.25) score += 0.4; // stacked — almost guarantee a kill
 
-    // Objective pressure
+    // Objective pressure: contest enemy-held objectives in melee
     const targetOnObjective = gameState.objectives.some(obj =>
       this.getDistance(nearestEnemy, obj) <= 3 && obj.controlled_by !== owner
     );
-    if (targetOnObjective) score += 0.4;
+    if (targetOnObjective) score += 0.5;
 
-    // Inactivity boost — push units that haven't fought recently
+    // Inactivity boost — push units that haven't fought in 2+ rounds
+    if ((unit.rounds_without_offense || 0) >= 1) score += 0.4;
     if ((unit.rounds_without_offense || 0) >= 2) score += 0.5;
-
-    // Penalise pure-ranged units (no melee weapons) — they should not charge
-    if (!hasMelee) score = 0.2;
 
     // Reduce if badly outnumbered and no support
     const strengthRatio = unit.current_models / (nearestEnemy.current_models || 1);
