@@ -898,6 +898,15 @@ export default function Battle() {
       status: u.current_models <= 0 ? 'destroyed' : u.status,
     }));
 
+    // Replenish Caster spell tokens (capped at 6)
+    newState.units.forEach(u => {
+      const gained = rules.replenishSpellTokens(u);
+      if (gained > 0) {
+        evs.push({ round: newRound, type: 'ability', message: `${u.name} gains ${gained} spell token(s) (now ${u.spell_tokens}/6)`, timestamp: new Date().toLocaleTimeString() });
+        logger?.logAbility({ round: newRound, unit: u, ability: 'Caster', details: { tokens_gained: gained, tokens_total: u.spell_tokens } });
+      }
+    });
+
     // Regeneration / Self-Repair / Repair — end-of-round recovery is now handled
     // inline when wounds are applied (see attemptShooting / resolveMelee).
     // Nothing to do here.
