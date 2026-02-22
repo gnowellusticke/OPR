@@ -541,9 +541,12 @@ export class RulesEngine {
     });
     const weaponsToUse = meleeWeapons.length > 0 ? meleeWeapons : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
 
-    // Bug 3 fix: model count = floor(wounds_remaining / tough_per_model).
-    // tough_per_model=0 means 1-wound models → treat as 1 for division.
-    // This ensures Robot Lord A (T4, 4 wounds) = 1 model, not 4.
+    // Model count = floor(current wounds / wounds-per-model).
+    // tough_per_model is set at deploy time to reflect wounds-per-model correctly:
+    //   Heroes Tough(X): tpm = X+1 (1 model with X+1 total wounds)
+    //   Multi-model Tough(X): tpm = X
+    //   Standard: tpm = 1
+    // Always at least 1.
     const effectiveToughPerModel = Math.max(attacker.tough_per_model || 1, 1);
     const currentModelCount = Math.max(1, Math.floor(attacker.current_models / effectiveToughPerModel));
 
