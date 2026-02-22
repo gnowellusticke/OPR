@@ -445,11 +445,13 @@ export class RulesEngine {
     return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs: 0, deadlyMultiplier, hasBane, specialRulesApplied };
   }
 
-  applyRegeneration(unit) {
+  applyRegeneration(unit, suppressedByBane = false) {
     const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
     const hasRule = REGEN_RULES.some(r => unit.special_rules?.includes(r));
     if (!hasRule) return { recovered: 0, roll: null };
     if (unit.current_models >= unit.total_models) return { recovered: 0, roll: null };
+    // Bane: ignores Regeneration — if the last wound came from a Bane weapon, skip regen
+    if (suppressedByBane) return { recovered: 0, roll: null, suppressedByBane: true };
     const roll = this.dice.roll();
     const recovered = roll >= 5 ? 1 : 0;
     unit.current_models = Math.min(unit.total_models, unit.current_models + recovered);
