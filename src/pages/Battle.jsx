@@ -1039,9 +1039,9 @@ export default function Battle() {
         const isProgressiveScoring = gs.advance_rules?.progressiveScoring === true;
         const isFinalRound = newRound === 5; // After round 4
 
-    // Validation pass: every unit alive at round start must have had exactly one activation.
-    // Log warnings for any that were missed, and give Shaken units a safety-net recovery roll.
-    const liveUnits = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed' && !u.is_in_reserve);
+        // Validation pass: every unit alive at round start must have had exactly one activation.
+        // Log warnings for any that were missed, and give Shaken units a safety-net recovery roll.
+        const liveUnits = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed' && !u.is_in_reserve);
     const activatedSetEnd = new Set(gs.units_activated || []);
     const notActivated = liveUnits.filter(u => !activatedSetEnd.has(u.id));
     notActivated.forEach(u => {
