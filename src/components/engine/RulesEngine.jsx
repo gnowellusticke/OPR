@@ -367,14 +367,20 @@ export class RulesEngine {
   const specialRulesApplied = [];
   let baneProcs = 0;
 
-  // Bane: natural 6s on hit rolls auto-wound, bypassing saves
+  // Bane: natural 6s on hit rolls auto-wound, bypassing saves.
+  // These hits are ALREADY included in hits.successes (hitCount), so we:
+  //   1. Record how many are Bane auto-wounds (baneProcs)
+  //   2. Remove them from the save pool (they bypass saves)
+  //   3. Do NOT add them again later — they are counted as unsaved hits automatically
+  //      because they are removed from hitCount but not from the unsaved calculation base.
+  // IMPORTANT: baneProcs are NOT added to wounds separately — they contribute via unsavedHits.
   const baneHits = weapon.special_rules?.includes('Bane') && hitRolls
     ? hitRolls.filter(r => r.value === 6 && r.success && !r.auto).length
     : 0;
   if (baneHits > 0) {
     baneProcs = baneHits;
-    hitCount = Math.max(0, hitCount - baneHits); // Remove Bane hits from save pool
-    if (baneHits > 0) specialRulesApplied.push({ rule: 'Bane', value: baneHits, effect: `${baneHits} natural 6s auto-wound, bypassing saves` });
+    hitCount = Math.max(0, hitCount - baneHits); // Remove from save pool — they bypass saves
+    specialRulesApplied.push({ rule: 'Bane', value: baneHits, effect: `${baneHits} natural 6s bypass saves (auto-wound)` });
   }
 
   if (terrain) {
