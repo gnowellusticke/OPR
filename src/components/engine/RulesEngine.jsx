@@ -222,7 +222,22 @@ export class RulesEngine {
     }
 
     const hits = this.rollToHit(attacker, weapon, defender, gameState);
-    const saves = this.rollDefense(defender, hits.successes, weapon, terrain, hits.rolls);
+
+    // Blast: after resolving hits, multiply each hit by X (capped at number of models in target unit)
+    let finalHits = hits.successes;
+    let blastMultiplied = false;
+    const rulesStrBlast = this._rulesStr(weapon.special_rules);
+    const blastMultMatch = rulesStrBlast.match(/\bBlast\((\d+)\)/);
+    if (blastMultMatch && hits.blast) {
+      const blastX = parseInt(blastMultMatch[1]);
+      const modelCount = defender.model_count || Math.ceil((defender.current_models || 1) / Math.max(defender.tough_per_model || 1, 1));
+      const cappedMultiplier = Math.min(blastX, modelCount);
+      finalHits = hits.successes * cappedMultiplier;
+      blastMultiplied = true;
+      hits.specialRulesApplied.push({ rule: 'Blast', value: cappedMultiplier, effect: `each hit ×${cappedMultiplier} (capped at ${modelCount} models in target)` });
+    }
+
+    const saves = this.rollDefense(defender, finalHits, weapon, terrain, hits.rolls);
     const allRules = [...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])];
 
     const seenRules = new Set();
@@ -235,7 +250,7 @@ export class RulesEngine {
     return {
       weapon: weapon.name,
       hit_rolls: hits.rolls,
-      hits: hits.successes,
+      hits: finalHits,
       defense_rolls: saves.rolls,
       saves: saves.saves,
       wounds: saves.wounds,
