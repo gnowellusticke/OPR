@@ -641,12 +641,13 @@ export class RulesEngine {
 
     const specialRulesApplied = [];
     const ap = this._parseAP(weapon);
-    const deadlyMultiplier = this._parseDeadly(weapon);
+    const deadlyMultiplier = this._parseDeadly(weapon); // 1 = no Deadly; >1 = Deadly(X) on weapon only
     const rulesStr = this._rulesStr(weapon.special_rules);
     const hasBane = rulesStr.includes('Bane');
+    // toughPerModel caps Deadly damage per model — it is NOT a wound multiplier for normal hits
     const toughPerModel = defender.tough_per_model || 1;
 
-    let defense = defender.defense || 5;
+    const defense = defender.defense || 5;
     const modifiedDefense = Math.min(6, Math.max(2, defense - ap));
 
     if (ap > 0) specialRulesApplied.push({ rule: 'AP', value: ap, effect: `defense reduced by ${ap}` });
