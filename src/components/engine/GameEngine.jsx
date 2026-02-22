@@ -275,23 +275,28 @@ export class DMNEngine {
     // High bonus for getting to objectives quickly
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 12) {
       score += 0.4;
-      // Extra bonus if the objective is uncontested or enemy-controlled
       if (nearestObjective.controlled_by !== unit.owner) score += 0.3;
     }
     
     // Penalty if unit has shooting weapons (can't shoot after rush)
     const hasRanged = unit.weapons?.some(w => w.range > 6);
     if (hasRanged) score -= 0.3;
-    
-    // If we're behind on objectives and time is running out, rush!
-    if (strategicState.isLosing && strategicState.roundsRemaining <= 2) {
-      score += 0.5;
+
+    // Melee-primary units near (but not quite in) charge range should rush to close the gap
+    if (this.isMeleePrimary(unit)) {
+      const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
+      const nearest = this.findNearestEnemy(unit, enemies);
+      if (nearest) {
+        const dist = this.getDistance(unit, nearest);
+        const chargeRange = this.maxChargeDistance(unit);
+        if (dist > chargeRange && dist <= chargeRange + 14) {
+          score += 0.8; // rush to get into charge range next turn
+        }
+      }
     }
     
-    // If enemy controls more objectives, rush to contest
-    if (strategicState.enemyObjectives > strategicState.myObjectives) {
-      score += 0.3;
-    }
+    if (strategicState.isLosing && strategicState.roundsRemaining <= 2) score += 0.5;
+    if (strategicState.enemyObjectives > strategicState.myObjectives) score += 0.3;
     
     return score;
   }
