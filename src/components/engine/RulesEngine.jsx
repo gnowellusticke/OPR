@@ -279,19 +279,15 @@ export class RulesEngine {
       specialRulesApplied.push({ rule: 'Reliable', value: null, effect: 'attacks at Quality 2+' });
     }
 
-    // Blast(X) — X automatic hits, no quality roll.
-    // ONLY applies to ranged weapons (range > 2). Never in melee.
-    const isMeleeWeapon = (weapon.range ?? 1) <= 2;
-    if (!isMeleeWeapon) {
-      const blastMatch = rulesStr.match(/\bBlast\((\d+)\)/)
-        || (weapon.blast === true && weapon.blast_x ? [``, weapon.blast_x] : null)
-        || (weapon.name || '').match(/Blast[\s-]?(\d+)/i);
-      if (blastMatch) {
-        const blastCount = parseInt(blastMatch[1]);
-        const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
-        specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
-        return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
-      }
+    // Blast(X) — X automatic hits, no quality roll (works in both melee and ranged)
+    const blastMatch = rulesStr.match(/\bBlast\((\d+)\)/)
+      || (weapon.blast === true && weapon.blast_x ? [``, weapon.blast_x] : null)
+      || (weapon.name || '').match(/Blast[\s-]?(\d+)/i);
+    if (blastMatch) {
+      const blastCount = parseInt(blastMatch[1]);
+      const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
+      specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
+      return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
     }
 
     const attacks = weapon.attacks || 1;
