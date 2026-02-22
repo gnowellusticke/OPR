@@ -282,7 +282,8 @@ export class BattleLogger {
       range_bracket: null,
       roll_results: {
         roll: roll ?? null,
-        quality_target: qualityTarget ?? (unit.quality || 4),
+        quality_needed: qualityTarget ?? (unit.quality || 4),
+        quality_target: qualityTarget ?? (unit.quality || 4), // keep for backwards compat
         outcome,
         special_rules_applied: specialRulesApplied || []
       },
