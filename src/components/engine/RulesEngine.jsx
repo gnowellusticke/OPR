@@ -690,8 +690,12 @@ export class RulesEngine {
           saves++;
         } else {
           // Deadly(X): each unsaved hit = min(X, toughPerModel) wounds (no carry-over per model)
-          // No Deadly: each unsaved hit = exactly 1 wound
-          wounds += deadlyMultiplier > 1 ? Math.min(deadlyMultiplier, toughPerModel) : 1;
+          // No Deadly: each unsaved hit = EXACTLY 1 wound — toughPerModel is never a multiplier here
+          if (deadlyMultiplier > 1) {
+            wounds += Math.min(deadlyMultiplier, toughPerModel);
+          } else {
+            wounds += 1;
+          }
         }
       }
     }
