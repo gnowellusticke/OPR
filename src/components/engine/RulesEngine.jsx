@@ -442,7 +442,7 @@ export class RulesEngine {
     const wounds = deadlyWounds + normalWounds;
 
     console.log(`[DMG] weapon="${weapon.name}" hits=${hitCount} saves=${saves} deadlyWounds=${deadlyWounds} normalWounds=${normalWounds} → wounds=${wounds}`);
-    return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs: 0, deadlyMultiplier, specialRulesApplied };
+    return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs: 0, deadlyMultiplier, hasBane, specialRulesApplied };
   }
 
   applyRegeneration(unit) {
