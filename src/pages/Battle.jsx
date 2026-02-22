@@ -423,16 +423,17 @@ export default function Battle() {
 
     const activated = gs.units_activated || [];
 
-    // All living units not yet activated this round (exclude units still in reserve)
-    const remaining = gs.units.filter(u =>
+    // Bug 4 fix: Build activation queue with safety net — every living unit must be included
+    const allLiving = gs.units.filter(u =>
       u.current_models > 0 &&
       u.status !== 'destroyed' && u.status !== 'routed' &&
-      !activated.includes(u.id) &&
       !u.is_in_reserve
     );
+    // Force-add any living units that somehow slipped out of the activation queue
+    const missingFromQueue = allLiving.filter(u => !activated.includes(u.id));
+    const remaining = missingFromQueue; // these are the units still needing activation this round
 
     if (remaining.length === 0) {
-      // Validation: emit warning for any unit that had models but 0 activations (ghost check)
       await endRound(gs);
       return;
     }
