@@ -914,15 +914,16 @@ export default function Battle() {
   const logger = loggerRef.current;
   let shotFired = false;
 
-  // Unconditionally initialise dedup set — catches ALL code paths including R1 first activations.
-  const firedThisActivation = new Set();
-  const rangedWeapons = (unit.weapons || []).filter(w => {
-    if ((w.range ?? 2) <= 2) return false;
-    const key = w.name || w.id || JSON.stringify(w);
-    if (firedThisActivation.has(key)) return false;
-    firedThisActivation.add(key);
-    return true;
-  });
+  // Use activation-level set (initialised at top of activateUnit — Bug 2 fix).
+    const firedThisActivation = unit._firedThisActivation || new Set();
+    unit._firedThisActivation = firedThisActivation;
+    const rangedWeapons = (unit.weapons || []).filter(w => {
+      if ((w.range ?? 2) <= 2) return false;
+      const key = w.name || w.id || JSON.stringify(w);
+      if (firedThisActivation.has(key)) return false;
+      firedThisActivation.add(key);
+      return true;
+    });
 
   if (rangedWeapons.length === 0) return false;
 
