@@ -136,7 +136,7 @@ export class BattleLogger {
     return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
 
-  logShoot({ round, actingUnit, targetUnit, weapon, zone, rangeDist, rollResults, gameState, dmnReason }) {
+  logShoot({ round, actingUnit, targetUnit, weapon, zone, rangeDist, rollResults, gameState, dmnReason, stateBefore }) {
     const isFirstBlood = !this.firstBloodDealt && (rollResults.wounds_dealt > 0);
     if (isFirstBlood) this.firstBloodDealt = true;
 
@@ -150,10 +150,7 @@ export class BattleLogger {
     const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
     const isTurningPoint = unitDestroyed && (toughValue >= 6 || targetUnit.status === 'shaken');
 
-    // Build special_rules_applied audit trail
     const specialRules = rollResults.special_rules_applied || [];
-
-    // Bug 5 fix: Separate AI score from rules narrative
     const { internal_score, ...cleanRollResults } = rollResults;
 
     this.events.push({
@@ -166,6 +163,8 @@ export class BattleLogger {
       zone: zone || 'centre',
       range_bracket: this._rangeBracket(rangeDist),
       roll_results: { ...cleanRollResults, special_rules_applied: specialRules },
+      // Enhancement 1: unit_state_before snapshot (captured before dice are rolled)
+      unit_state_before: stateBefore || null,
       unit_state_after: {
         acting_unit: this._unitState(actingUnit),
         target_unit: this._unitState(targetUnit)
