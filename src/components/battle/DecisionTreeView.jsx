@@ -1,6 +1,62 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Brain, CheckCircle2 } from "lucide-react";
+import { Brain, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react";
+
+function FactorBar({ delta }) {
+  const isPositive = delta >= 0;
+  const width = Math.min(Math.abs(delta) * 40, 100);
+  return (
+    <div className="flex items-center gap-1 w-16">
+      <div className="flex-1 h-1.5 bg-slate-700 rounded overflow-hidden">
+        <div
+          className={`h-full rounded ${isPositive ? 'bg-green-500' : 'bg-red-500'}`}
+          style={{ width: `${width}%` }}
+        />
+      </div>
+      <span className={`text-xs font-mono w-10 text-right ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+        {isPositive ? '+' : ''}{delta.toFixed(2)}
+      </span>
+    </div>
+  );
+}
+
+function OptionRow({ opt }) {
+  const [expanded, setExpanded] = useState(opt.selected);
+  const hasFactors = opt.factors && opt.factors.length > 0;
+
+  return (
+    <div className={`rounded text-xs border ${opt.selected ? 'bg-green-900/30 border-green-700' : 'bg-slate-800/50 border-slate-700'}`}>
+      <button
+        className="w-full flex justify-between items-center p-2 text-left"
+        onClick={() => hasFactors && setExpanded(e => !e)}
+      >
+        <div className="flex items-center gap-2">
+          {opt.selected
+            ? <CheckCircle2 className="w-3 h-3 text-green-400 flex-shrink-0" />
+            : <div className="w-3 h-3" />}
+          <span className="text-white font-medium">{opt.action}</span>
+          {hasFactors && (expanded
+            ? <ChevronDown className="w-3 h-3 text-slate-400" />
+            : <ChevronRight className="w-3 h-3 text-slate-400" />)}
+        </div>
+        <span className={`font-mono ${opt.selected ? 'text-green-400' : 'text-slate-400'}`}>
+          {opt.score.toFixed(2)}
+        </span>
+      </button>
+
+      {expanded && hasFactors && (
+        <div className="border-t border-slate-700/60 px-2 pb-2 pt-1 space-y-1">
+          {opt.factors.map((f, i) => (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <span className="text-slate-400 truncate flex-1">{f.label}</span>
+              <FactorBar delta={f.delta} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function DecisionTreeView({ decision }) {
   if (!decision) {
@@ -30,13 +86,13 @@ export default function DecisionTreeView({ decision }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Current Unit */}
+        {/* Active Unit */}
         <div>
           <div className="text-slate-400 text-xs mb-1">Active Unit</div>
           <div className="text-white font-semibold">{decision.unit?.name}</div>
         </div>
 
-        {/* Decision Method */}
+        {/* Decision Framework */}
         <div>
           <div className="text-slate-400 text-xs mb-1">Decision Framework</div>
           <div className="flex gap-2 flex-wrap">
@@ -51,27 +107,14 @@ export default function DecisionTreeView({ decision }) {
           </div>
         </div>
 
-        {/* Options Evaluated */}
+        {/* Options with expandable factor breakdowns */}
         <div>
-          <div className="text-slate-400 text-xs mb-2">Options Evaluated</div>
+          <div className="text-slate-400 text-xs mb-2">
+            Options Evaluated <span className="text-slate-600">(click to expand)</span>
+          </div>
           <div className="space-y-1">
             {decision.options?.map((opt, idx) => (
-              <div 
-                key={idx} 
-                className={`flex justify-between items-center p-2 rounded text-xs ${
-                  opt.selected 
-                    ? 'bg-green-900/30 border border-green-700' 
-                    : 'bg-slate-800/50 border border-slate-700'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {opt.selected && <CheckCircle2 className="w-3 h-3 text-green-400" />}
-                  <span className="text-white">{opt.action}</span>
-                </div>
-                <span className={`font-mono ${opt.selected ? 'text-green-400' : 'text-slate-400'}`}>
-                  {opt.score.toFixed(2)}
-                </span>
-              </div>
+              <OptionRow key={idx} opt={opt} />
             ))}
           </div>
         </div>
