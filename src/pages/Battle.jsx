@@ -1051,7 +1051,8 @@ export default function Battle() {
           special_rules_applied: deduplicatedRules
         },
         gameState: gs,
-        dmnReason: `${dmnReason} (score ${topScore})`
+        dmnReason: `${dmnReason} (score ${topScore})`,
+        stateBefore: shootStateBefore
       });
 
       // Morale on wounded survivor
