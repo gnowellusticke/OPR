@@ -1093,10 +1093,10 @@ export default function Battle() {
   }
 
   defender.current_models = Math.max(0, defender.current_models - attackerWoundsToApply);
-  attacker.current_models = Math.max(0, attacker.current_models - defenderWoundsToApply);
-  // Bug 2 fix: wounds=0 always means destroyed — no other status can override this
-  if (defender.current_models <= 0) defender.status = 'destroyed';
-  if (attacker.current_models <= 0) attacker.status = 'destroyed';
+    attacker.current_models = Math.max(0, attacker.current_models - defenderWoundsToApply);
+    // Bug 1 fix: unconditionally set destroyed when wounds reach 0 — overrides shaken or any other status
+    if (defender.current_models <= 0) defender.status = 'destroyed';
+    if (attacker.current_models <= 0) attacker.status = 'destroyed';
 
   evs.push({ round, type: 'combat', message: `⚔ ${attacker.name} vs ${defender.name} — dealt ${result.attacker_wounds}, took ${result.defender_wounds}`, timestamp: new Date().toLocaleTimeString() });
 
