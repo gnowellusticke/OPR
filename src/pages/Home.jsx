@@ -19,12 +19,20 @@ export default function Home() {
   const [errorA, setErrorA] = useState('');
   const [errorB, setErrorB] = useState('');
   const [advanceRulesOpen, setAdvanceRulesOpen] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState('city_fight');
   const [advanceRules, setAdvanceRules] = useState({
     cumulativeScoring: false,
     scoutingDeployment: false,
     overrun: false,
     heroicActions: false,
   });
+
+  const MAP_THEMES = [
+    { key: 'city_fight', label: '🏙 City Fight', desc: 'Dense urban terrain — ruins, solid buildings, barricades, and open walls create tight lanes of fire.' },
+    { key: 'forest', label: '🌲 Forest', desc: 'Heavy woodland — forests and hills dominate with scattered ruins and ponds.' },
+    { key: 'wasteland', label: '🌋 Wasteland', desc: 'Open ground with craters, vehicle wreckage, and scattered barricades.' },
+    { key: 'mixed', label: '⚔️ Mixed', desc: 'Balanced terrain mix — good for competitive play.' },
+  ];
 
   const toggleAdvanceRule = (key) => setAdvanceRules(prev => ({ ...prev, [key]: !prev[key] }));
 
