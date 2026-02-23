@@ -599,14 +599,18 @@ export default function Battle() {
       remaining.push(...forceAddedUnits);
     }
 
-    // Alternate activations: pick from active_agent; if none left, switch
+    // OPR strict alternation: A→B→A→B→...
+    // active_agent is who should activate next. Pick from that side;
+    // only fall back to the other side if the current side is fully exhausted.
     const agentRemaining = remaining.filter(u => u.owner === gs.active_agent);
     const otherRemaining = remaining.filter(u => u.owner !== gs.active_agent);
 
     let unit;
     if (agentRemaining.length > 0) {
+      // Strictly pick from the active agent's pool — enforces A→B→A→B
       unit = agentRemaining[0];
     } else if (otherRemaining.length > 0) {
+      // Current side exhausted — trailing run for the longer side (correct OPR behavior)
       unit = otherRemaining[0];
     } else {
       await endRound(gs);
