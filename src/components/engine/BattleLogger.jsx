@@ -278,10 +278,17 @@ export class BattleLogger {
     if (!this.roundDestroyed.includes(unit.name)) this.roundDestroyed.push(unit.name);
   }
 
-  logMorale({ round, unit, outcome, roll, qualityTarget, dmnReason, specialRulesApplied }) {
+  logMorale({ round, unit, outcome, roll, qualityTarget, dmnReason, specialRulesApplied, woundsTaken, stateBefore }) {
     if (outcome === 'shaken' && !this.roundShaken.includes(unit.name)) {
       this.roundShaken.push(unit.name);
     }
+    const quality = qualityTarget ?? (unit.quality || 4);
+    const outcomeLabel = outcome === 'passed' ? 'Holds' : outcome === 'shaken' ? 'Shaken' : outcome === 'routed' ? 'Routed' : outcome;
+    // Enhancement 3: rich dmn_reason for morale events
+    const richReason = dmnReason && dmnReason !== 'morale check triggered'
+      ? dmnReason
+      : `Morale check: ${unit.name}${woundsTaken != null ? ` took ${woundsTaken} wound(s)` : ''} (${unit.current_models}/${unit.total_models} remaining), quality ${quality}+ required, rolled ${roll ?? '?'} → ${outcomeLabel}`;
+
     this.events.push({
       round,
       timestamp: this._timestamp(),
@@ -293,13 +300,14 @@ export class BattleLogger {
       range_bracket: null,
       roll_results: {
         roll: roll ?? null,
-        quality_needed: qualityTarget ?? (unit.quality || 4),
-        quality_target: qualityTarget ?? (unit.quality || 4), // keep for backwards compat
+        quality_needed: quality,
+        quality_target: quality,
         outcome,
         special_rules_applied: specialRulesApplied || []
       },
+      unit_state_before: stateBefore || null,
       unit_state_after: { acting_unit: this._unitState(unit) },
-      dmn_reason: dmnReason || 'morale check triggered',
+      dmn_reason: richReason,
       flags: {
         turning_point: outcome === 'routed',
         first_blood: false,
