@@ -162,7 +162,7 @@ export default function Battle() {
 
   // ─── TERRAIN / OBJECTIVES ────────────────────────────────────────────────────
 
-  const generateTerrain = () => {
+  const generateTerrain = (theme = 'mixed') => {
     // Core terrain type definitions
     const TERRAIN_TYPES = {
       barricade:        { cover: true,  difficult: true,  dangerous: false, blocking: false, impassable: false, movePenalty: 3,  label: 'Barricade' },
