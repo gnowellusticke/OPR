@@ -246,85 +246,72 @@ export class DMNEngine {
   }
 
   scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState, enemyArchetype, formationScore, attritionCritical) {
+    const details = [];
     let score = 0.5;
+    details.push({ label: 'Base score', value: 0.5 });
 
     if (this.isMeleePrimary(unit) && nearestEnemy) {
       const dist = this.getDistance(unit, nearestEnemy);
       const chargeRange = this.maxChargeDistance(unit);
-      if (dist <= chargeRange) score -= 1.5;
-      else if (dist <= chargeRange + 8) score -= 0.6;
+      if (dist <= chargeRange) { score -= 1.5; details.push({ label: 'Melee unit: charge is better', value: -1.5 }); }
+      else if (dist <= chargeRange + 8) { score -= 0.6; details.push({ label: 'Melee unit: rush to charge range', value: -0.6 }); }
     }
 
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 3) {
-      score += 0.3;
-      if (strategicState.myObjectives < strategicState.enemyObjectives) score += 0.4;
-      if (nearestObjective.controlled_by !== unit.owner) score += 0.2;
+      score += 0.3; details.push({ label: 'Moving toward objective', value: 0.3 });
+      if (strategicState.myObjectives < strategicState.enemyObjectives) { score += 0.4; details.push({ label: 'Behind on objectives', value: 0.4 }); }
+      if (nearestObjective.controlled_by !== unit.owner) { score += 0.2; details.push({ label: 'Objective not held by us', value: 0.2 }); }
     }
 
     if (nearestEnemy) {
       const dist = this.getDistance(unit, nearestEnemy);
-      if (dist > 12 && dist < 30) score += 0.2;
+      if (dist > 12 && dist < 30) { score += 0.2; details.push({ label: 'Enemy at optimal shooting range', value: 0.2 }); }
     }
 
-    if (strategicState.isLosing && strategicState.roundsRemaining < 3) score += 0.3;
-
-    // ── 5. COUNTER-STRATEGY: vs elite ranged, close distance fast ────────
-    if (enemyArchetype === 'elite_ranged' && !this.isMeleePrimary(unit)) score += 0.3;
-    // vs vehicle heavy: advance to AP weapon range
+    if (strategicState.isLosing && strategicState.roundsRemaining < 3) { score += 0.3; details.push({ label: 'Losing late game: push forward', value: 0.3 }); }
+    if (enemyArchetype === 'elite_ranged' && !this.isMeleePrimary(unit)) { score += 0.3; details.push({ label: 'Counter elite ranged: close in', value: 0.3 }); }
     if (enemyArchetype === 'vehicle_heavy') {
       const hasAP = unit.weapons?.some(w => (w.ap || 0) >= 2 || w.special_rules?.includes('AP'));
-      if (hasAP) score += 0.25;
+      if (hasAP) { score += 0.25; details.push({ label: 'AP weapons vs vehicles: advance to range', value: 0.25 }); }
     }
+    if (attritionCritical && !this.isMeleePrimary(unit)) { score -= 0.3; details.push({ label: 'Critically wounded: avoid advancing', value: -0.3 }); }
+    if (formationScore * 0.2 !== 0) { score += formationScore * 0.2; details.push({ label: 'Formation score', value: +(formationScore * 0.2).toFixed(2) }); }
 
-    // ── 3. ATTRITION: critically wounded ranged units keep distance ───────
-    if (attritionCritical && !this.isMeleePrimary(unit)) score -= 0.3;
-
-    // ── 2. FORMATION bonus ────────────────────────────────────────────────
-    score += formationScore * 0.2;
-
-    return score;
+    return { score, details };
   }
 
   scoreRushAction(unit, gameState, nearestObjective, strategicState, enemies, attritionCritical) {
+    const details = [];
     let score = 0.4;
+    details.push({ label: 'Base score', value: 0.4 });
 
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 12) {
-      score += 0.4;
-      if (nearestObjective.controlled_by !== unit.owner) score += 0.3;
+      score += 0.4; details.push({ label: 'Far from objective: rush', value: 0.4 });
+      if (nearestObjective.controlled_by !== unit.owner) { score += 0.3; details.push({ label: 'Objective not held by us', value: 0.3 }); }
     }
 
     const hasRanged = unit.weapons?.some(w => w.range > 6);
-    if (hasRanged) score -= 0.3;
+    if (hasRanged) { score -= 0.3; details.push({ label: 'Ranged unit: can\'t shoot after rush', value: -0.3 }); }
 
     if (this.isMeleePrimary(unit)) {
       const nearest = this.findNearestEnemy(unit, enemies);
       if (nearest) {
         const dist = this.getDistance(unit, nearest);
         const chargeRange = this.maxChargeDistance(unit);
-        if (dist > chargeRange && dist <= chargeRange + 14) score += 0.8;
+        if (dist > chargeRange && dist <= chargeRange + 14) { score += 0.8; details.push({ label: 'Rush into charge range next turn', value: 0.8 }); }
       }
     }
 
-    if (strategicState.isLosing && strategicState.roundsRemaining <= 2) score += 0.5;
-    if (strategicState.enemyObjectives > strategicState.myObjectives) score += 0.3;
+    if (strategicState.isLosing && strategicState.roundsRemaining <= 2) { score += 0.5; details.push({ label: 'Losing: desperate rush', value: 0.5 }); }
+    if (strategicState.enemyObjectives > strategicState.myObjectives) { score += 0.3; details.push({ label: 'Behind on objectives: contest', value: 0.3 }); }
+    if (strategicState.round <= 2 && nearestObjective && this.getDistance(unit, nearestObjective) > 6) { score += 0.3; details.push({ label: 'Early game: rush to objectives', value: 0.3 }); }
 
-    // ── 4. ROUND-PHASE: early game rush to contest objectives ─────────────
-    if (strategicState.round <= 2 && nearestObjective) {
-      const dist = this.getDistance(unit, nearestObjective);
-      if (dist > 6) score += 0.3;
-    }
-
-    // ── 3. ATTRITION: critically wounded units don't rush into danger ─────
     if (attritionCritical) {
       const nearestEnemy = this.findNearestEnemy(unit, enemies);
-      if (nearestEnemy) {
-        // Only penalise rushing toward enemies when wounded
-        const rushingTowardDanger = this.getDistance(unit, nearestEnemy) < 18;
-        if (rushingTowardDanger) score -= 0.6;
-      }
+      if (nearestEnemy && this.getDistance(unit, nearestEnemy) < 18) { score -= 0.6; details.push({ label: 'Critically wounded: avoid rushing toward enemy', value: -0.6 }); }
     }
 
-    return score;
+    return { score, details };
   }
 
   scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState, attritionCritical) {
