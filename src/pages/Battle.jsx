@@ -579,6 +579,14 @@ export default function Battle() {
       return;
     }
 
+    // Bug 5 fix: Round-start safety net — force-add any living unit not yet in the queue
+    // This catches ghost units that were somehow excluded from the activated set.
+    const forceAddedUnits = allLiving.filter(u => !activatedSet.has(u.id) && !remaining.includes(u));
+    if (forceAddedUnits.length > 0) {
+      console.warn(`[SCHEDULER SAFETY NET] Force-adding ${forceAddedUnits.length} ghost unit(s):`, forceAddedUnits.map(u => u.name));
+      remaining.push(...forceAddedUnits);
+    }
+
     // Alternate activations: pick from active_agent; if none left, switch
     const agentRemaining = remaining.filter(u => u.owner === gs.active_agent);
     const otherRemaining = remaining.filter(u => u.owner !== gs.active_agent);
