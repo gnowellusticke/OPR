@@ -90,7 +90,7 @@ export class DMNEngine {
     const strategicState = this.analyzeStrategicPosition(gameState, owner);
 
     if (unit.embarked_in) {
-      options.push({ action: 'Disembark', score: this.scoreDisembarkAction(unit, gameState, owner), selected: true });
+      options.push({ action: 'Disembark', score: this.scoreDisembarkAction(unit, gameState, owner), selected: true, factors: [{ label: 'Disembark to act', delta: 1.0 }] });
       return options;
     }
 
@@ -99,19 +99,22 @@ export class DMNEngine {
     options.push({
       action: 'Hold',
       score: this.scoreHoldAction(unit, gameState, nearestEnemy, strategicState),
-      selected: false
+      selected: false,
+      factors: this.factorsHold(unit, gameState, nearestEnemy, strategicState)
     });
 
     options.push({
       action: 'Advance',
       score: this.scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState),
-      selected: false
+      selected: false,
+      factors: this.factorsAdvance(unit, gameState, nearestEnemy, nearestObjective, strategicState)
     });
 
     options.push({
       action: 'Rush',
       score: this.scoreRushAction(unit, gameState, nearestObjective, strategicState),
-      selected: false
+      selected: false,
+      factors: this.factorsRush(unit, gameState, nearestObjective, strategicState)
     });
 
     // Charge only offered when enemy is within maximum charge distance and unit hasn't charged this round
@@ -124,7 +127,8 @@ export class DMNEngine {
       options.push({
         action: 'Charge',
         score: this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState),
-        selected: false
+        selected: false,
+        factors: this.factorsCharge(unit, nearestEnemy, gameState, owner, strategicState)
       });
     }
 
@@ -134,8 +138,12 @@ export class DMNEngine {
       options.forEach(opt => {
         const successCount = this.learningData.actionSuccess[opt.action] || 0;
         const successRate = totalActions > 0 ? successCount / totalActions : 0;
-        // Boost successful actions by up to 20 points based on historical success
-        opt.score += successRate * 20;
+        const delta = successRate * 20;
+        if (delta > 0) {
+          opt.factors = opt.factors || [];
+          opt.factors.push({ label: `Historical success rate (${(successRate * 100).toFixed(0)}%)`, delta: parseFloat(delta.toFixed(2)) });
+        }
+        opt.score += delta;
       });
     }
 
@@ -144,6 +152,97 @@ export class DMNEngine {
     options[0].selected = true;
 
     return options;
+  }
+
+  // ─── SCORE FACTOR BREAKDOWNS ─────────────────────────────────────────────
+
+  factorsHold(unit, gameState, nearestEnemy, strategicState) {
+    const factors = [{ label: 'Base score', delta: 0.3 }];
+    if ((unit.rounds_without_offense || 0) >= 2) factors.push({ label: 'Inactive 2+ rounds', delta: -0.4 });
+    const hasRanged = unit.weapons?.some(w => w.range > 12);
+    if (hasRanged) factors.push({ label: 'Has long-range weapons', delta: 0.3 });
+    if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= 24) factors.push({ label: 'Enemy in shooting range', delta: 0.2 });
+    if (unit.status === 'shaken') factors.push({ label: 'Shaken — must recover', delta: 0.7 });
+    if (strategicState.isWinning && hasRanged) factors.push({ label: 'Winning + ranged = defensive hold', delta: 0.2 });
+    const onObjective = gameState.objectives.some(obj => this.getDistance(unit, obj) <= 3);
+    if (onObjective) factors.push({ label: 'On objective', delta: 0.3 });
+    return factors;
+  }
+
+  factorsAdvance(unit, gameState, nearestEnemy, nearestObjective, strategicState) {
+    const factors = [{ label: 'Base score', delta: 0.5 }];
+    if (this.isMeleePrimary(unit) && nearestEnemy) {
+      const dist = this.getDistance(unit, nearestEnemy);
+      const cr = this.maxChargeDistance(unit);
+      if (dist <= cr) factors.push({ label: 'Melee unit in charge range — prefer Charge', delta: -1.5 });
+      else if (dist <= cr + 8) factors.push({ label: 'Melee unit close to charge range — prefer Rush', delta: -0.6 });
+    }
+    if (nearestObjective && this.getDistance(unit, nearestObjective) > 3) {
+      factors.push({ label: 'Moving toward objective', delta: 0.3 });
+      if (strategicState.myObjectives < strategicState.enemyObjectives) factors.push({ label: 'Losing on objectives', delta: 0.4 });
+      if (nearestObjective.controlled_by !== unit.owner) factors.push({ label: 'Objective uncontrolled/enemy', delta: 0.2 });
+    }
+    if (nearestEnemy) {
+      const dist = this.getDistance(unit, nearestEnemy);
+      if (dist > 12 && dist < 30) factors.push({ label: 'Enemy at medium range', delta: 0.2 });
+    }
+    if (strategicState.isLosing && strategicState.roundsRemaining < 3) factors.push({ label: 'Losing + time pressure', delta: 0.3 });
+    return factors;
+  }
+
+  factorsRush(unit, gameState, nearestObjective, strategicState) {
+    const factors = [{ label: 'Base score', delta: 0.4 }];
+    if (nearestObjective && this.getDistance(unit, nearestObjective) > 12) {
+      factors.push({ label: 'Objective far away — rush to reach it', delta: 0.4 });
+      if (nearestObjective.controlled_by !== unit.owner) factors.push({ label: 'Objective uncontrolled/enemy', delta: 0.3 });
+    }
+    const hasRanged = unit.weapons?.some(w => w.range > 6);
+    if (hasRanged) factors.push({ label: "Can't shoot after Rush", delta: -0.3 });
+    if (this.isMeleePrimary(unit)) {
+      const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
+      const nearest = this.findNearestEnemy(unit, enemies);
+      if (nearest) {
+        const dist = this.getDistance(unit, nearest);
+        const cr = this.maxChargeDistance(unit);
+        if (dist > cr && dist <= cr + 14) factors.push({ label: 'Rush to get into charge range', delta: 0.8 });
+      }
+    }
+    if (strategicState.isLosing && strategicState.roundsRemaining <= 2) factors.push({ label: 'Losing + last turns', delta: 0.5 });
+    if (strategicState.enemyObjectives > strategicState.myObjectives) factors.push({ label: 'Enemy ahead on objectives', delta: 0.3 });
+    return factors;
+  }
+
+  factorsCharge(unit, nearestEnemy, gameState, owner, strategicState) {
+    const meleeWeapons = (unit.weapons || []).filter(w => w.range <= 2);
+    const hasMelee = meleeWeapons.length > 0;
+    const meleePrimary = this.isMeleePrimary(unit);
+    const factors = [];
+    if (!hasMelee) { factors.push({ label: 'No melee weapons', delta: 0.2 }); return factors; }
+    factors.push({ label: 'Base charge score', delta: 1.2 });
+    if (meleePrimary) factors.push({ label: 'Melee-primary unit', delta: 1.5 });
+    if (unit.special_rules?.includes('Furious')) factors.push({ label: 'Furious rule', delta: 0.6 });
+    if (unit.special_rules?.includes('Rage')) factors.push({ label: 'Rage rule', delta: 0.5 });
+    if (unit.special_rules?.includes('Hatred')) factors.push({ label: 'Hatred rule', delta: 0.4 });
+    if (unit.special_rules?.includes('Fear')) factors.push({ label: 'Fear rule', delta: 0.3 });
+    if (hasMelee) factors.push({ label: 'Has melee weapons', delta: 0.5 });
+    if (nearestEnemy) {
+      const cr = this.maxChargeDistance(unit);
+      const dist = this.getDistance(unit, nearestEnemy);
+      const distBonus = parseFloat(((( cr - dist) / cr) * 1.0).toFixed(2));
+      factors.push({ label: `Charge distance bonus (${dist.toFixed(1)}" away)`, delta: distBonus });
+      const healthRatio = nearestEnemy.current_models / (nearestEnemy.total_models || 1);
+      if (healthRatio < 0.5) factors.push({ label: 'Target below half health', delta: 0.4 });
+      if (healthRatio < 0.25) factors.push({ label: 'Target nearly destroyed', delta: 0.4 });
+      const targetOnObjective = gameState.objectives.some(obj => this.getDistance(nearestEnemy, obj) <= 3 && obj.controlled_by !== owner);
+      if (targetOnObjective) factors.push({ label: 'Target on enemy objective', delta: 0.5 });
+    }
+    if ((unit.rounds_without_offense || 0) >= 1) factors.push({ label: 'Inactive last round', delta: 0.4 });
+    if ((unit.rounds_without_offense || 0) >= 2) factors.push({ label: 'Inactive 2+ rounds', delta: 0.5 });
+    if (nearestEnemy) {
+      const sr = unit.current_models / (nearestEnemy.current_models || 1);
+      if (sr < 0.3) factors.push({ label: 'Badly outnumbered', delta: -0.3 });
+    }
+    return factors;
   }
   
   analyzeStrategicPosition(gameState, owner) {
