@@ -392,8 +392,10 @@ export class DMNEngine {
 
     if (!hasMelee) return { score: 0.2, details: [{ label: 'No melee weapons', value: 0.2 }] };
 
-    let score = 1.2;
-    details.push({ label: 'Base melee score', value: 1.2 });
+      const pCharge = this.personality?.action_weights?.Charge;
+      const chargeBase = pCharge?.base_score ?? 1.2;
+      let score = chargeBase;
+      details.push({ label: 'Base melee score', value: chargeBase });
     const chargeRange = this.maxChargeDistance(unit);
     const dist = nearestEnemy ? this.getDistance(unit, nearestEnemy) : 99;
     if (dist > chargeRange) return { score: -99, details: [{ label: 'Out of charge range', value: -99 }] };
