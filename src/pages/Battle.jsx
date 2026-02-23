@@ -1067,7 +1067,7 @@ export default function Battle() {
 
   // ─── MELEE ────────────────────────────────────────────────────────────────────
 
-  const resolveMelee = async (attacker, defender, gs, evs, dmnReason) => {
+  const resolveMelee = async (attacker, defender, gs, evs, dmnReason, killerName) => {
   const round = gs.current_round;
   const rules = rulesRef.current;
   const logger = loggerRef.current;
