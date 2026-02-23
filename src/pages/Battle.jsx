@@ -959,10 +959,10 @@ export default function Battle() {
       // Ensure the weapon object always has special_rules as a string for RulesEngine
       const normWeapon = { ...weapon, special_rules: weaponSpecialStr };
 
-      // Model count for attack scaling = floor(current wounds / wounds-per-model).
-      // tough_per_model is set correctly at deploy time (1 for standard, X for multi-Tough, X+1 for heroes).
+      // Bug 3 fix: Attack count = ceil(current wounds / wounds-per-model) × weapon attacks
+      // Uses ceil so a partially wounded model still contributes attacks.
       const effectiveTpm = Math.max(unit.tough_per_model || 1, 1);
-      const currentModelCount = Math.max(1, Math.floor(unit.current_models / effectiveTpm));
+      const currentModelCount = Math.max(1, Math.ceil(unit.current_models / effectiveTpm));
       const baseAttacks = weapon.attacks || 1;
       const totalAttacks = baseAttacks * currentModelCount;
 
