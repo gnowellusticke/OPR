@@ -132,9 +132,16 @@ export class ArmyTextParser {
         weapons: weapons.length > 0 ? weapons : undefined
       };
 
-      // If there's a joined unit, merge the stats
+      // If there's a joined unit, merge the stats and preserve joined_squad for wound calculation
       if (joinedUnit && joinedUnit.units && joinedUnit.units.length > 0) {
         const joined = joinedUnit.units[0];
+        // Store the raw joined squad data so the engine can compute the correct combined wound pool
+        unit.joined_squad = {
+          models: joined.models,
+          special_rules: joined.special_rules || '',
+          weapons: joined.weapons || []
+        };
+        // Merge model count and points
         unit.models += joined.models;
         unit.points += joined.points;
         if (joined.weapons) {
