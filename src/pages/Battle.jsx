@@ -615,6 +615,9 @@ export default function Battle() {
     const rules = rulesRef.current;
     const logger = loggerRef.current;
 
+    // Bug 2 fix: initialise firedThisActivation at very top of activation — before ANY action resolution
+    liveUnit._firedThisActivation = new Set();
+
     // Bug 6 fix: Shaken recovery roll fires at START of unit's own activation, FIRST event
     let canAct = true;
     if (liveUnit.status === 'shaken') {
