@@ -583,7 +583,8 @@ export default function Battle() {
       const finalY = yMin + Math.random() * (yMax - yMin);
 
       unit.x = finalX;
-      unit.y = finalY;
+      unit.y = Math.max(yMin, Math.min(yMax, finalY));
+      unit.is_deployed = true;
       myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
       myUsedZones.add(finalZone);
       (isAgentA ? summaryDeployed.agent_a : summaryDeployed.agent_b).push(unit.name);

@@ -28,7 +28,10 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
   const BATTLEFIELD_HEIGHT = 48;
   const CELL_SIZE = 60;
 
-  const units = (gameState?.units || []).filter(u => u.current_models > 0);
+  const isDeploying = gameState?.deployment_in_progress;
+  const units = (gameState?.units || []).filter(u =>
+    u.current_models > 0 && (!isDeploying || u.is_deployed)
+  );
   const terrain = gameState?.terrain || [];
   const objectives = gameState?.objectives || [];
 
