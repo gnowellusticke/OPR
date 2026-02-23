@@ -215,11 +215,38 @@ export class DMNEngine {
       this.getDistance(unit, nearestEnemy) <= chargeRange &&
       !isTransport && !unit.just_charged && !isFireSupport;
 
+    const p = this.personality;
+    const riskBias = this._riskBias();
+
     const options = [
       { action: 'Hold',    ...this.scoreHoldAction(unit, gameState, nearestEnemy, strategicState, enemyArchetype, formationScore, attritionCritical),    selected: false },
       { action: 'Advance', ...this.scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState, enemyArchetype, formationScore, attritionCritical), selected: false },
       { action: 'Rush',    ...this.scoreRushAction(unit, gameState, nearestObjective, strategicState, enemies, attritionCritical),    selected: false },
     ];
+
+    // Apply personality base score overrides
+    if (p) {
+      options.forEach(opt => {
+        const w = p.action_weights?.[opt.action];
+        if (!w) return;
+        const defaultBases = { Hold: 0.3, Advance: 0.5, Rush: 0.4, Charge: 1.2 };
+        const delta = (w.base_score ?? defaultBases[opt.action]) - defaultBases[opt.action];
+        if (delta !== 0) {
+          opt.score += delta;
+          opt.details.push({ label: `${p.name} personality (${opt.action})`, value: +delta.toFixed(2) });
+        }
+      });
+      // Apply risk bias as a small global nudge to aggressive actions
+      if (riskBias !== 0) {
+        const riskyActions = ['Rush', 'Charge'];
+        options.forEach(opt => {
+          if (riskyActions.includes(opt.action)) {
+            opt.score += riskBias;
+            opt.details.push({ label: `${p.name} risk bias`, value: +riskBias.toFixed(2) });
+          }
+        });
+      }
+    }
 
     if (canCharge) {
       options.push({ action: 'Charge', ...this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState, attritionCritical), selected: false });
