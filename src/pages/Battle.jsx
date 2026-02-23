@@ -952,6 +952,12 @@ export default function Battle() {
       const liveTarget = gs.units.find(u => u.id === target.id);
       if (!liveTarget || liveTarget.current_models <= 0 || liveTarget.status === 'destroyed') continue;
 
+      // Enhancement 1: snapshot state BEFORE shooting rolls
+      const shootStateBefore = {
+        acting_unit: { wounds_remaining: unit.current_models, max_wounds: unit.total_models, status: unit.status },
+        target_unit: { wounds_remaining: liveTarget.current_models, max_wounds: liveTarget.total_models, status: liveTarget.status }
+      };
+
       const dist = rules.calculateDistance(unit, target);
       if (dist > weapon.range) continue;
 
