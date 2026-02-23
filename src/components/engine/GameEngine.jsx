@@ -27,8 +27,51 @@ export class BPMNEngine {
 
 // DMN Decision Tables - AI Logic
 export class DMNEngine {
-  constructor() {
+  constructor(personality = null) {
     this.learningData = null;
+    this.personality = personality || null; // loaded from PersonalityRegistry
+    this._tunnelTarget = null; // for tunnel-vision: locked target id
+  }
+
+  setPersonality(personality) {
+    this.personality = personality;
+    this._tunnelTarget = null;
+  }
+
+  // ── Personality helpers ────────────────────────────────────────────────────
+
+  // Returns true if the personality is in "attrition critical" state for a unit.
+  // Overrides the default threshold using personality.attrition_threshold.
+  isAttritionCritical(unit) {
+    const threshold = this.personality?.attrition_threshold ?? 0.4;
+    const healthRatio = unit.current_models / Math.max(unit.total_models, 1);
+    return healthRatio < threshold;
+  }
+
+  // Apply a random risk bias (positive = riskier choices get a nudge).
+  _riskBias() {
+    const bias = this.personality?.risk_bias ?? 0;
+    // Small random fluctuation around the bias value to simulate human variance
+    return bias + (Math.random() - 0.5) * 0.2;
+  }
+
+  // Tunnel vision: occasionally lock onto a single target for the whole activation.
+  // Returns the locked target if still alive, otherwise releases the lock.
+  _resolveTunnelTarget(unit, enemies) {
+    const chance = this.personality?.tunnel_vision_chance ?? 0;
+    if (this._tunnelTarget) {
+      const stillAlive = enemies.find(e => e.id === this._tunnelTarget && e.current_models > 0);
+      if (stillAlive) return stillAlive;
+      this._tunnelTarget = null; // target is dead — release lock
+    }
+    if (chance > 0 && Math.random() < chance && enemies.length > 0) {
+      // Pick the highest-threat enemy and lock onto them
+      const scored = enemies.map(e => ({ e, s: this.scoreTarget(unit, e, enemies) }));
+      scored.sort((a, b) => b.s - a.s);
+      this._tunnelTarget = scored[0].e.id;
+      return scored[0].e;
+    }
+    return null;
   }
 
   async loadLearningData(armyId) {
