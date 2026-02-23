@@ -906,7 +906,8 @@ export class RulesEngine {
 
   getCoverBonus(unit, terrain) {
     const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
-    return (unitTerrain && unitTerrain.type === 'cover') ? 1 : 0;
+    // New terrain system uses a boolean `cover` property; legacy types used type === 'cover'
+    return (unitTerrain && (unitTerrain.cover || unitTerrain.type === 'cover')) ? 1 : 0;
   }
 
   getZone(x, y) {
