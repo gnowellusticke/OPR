@@ -88,6 +88,8 @@ export default function Home() {
           active_agent: 'agent_a',
           advance_rules: advanceRules,
           map_theme: selectedTheme,
+          personality_a: personalityA,
+          personality_b: personalityB,
         },
         event_log: []
       });
