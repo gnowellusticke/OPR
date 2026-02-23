@@ -162,49 +162,75 @@ export default function Battle() {
   // ─── TERRAIN / OBJECTIVES ────────────────────────────────────────────────────
 
   const generateTerrain = () => {
-    // Terrain types from official PDF definitions
-    const TERRAIN_TYPES = [
-      { type: 'barricade',        cover: true,  difficult: true,  dangerous: false, blocking: false, impassable: false, movePenalty: 3,  label: 'Barricade' },
-      { type: 'crater',           cover: true,  difficult: true,  dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Crater' },
-      { type: 'forest',           cover: true,  difficult: true,  dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Forest', blocksThroughLOS: true },
-      { type: 'hill',             cover: true,  difficult: true,  dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Hill', elevation: true },
-      { type: 'minefield',        cover: false, difficult: false, dangerous: true,  blocking: false, impassable: false, movePenalty: 0,  label: 'Minefield' },
-      { type: 'pond',             cover: false, difficult: true,  dangerous: true,  blocking: false, impassable: false, movePenalty: 0,  label: 'Pond' },
-      { type: 'ruins',            cover: true,  difficult: false, dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Ruins' },
-      { type: 'rooftop',          cover: true,  difficult: false, dangerous: false, blocking: false, impassable: true,  movePenalty: 0,  label: 'Rooftop', flyingOnly: true },
-      { type: 'tank_traps',       cover: false, difficult: true,  dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Tank Traps', vehicleOnly: true },
-      { type: 'vehicle_wreckage', cover: false, difficult: false, dangerous: true,  blocking: false, impassable: false, movePenalty: 0,  label: 'Wreckage', rushChargeDangerous: true },
-      { type: 'wall_open',        cover: true,  difficult: false, dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Wall (Open)' },
-      { type: 'wall_solid',       cover: false, difficult: false, dangerous: false, blocking: true,  impassable: true,  movePenalty: 0,  label: 'Wall (Solid)' },
-    ];
+    // Core terrain type definitions
+    const TERRAIN_TYPES = {
+      barricade:        { cover: true,  difficult: true,  dangerous: false, blocking: false, impassable: false, movePenalty: 3,  label: 'Barricade' },
+      crater:           { cover: true,  difficult: true,  dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Crater' },
+      forest:           { cover: true,  difficult: true,  dangerous: false, blocking: true,  impassable: false, movePenalty: 0,  label: 'Forest', blocksThroughLOS: true },
+      hill:             { cover: true,  difficult: true,  dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Hill', elevation: true },
+      pond:             { cover: false, difficult: true,  dangerous: true,  blocking: false, impassable: false, movePenalty: 0,  label: 'Pond' },
+      ruins:            { cover: true,  difficult: false, dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Ruins' },
+      solid_building:   { cover: false, difficult: false, dangerous: false, blocking: true,  impassable: true,  movePenalty: 0,  label: 'Building' },
+      vehicle_wreckage: { cover: false, difficult: false, dangerous: true,  blocking: false, impassable: false, movePenalty: 0,  label: 'Wreckage', rushChargeDangerous: true },
+      wall_open:        { cover: true,  difficult: false, dangerous: false, blocking: false, impassable: false, movePenalty: 0,  label: 'Wall (Open)' },
+      wall_solid:       { cover: false, difficult: false, dangerous: false, blocking: true,  impassable: true,  movePenalty: 0,  label: 'Wall (Solid)' },
+    };
 
-    // Distribution weights — more common terrain first
-    const WEIGHTED = [
-      'ruins', 'ruins', 'crater', 'crater',
-      'forest', 'forest', 'barricade', 'barricade',
-      'hill', 'wall_open', 'pond', 'vehicle_wreckage',
-      'minefield', 'tank_traps', 'rooftop', 'wall_solid',
-    ];
+    // Theme-based weighted pools
+    const mapTheme = gsRef.current?.advance_rules
+      ? null // will read from initializeBattle param
+      : null;
+    const theme = arguments[0] || 'mixed';
+
+    const THEME_WEIGHTS = {
+      city_fight: [
+        'solid_building','solid_building','solid_building',
+        'ruins','ruins','ruins',
+        'barricade','barricade','wall_open','wall_open','wall_solid',
+        'crater','vehicle_wreckage',
+      ],
+      forest: [
+        'forest','forest','forest','forest',
+        'hill','hill','pond','pond',
+        'ruins','barricade','crater',
+      ],
+      wasteland: [
+        'crater','crater','crater',
+        'vehicle_wreckage','vehicle_wreckage',
+        'barricade','barricade','ruins','ruins',
+        'hill','wall_open',
+      ],
+      mixed: [
+        'ruins','ruins','crater','crater',
+        'forest','forest','barricade','barricade',
+        'hill','wall_open','pond','vehicle_wreckage',
+        'solid_building','wall_solid',
+      ],
+    };
+
+    const WEIGHTED = THEME_WEIGHTS[theme] || THEME_WEIGHTS.mixed;
 
     const terrain = [];
     let attempts = 0;
     while (terrain.length < 9 && attempts < 80) {
       const pick = WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
-      const def = TERRAIN_TYPES.find(t => t.type === pick);
+      const def = TERRAIN_TYPES[pick];
+      if (!def) { attempts++; continue; }
       const isLinear = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid';
-      const w = isLinear ? 8 + Math.random() * 4 : 5 + Math.random() * 6;
-      const h = isLinear ? 1.5 + Math.random() * 1.5 : 4 + Math.random() * 5;
+      const isBuilding = pick === 'solid_building';
+      const w = isLinear ? 8 + Math.random() * 4 : isBuilding ? 4 + Math.random() * 5 : 5 + Math.random() * 6;
+      const h = isLinear ? 1.5 + Math.random() * 1.5 : isBuilding ? 4 + Math.random() * 4 : 4 + Math.random() * 5;
       const t = {
         ...def,
+        type: pick,
         x: Math.random() * 54 + 6,
         y: Math.random() * 34 + 6,
         width: w,
         height: h,
       };
-      // No overlap with existing terrain
       const overlaps = terrain.some(e =>
-        t.x < e.x + e.width && t.x + t.width > e.x &&
-        t.y < e.y + e.height && t.y + t.height > e.y
+        t.x < e.x + e.width + 1 && t.x + t.width > e.x - 1 &&
+        t.y < e.y + e.height + 1 && t.y + t.height > e.y - 1
       );
       if (!overlaps) terrain.push(t);
       attempts++;
