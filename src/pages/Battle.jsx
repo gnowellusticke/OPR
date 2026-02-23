@@ -784,10 +784,10 @@ export default function Battle() {
           evs.push({ round, type: 'warning', message: `${unit.name} destroyed before melee — skipping combat`, timestamp: new Date().toLocaleTimeString() });
         } else {
           const liveTarget = gs.units.find(u => u.id === target.id);
-          if (!liveTarget || liveTarget.current_models <= 0) {
-            evs.push({ round, type: 'movement', message: `${unit.name} charge target ${target.name} already destroyed — no melee`, timestamp: new Date().toLocaleTimeString() });
-          } else {
-            const killedTarget = await resolveMelee(unit, liveTarget, gs, evs, dmnReason);
+            if (!liveTarget || liveTarget.current_models <= 0) {
+              evs.push({ round, type: 'movement', message: `${unit.name} charge target ${target.name} already destroyed — no melee`, timestamp: new Date().toLocaleTimeString() });
+            } else {
+              const killedTarget = await resolveMelee(unit, liveTarget, gs, evs, dmnReason, unit.name);
             unit.rounds_without_offense = 0;
             if (killedTarget && gs.advance_rules?.overrun) {
               const dx = (Math.random() - 0.5) * 6;
