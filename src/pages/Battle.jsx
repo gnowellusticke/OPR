@@ -284,21 +284,33 @@ export default function Battle() {
   // ─── DEPLOY ──────────────────────────────────────────────────────────────────
 
   const computeWounds = (unit) => {
-    // Bug 1 fix: Multi-model units have wounds = models × tough per model
+    // OPR rule: Tough(X) means the model is removed when it takes X wounds → max_wounds = X (NOT X+1)
     const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
     const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
     const modelCount = unit.models || 1;
     const isHero = unit.special_rules?.toLowerCase().includes('hero');
-    
+
+    // Bug 6 fix: Joined hero — wound pool = hero wounds + squad wounds
+    // The parser merges models counts already (unit.models includes squad).
+    // But special_rules come from the hero, so toughValue is the hero's Tough(X).
+    // joined_squad is stored on the unit by the parser when "| Joined to:" is present.
+    if (unit.joined_squad) {
+      const heroWounds = toughValue > 0 ? toughValue : 1;
+      const squadCount = unit.joined_squad.models || 0;
+      const squadToughMatch = unit.joined_squad.special_rules?.match(/Tough\((\d+)\)/);
+      const squadTough = squadToughMatch ? parseInt(squadToughMatch[1]) : 1;
+      return heroWounds + (squadCount * squadTough);
+    }
+
     if (isHero && toughValue > 0) {
-      // Hero: 1 hero model + toughValue wounds
-      return 1 + toughValue;
+      // Solo hero with Tough(X): exactly X wounds (Bug 6A fix — no +1)
+      return toughValue;
     }
     if (toughValue > 0) {
       // Multi-model unit: each model has toughValue wounds
       return modelCount * toughValue;
     }
-    // No tough value: each model is 1 wound (degenerate, but handle it)
+    // No tough value: each model is 1 wound
     return modelCount;
   };
 
