@@ -442,6 +442,9 @@ export class DMNEngine {
 
   selectTarget(unit, enemies) {
     if (!enemies || enemies.length === 0) return null;
+    // Tunnel vision: personality may lock onto a fixed target
+    const tunnelTarget = this._resolveTunnelTarget(unit, enemies);
+    if (tunnelTarget) return tunnelTarget;
     const scoredEnemies = enemies.map(enemy => ({
       enemy,
       score: this.scoreTarget(unit, enemy, enemies)
