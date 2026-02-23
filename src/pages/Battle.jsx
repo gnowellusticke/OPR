@@ -355,19 +355,18 @@ export default function Battle() {
   const ranged_weapons = deduplicatedWeapons.filter(w => (w.range ?? 2) > 2);
 
   // tough_per_model = wounds per model (for scaling attacks and model count)
-  // Heroes with Tough(X): 1 model with X+1 wounds → tough_per_model = X+1
-  // Multi-model with Tough(X): each model has X wounds → tough_per_model = X
-  // Standard units (no Tough): each model = 1 wound → tough_per_model = 1
+  // OPR Bug 6A fix: Tough(X) = X wounds, NOT X+1.
+  // Solo hero Tough(X): 1 model × X wounds → toughPerModel = X
+  // Multi-model Tough(X): each model has X wounds → toughPerModel = X
+  // Standard units (no Tough): each model = 1 wound → toughPerModel = 1
   const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
   const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
   const isHero = unit.special_rules?.toLowerCase?.().includes('hero');
   const modelCount = unit.models || 1;
   // toughPerModel is wounds-per-model for attack scaling purposes
   let toughPerModel;
-  if (isHero && toughValue > 0) {
-    toughPerModel = toughValue + 1; // hero has 1+toughValue total wounds, 1 model
-  } else if (toughValue > 0) {
-    toughPerModel = toughValue; // multi-model: X wounds each
+  if (toughValue > 0) {
+    toughPerModel = toughValue; // Tough(X) = X wounds per model for both heroes and squads
   } else {
     toughPerModel = 1; // standard: 1 wound per model
   }
