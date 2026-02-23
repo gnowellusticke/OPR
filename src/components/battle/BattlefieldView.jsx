@@ -152,24 +152,36 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
         ))}
 
         {/* Objectives */}
-        {objectives.map((obj, idx) => (
-          <div
-            key={`obj-${idx}`}
-            className="absolute rounded-full border-4 flex items-center justify-center font-bold"
-            style={{
-              left: (obj.x / GRID_SIZE) * CELL_SIZE - 15,
-              top: (obj.y / GRID_SIZE) * CELL_SIZE - 15,
-              width: 30,
-              height: 30,
-              borderColor: obj.controlled_by === 'agent_a' ? '#3b82f6' : obj.controlled_by === 'agent_b' ? '#ef4444' : '#64748b',
-              backgroundColor: 'rgba(0,0,0,0.7)',
-              color: '#fff',
-              fontSize: 12
-            }}
-          >
-            {idx + 1}
-          </div>
-        ))}
+        {objectives.map((obj, idx) => {
+          const ctrl = obj.controlled_by;
+          const ringColor = ctrl === 'agent_a' ? '#3b82f6' : ctrl === 'agent_b' ? '#ef4444' : ctrl === 'contested' ? '#a855f7' : '#94a3b8';
+          const bgColor = ctrl === 'agent_a' ? 'rgba(30,58,138,0.85)' : ctrl === 'agent_b' ? 'rgba(127,29,29,0.85)' : 'rgba(15,23,42,0.85)';
+          return (
+            <div
+              key={`obj-${idx}`}
+              style={{
+                position: 'absolute',
+                left: (obj.x / GRID_SIZE) * CELL_SIZE - 18,
+                top: (obj.y / GRID_SIZE) * CELL_SIZE - 18,
+                width: 36, height: 36,
+                borderRadius: '50%',
+                border: `3px solid ${ringColor}`,
+                backgroundColor: bgColor,
+                boxShadow: `0 0 10px ${ringColor}66`,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                zIndex: 5
+              }}
+            >
+              {/* Flag icon */}
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ marginBottom: 1 }}>
+                <line x1="2" y1="1" x2="2" y2="11" stroke={ringColor} strokeWidth="1.5"/>
+                <path d="M2 1 L10 3 L2 5Z" fill={ringColor} opacity="0.9"/>
+              </svg>
+              <span style={{ fontSize: 9, fontWeight: 700, color: '#f8fafc', lineHeight: 1 }}>{idx + 1}</span>
+            </div>
+          );
+        })}
 
         {/* Units */}
         {renderableUnits.map((group, idx) => (
