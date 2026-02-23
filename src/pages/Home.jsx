@@ -202,6 +202,25 @@ export default function Home() {
           </Card>
         </div>
 
+        {/* Map Theme Selector */}
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-white text-base sm:text-lg">🗺 Battle Map Theme</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {MAP_THEMES.map(({ key, label, desc }) => (
+              <button
+                key={key}
+                onClick={() => setSelectedTheme(key)}
+                className={`text-left p-3 rounded-lg border-2 transition-colors ${selectedTheme === key ? 'border-yellow-500 bg-yellow-500/10' : 'border-slate-600 bg-slate-900/40 hover:border-slate-400'}`}
+              >
+                <p className="text-white font-semibold text-sm">{label}</p>
+                <p className="text-slate-400 text-xs mt-1">{desc}</p>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+
         {/* Advance Rules */}
         <Card className="bg-slate-800/50 border-slate-700">
           <button
