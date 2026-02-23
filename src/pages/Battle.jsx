@@ -731,6 +731,13 @@ export default function Battle() {
         unit.just_charged = true;
         rules.executeMovement(unit, action, target, gs.terrain);
         const zone = rules.getZone(unit.x, unit.y);
+        // Dangerous terrain check on charge move
+        const chargeDangerWounds = rules.checkDangerousTerrain(unit, gs.terrain, 'Charge');
+        if (chargeDangerWounds > 0) {
+          unit.current_models = Math.max(0, unit.current_models - chargeDangerWounds);
+          evs.push({ round, type: 'combat', message: `⚠ ${unit.name} hit dangerous terrain during Charge! -${chargeDangerWounds} wound(s)`, timestamp: new Date().toLocaleTimeString() });
+          if (unit.current_models <= 0) { unit.status = 'destroyed'; }
+        }
         // Bug 3+4 fix: capture target state BEFORE melee; add special_rules_applied to charge event
         const chargeSpecialRules = [];
         if (unit.special_rules?.includes('Furious')) chargeSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack in melee on charge' });
