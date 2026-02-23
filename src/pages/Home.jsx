@@ -67,6 +67,7 @@ export default function Home() {
           objectives: [],
           active_agent: 'agent_a',
           advance_rules: advanceRules,
+          map_theme: selectedTheme,
         },
         event_log: []
       });
