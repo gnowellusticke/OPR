@@ -228,7 +228,7 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
             { key: 'minefield', label: 'Minefield (Dangerous)' },
             { key: 'pond',      label: 'Pond (Difficult+Dangerous)' },
             { key: 'ruins',     label: 'Ruins (Cover)' },
-            { key: 'rooftop',   label: 'Rooftop (Flying only)' },
+            { key: 'solid_building', label: 'Building (Impassable, Blocks LOS)' },
             { key: 'vehicle_wreckage', label: 'Wreckage (Rush/Charge Dangerous)' },
             { key: 'wall_open', label: 'Wall Open (Cover)' },
             { key: 'wall_solid',label: 'Wall Solid (Blocking/Impassable)' },
