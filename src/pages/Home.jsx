@@ -222,6 +222,34 @@ export default function Home() {
           </Card>
         </div>
 
+        {/* AI Personality Selection */}
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-white text-base sm:text-lg flex items-center justify-between">
+              <span>🧠 AI Personalities</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-slate-600 text-slate-400 hover:text-white text-xs"
+                onClick={() => {
+                  const all = PERSONALITIES;
+                  const a = all[Math.floor(Math.random() * all.length)];
+                  const others = all.filter(p => p.id !== a.id);
+                  const b = others[Math.floor(Math.random() * others.length)];
+                  setPersonalityA(a.id);
+                  setPersonalityB(b.id);
+                }}
+              >
+                🎲 Randomise Both
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <PersonalityPicker value={personalityA} onChange={handlePersonalityA} label="Army A" color="blue" />
+            <PersonalityPicker value={personalityB} onChange={handlePersonalityB} label="Army B" color="red" />
+          </CardContent>
+        </Card>
+
         {/* Map Theme Selector */}
         <Card className="bg-slate-800/50 border-slate-700">
           <CardHeader>
