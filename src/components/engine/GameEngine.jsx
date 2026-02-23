@@ -473,7 +473,8 @@ export class DMNEngine {
     // ── 1a. WEAPON MATCHING ────────────────────────────────────────────────
     // AP weapons prefer high-defence targets
     const unitBestAP = Math.max(...(unit.weapons || []).map(w => w.ap || 0), 0);
-    if (unitBestAP >= 2 && enemy.defense >= 5) score += 0.4;
+    const apBonus = p?.targeting?.ap_vs_tough_bonus ?? 0.4;
+    if (unitBestAP >= 2 && enemy.defense >= 5) score += apBonus;
 
     // Blast weapons prefer blob targets
     const hasBlast = unit.weapons?.some(w => {
