@@ -669,8 +669,10 @@ export default function Battle() {
     if (!canAct && (selectedAction === 'Charge' || selectedAction === 'Hold')) selectedAction = 'Advance';
 
     setCurrentDecision({
-      unit: liveUnit, options, dmn_phase: 'Action Selection',
-      reasoning: `${liveUnit.name} at (${liveUnit.x.toFixed(0)},${liveUnit.y.toFixed(0)}) → ${selectedAction}`
+      unit: liveUnit,
+      options,
+      dmn_phase: 'Action Selection',
+      reasoning: `(${liveUnit.x.toFixed(0)}, ${liveUnit.y.toFixed(0)}) → ${selectedAction}`
     });
 
     await new Promise(r => setTimeout(r, 300));
