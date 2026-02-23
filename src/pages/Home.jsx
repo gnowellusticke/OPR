@@ -28,6 +28,8 @@ export default function Home() {
     overrun: false,
     heroicActions: false,
   });
+  const [personalityA, setPersonalityA] = useState(DEFAULT_PERSONALITY.id);
+  const [personalityB, setPersonalityB] = useState(DEFAULT_PERSONALITY.id);
 
   const MAP_THEMES = [
     { key: 'city_fight', label: '🏙 City Fight', desc: 'Dense urban terrain — ruins, solid buildings, barricades, and open walls create tight lanes of fire.' },
