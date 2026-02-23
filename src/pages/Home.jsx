@@ -40,6 +40,25 @@ export default function Home() {
 
   const toggleAdvanceRule = (key) => setAdvanceRules(prev => ({ ...prev, [key]: !prev[key] }));
 
+  const handlePersonalityA = (id) => {
+    setPersonalityA(id);
+    // If B has the same personality, randomise B to a different one
+    if (id === personalityB) {
+      const { PERSONALITIES } = require('../components/engine/personalities/PersonalityRegistry');
+      const others = PERSONALITIES.filter(p => p.id !== id);
+      setPersonalityB(others[Math.floor(Math.random() * others.length)].id);
+    }
+  };
+
+  const handlePersonalityB = (id) => {
+    setPersonalityB(id);
+    if (id === personalityA) {
+      const { PERSONALITIES } = require('../components/engine/personalities/PersonalityRegistry');
+      const others = PERSONALITIES.filter(p => p.id !== id);
+      setPersonalityA(others[Math.floor(Math.random() * others.length)].id);
+    }
+  };
+
   const handleParseArmy = async (text, setArmy, setError) => {
     setError('');
     try {
