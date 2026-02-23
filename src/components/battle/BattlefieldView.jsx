@@ -134,22 +134,28 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
         </svg>
 
         {/* Terrain */}
-        {terrain.map((t, idx) => (
-          <div
-            key={`terrain-${idx}`}
-            className="absolute rounded"
-            style={{
-              left: (t.x / GRID_SIZE) * CELL_SIZE,
-              top: (t.y / GRID_SIZE) * CELL_SIZE,
-              width: (t.width / GRID_SIZE) * CELL_SIZE,
-              height: (t.height / GRID_SIZE) * CELL_SIZE,
-              backgroundColor: t.type === 'cover' ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)',
-              border: '2px solid rgba(148,163,184,0.5)'
-            }}
-          >
-            <span className="text-xs text-slate-300 p-1">{t.type}</span>
-          </div>
-        ))}
+        {terrain.map((t, idx) => {
+          const style = TERRAIN_STYLES[t.type] || TERRAIN_STYLES.default;
+          return (
+            <div
+              key={`terrain-${idx}`}
+              className="absolute flex items-start justify-start overflow-hidden"
+              style={{
+                left: (t.x / GRID_SIZE) * CELL_SIZE,
+                top: (t.y / GRID_SIZE) * CELL_SIZE,
+                width: (t.width / GRID_SIZE) * CELL_SIZE,
+                height: (t.height / GRID_SIZE) * CELL_SIZE,
+                backgroundColor: style.bg,
+                border: `2px solid ${style.border}`,
+                borderRadius: style.round ? '50%' : '4px',
+              }}
+            >
+              <span style={{ fontSize: 9, color: style.textColor || '#e2e8f0', padding: '1px 3px', lineHeight: 1.2, fontWeight: 600, textShadow: '0 0 3px #000' }}>
+                {style.icon} {t.label || t.type}
+              </span>
+            </div>
+          );
+        })}
 
         {/* Objectives */}
         {objectives.map((obj, idx) => (
