@@ -712,7 +712,8 @@ export default function Battle() {
 
     const dmnOptions = dmn.evaluateActionOptions(unit, gs, unit.owner);
     const topOption = dmnOptions.sort((a, b) => b.score - a.score)[0];
-    const dmnReason = topOption ? `${topOption.action} scored ${topOption.score.toFixed(2)}` : action;
+    const topDetails = topOption?.details?.map(d => `${d.label} (${d.value > 0 ? '+' : ''}${typeof d.value === 'number' ? d.value.toFixed(2) : d.value})`).join('; ') || '';
+    const dmnReason = topOption ? `${topOption.action} scored ${topOption.score.toFixed(2)}${topDetails ? ': ' + topDetails : ''}` : action;
 
     if (canAct) await attemptSpellCasting(unit, gs, evs);
 
