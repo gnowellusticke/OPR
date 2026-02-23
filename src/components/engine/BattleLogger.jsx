@@ -247,20 +247,32 @@ export class BattleLogger {
     });
   }
 
-  logDestruction({ round, unit, cause }) {
+  logDestruction({ round, unit, cause, actingUnit, killedByWeapon }) {
     unit.status = 'destroyed';
+    // Enhancement 2: Extract killer from cause string if not explicitly provided
+    let killerName = actingUnit || null;
+    let weaponName = killedByWeapon || null;
+    if (!killerName && cause) {
+      const byMatch = cause.match(/by (.+?) \(/) || cause.match(/with (.+)$/);
+      if (byMatch) killerName = byMatch[1];
+    }
+    const richReason = killerName
+      ? `${killerName} destroyed ${unit.name}${weaponName ? ` with ${weaponName}` : ''}${cause ? ` (${cause})` : ''}`
+      : (cause || null);
+
     this.events.push({
       round,
       timestamp: this._timestamp(),
       event_type: 'destruction',
-      acting_unit: null,
+      // Enhancement 2: acting_unit and killed_by_weapon attributed directly
+      acting_unit: killerName,
       target_unit: unit.name,
-      weapon_used: null,
+      weapon_used: weaponName,
       zone: null,
       range_bracket: null,
       roll_results: { cause },
       unit_state_after: { target_unit: { wounds_remaining: 0, max_wounds: unit.total_models, status: 'destroyed' } },
-      dmn_reason: null,
+      dmn_reason: richReason,
       flags: { turning_point: true, first_blood: false, unit_destroyed: true }
     });
     if (!this.roundDestroyed.includes(unit.name)) this.roundDestroyed.push(unit.name);
