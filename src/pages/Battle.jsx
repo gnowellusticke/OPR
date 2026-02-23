@@ -754,7 +754,7 @@ export default function Battle() {
 
   const executeAction = async (unit, action, canAct, gs, evs) => {
     const round = gs.current_round;
-    const dmn = dmnRef.current;
+    const dmn = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
     const rules = rulesRef.current;
     const logger = loggerRef.current;
     const tracking = actionTrackingRef.current;
