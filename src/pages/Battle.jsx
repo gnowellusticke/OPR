@@ -1050,11 +1050,12 @@ export default function Battle() {
 
       // Morale on wounded survivor
       if (target.current_models > 0 && target.status === 'normal' && target.current_models <= target.total_models / 2) {
+        const moraleStateBefore = { acting_unit: { wounds_remaining: target.current_models, max_wounds: target.total_models, status: target.status } };
         const moraleResult = rules.checkMorale(target, 'wounds');
         if (!moraleResult.passed) {
           const outcome = rules.applyMoraleResult(target, false, 'wounds');
           evs.push({ round, type: 'morale', message: `${target.name} morale failed — ${outcome}`, timestamp: new Date().toLocaleTimeString() });
-          logger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll, qualityTarget: target.quality || 4, specialRulesApplied: moraleResult.specialRulesApplied || [] });
+          logger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll, qualityTarget: target.quality || 4, specialRulesApplied: moraleResult.specialRulesApplied || [], woundsTaken: woundsDealt, stateBefore: moraleStateBefore });
         }
       }
 
