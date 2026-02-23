@@ -456,13 +456,16 @@ export class DMNEngine {
   // ── 1. SMART TARGET SCORING ───────────────────────────────────────────────
   scoreTarget(unit, enemy, allEnemies = []) {
     let score = 0;
+    const p = this.personality;
 
     const healthRatio = enemy.current_models / Math.max(enemy.total_models, 1);
     score += (1 - healthRatio) * 0.5;
 
     // Opportunity kill: nearly dead — finish them before they act
-    if (healthRatio < 0.3) score += 0.6;
-    if (healthRatio < 0.15) score += 0.6; // stacked — near certain kill
+    const oppKillBonus = p?.targeting?.opportunity_kill_bonus ?? 0.6;
+    const weakenedBonus = p?.targeting?.weakened_target_bonus ?? 0.6;
+    if (healthRatio < 0.3) score += oppKillBonus;
+    if (healthRatio < 0.15) score += weakenedBonus; // stacked — near certain kill
 
     const distance = this.getDistance(unit, enemy);
     score += Math.max(0, (30 - distance) / 30) * 0.3;
