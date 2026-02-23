@@ -87,7 +87,16 @@ export default function Battle() {
       const armyB = await base44.entities.ArmyList.get(battleData.army_b_id);
 
       setLoadingStatus("Analyzing army performance...");
-      await dmnRef.current.loadLearningData(battleData.army_a_id);
+      await dmnARef.current.loadLearningData(battleData.army_a_id);
+      await dmnBRef.current.loadLearningData(battleData.army_b_id);
+
+      // Load personalities from battle config
+      const gs = battleData.game_state || {};
+      const persA = getPersonality(gs.personality_a) || DEFAULT_PERSONALITY;
+      const persB = getPersonality(gs.personality_b) || DEFAULT_PERSONALITY;
+      dmnARef.current.setPersonality(persA);
+      dmnBRef.current.setPersonality(persB);
+      console.log(`[PERSONALITIES] A: ${persA.name}, B: ${persB.name}`);
 
       const logger = new BattleLogger(battleData.id, armyA, armyB);
       loggerRef.current = logger;
