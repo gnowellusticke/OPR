@@ -13,6 +13,7 @@ import { RulesEngine } from '../components/engine/RulesEngine';
 import { BattleLogger } from '../components/engine/BattleLogger';
 import { verifyRuleCompliance } from '../components/engine/RuleComplianceVerifier';
 import { attachFactionSpells } from '../components/engine/spells/SpellRegistry';
+import { getPersonality, DEFAULT_PERSONALITY } from '../components/engine/personalities/PersonalityRegistry';
 
 export default function Battle() {
   const navigate = useNavigate();
