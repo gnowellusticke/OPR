@@ -151,7 +151,6 @@ export class DMNEngine {
   }
 
   evaluateActionOptions(unit, gameState, owner) {
-    const options = [];
     const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
     const allies = gameState.units.filter(u => u.owner === owner && u.current_models > 0);
     const nearestEnemy = this.findNearestEnemy(unit, enemies);
@@ -162,8 +161,7 @@ export class DMNEngine {
     const attritionCritical = this.isAttritionCritical(unit);
 
     if (unit.embarked_in) {
-      options.push({ action: 'Disembark', score: 1.0, selected: true });
-      return options;
+      return [{ action: 'Disembark', score: 1.0, details: [{ label: 'Always disembark to act', value: 1.0 }], selected: true }];
     }
 
     const isTransport = unit.special_rules?.includes('Transport');
@@ -174,28 +172,14 @@ export class DMNEngine {
       this.getDistance(unit, nearestEnemy) <= chargeRange &&
       !isTransport && !unit.just_charged && !isFireSupport;
 
-    options.push({
-      action: 'Hold',
-      score: this.scoreHoldAction(unit, gameState, nearestEnemy, strategicState, enemyArchetype, formationScore, attritionCritical),
-      selected: false
-    });
-    options.push({
-      action: 'Advance',
-      score: this.scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState, enemyArchetype, formationScore, attritionCritical),
-      selected: false
-    });
-    options.push({
-      action: 'Rush',
-      score: this.scoreRushAction(unit, gameState, nearestObjective, strategicState, enemies, attritionCritical),
-      selected: false
-    });
+    const options = [
+      { action: 'Hold',    ...this.scoreHoldAction(unit, gameState, nearestEnemy, strategicState, enemyArchetype, formationScore, attritionCritical),    selected: false },
+      { action: 'Advance', ...this.scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState, enemyArchetype, formationScore, attritionCritical), selected: false },
+      { action: 'Rush',    ...this.scoreRushAction(unit, gameState, nearestObjective, strategicState, enemies, attritionCritical),    selected: false },
+    ];
 
     if (canCharge) {
-      options.push({
-        action: 'Charge',
-        score: this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState, attritionCritical),
-        selected: false
-      });
+      options.push({ action: 'Charge', ...this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState, attritionCritical), selected: false });
     }
 
     // Historical learning adjustments
@@ -203,7 +187,10 @@ export class DMNEngine {
       const totalActions = Object.values(this.learningData.actionSuccess).reduce((a, b) => a + b, 0);
       options.forEach(opt => {
         const successRate = totalActions > 0 ? (this.learningData.actionSuccess[opt.action] || 0) / totalActions : 0;
-        opt.score += successRate * 20;
+        if (successRate > 0) {
+          opt.score += successRate * 20;
+          opt.details.push({ label: 'Historical success bonus', value: +(successRate * 20).toFixed(2) });
+        }
       });
     }
 
@@ -233,34 +220,29 @@ export class DMNEngine {
   }
 
   scoreHoldAction(unit, gameState, nearestEnemy, strategicState, enemyArchetype, formationScore, attritionCritical) {
+    const details = [];
     let score = 0.3;
+    details.push({ label: 'Base score', value: 0.3 });
 
-    if (unit.status === 'shaken') return 1.0; // must hold to recover
+    if (unit.status === 'shaken') {
+      return { score: 10.0, details: [{ label: 'Shaken: must Hold to recover', value: 10.0 }] };
+    }
 
-    if ((unit.rounds_without_offense || 0) >= 2) score -= 0.4;
+    if ((unit.rounds_without_offense || 0) >= 2) { score -= 0.4; details.push({ label: 'Inactive 2+ rounds penalty', value: -0.4 }); }
 
     const hasRanged = unit.weapons?.some(w => w.range > 12);
-    if (hasRanged) score += 0.3;
-    if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= 24) score += 0.2;
+    if (hasRanged) { score += 0.3; details.push({ label: 'Has ranged weapons (can shoot)', value: 0.3 }); }
+    if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= 24) { score += 0.2; details.push({ label: 'Enemy in shooting range', value: 0.2 }); }
 
-    // ── 4. OBJECTIVE-AWARE: holding on objective is valuable ──────────────
     const onObjective = gameState.objectives.some(obj => this.getDistance(unit, obj) <= 3);
-    if (onObjective) score += 0.4;
+    if (onObjective) { score += 0.4; details.push({ label: 'Holding an objective', value: 0.4 }); }
+    if (strategicState.isWinning && hasRanged) { score += 0.2; details.push({ label: 'Winning: defensive fire good', value: 0.2 }); }
+    if (strategicState.isWinning && onObjective && strategicState.roundsRemaining <= 2) { score += 0.5; details.push({ label: 'Late game: hold objective to win', value: 0.5 }); }
+    if (enemyArchetype === 'melee_swarm' && hasRanged) { score += 0.35; details.push({ label: 'Counter melee swarm: hold & shoot', value: 0.35 }); }
+    if (attritionCritical) { score += 0.5; details.push({ label: 'Critically wounded: hold to survive', value: 0.5 }); }
+    if (formationScore * 0.3 !== 0) { score += formationScore * 0.3; details.push({ label: 'Formation score', value: +(formationScore * 0.3).toFixed(2) }); }
 
-    // ── 4. ROUND-PHASE scoring: late game + winning = stay put ────────────
-    if (strategicState.isWinning && hasRanged) score += 0.2;
-    if (strategicState.isWinning && onObjective && strategicState.roundsRemaining <= 2) score += 0.5;
-
-    // ── 5. COUNTER-STRATEGY: vs melee swarm, ranged units want to hold & shoot ──
-    if (enemyArchetype === 'melee_swarm' && hasRanged) score += 0.35;
-
-    // ── 3. ATTRITION: critically wounded units hold to avoid being wiped ──
-    if (attritionCritical) score += 0.5;
-
-    // ── 2. FORMATION: factored into all scoring ───────────────────────────
-    score += formationScore * 0.3;
-
-    return score;
+    return { score, details };
   }
 
   scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState, enemyArchetype, formationScore, attritionCritical) {
