@@ -1025,7 +1025,7 @@ export default function Battle() {
       if (target.current_models <= 0) {
         target.status = 'destroyed';
         evs.push({ round, type: 'combat', message: `${target.name} destroyed!`, timestamp: new Date().toLocaleTimeString() });
-        logger?.logDestruction({ round, unit: target, cause: `shooting by ${unit.name} (${weaponLabel})` });
+        logger?.logDestruction({ round, unit: target, cause: `shooting by ${unit.name} (${weaponLabel})`, actingUnit: unit.name, killedByWeapon: weapon.name });
       }
 
       const topScore = liveEnemies.map(e => dmn.scoreTarget(unit, e)).sort((a, b) => b - a)[0]?.toFixed(2);
