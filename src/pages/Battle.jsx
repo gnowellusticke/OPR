@@ -28,7 +28,10 @@ export default function Battle() {
   const [loadingStatus, setLoadingStatus] = useState("Initializing...");
 
   // Engines (stable refs, never recreated)
-  const dmnRef = useRef(new DMNEngine());
+  // Personality is loaded after battle data arrives — two separate DMN engines, one per agent
+  const dmnARef = useRef(new DMNEngine());
+  const dmnBRef = useRef(new DMNEngine());
+  const dmnRef = useRef(null); // will be set dynamically per-activation
   const rulesRef = useRef(new RulesEngine());
   const loggerRef = useRef(null);
   const battleRef = useRef(null);
