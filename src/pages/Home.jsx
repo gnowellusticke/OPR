@@ -8,7 +8,7 @@ import { ArmyTextParser } from '../components/army/ArmyTextParser';
 import { base44 } from "@/api/base44Client";
 import RulesReference from '../components/rules/RulesReference';
 import PersonalityPicker from '../components/battle/PersonalityPicker';
-import { getRandomPersonality, DEFAULT_PERSONALITY } from '../components/engine/personalities/PersonalityRegistry';
+import { PERSONALITIES, getRandomPersonality, DEFAULT_PERSONALITY } from '../components/engine/personalities/PersonalityRegistry';
 
 
 export default function Home() {
