@@ -207,7 +207,7 @@ export default function Battle() {
 
     const terrain = [];
     let attempts = 0;
-    while (terrain.length < 9 && attempts < 80) {
+    while (terrain.length < 15 && attempts < 150) {
       const pick = WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
       const def = TERRAIN_TYPES[pick];
       if (!def) { attempts++; continue; }
