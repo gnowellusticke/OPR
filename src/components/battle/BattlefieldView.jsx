@@ -219,26 +219,33 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
           <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-500 rounded-full" /><span>Fatigued</span></div>
           <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500 rounded-full" /><span>Shaken</span></div>
         </div>
-        <div className="flex flex-wrap gap-2 text-xs text-slate-400 border-t border-slate-700 pt-2">
-          {[
-            { key: 'barricade', label: 'Barricade (Cover, -3" Mv)' },
-            { key: 'crater',    label: 'Crater (Cover+Difficult)' },
-            { key: 'forest',    label: 'Forest (Cover+Difficult, LOS)' },
-            { key: 'hill',      label: 'Hill (Cover+Difficult uphill)' },
-            { key: 'minefield', label: 'Minefield (Dangerous)' },
-            { key: 'pond',      label: 'Pond (Difficult+Dangerous)' },
-            { key: 'ruins',     label: 'Ruins (Cover)' },
-            { key: 'solid_building', label: 'Building (Impassable, Blocks LOS)' },
-            { key: 'vehicle_wreckage', label: 'Wreckage (Rush/Charge Dangerous)' },
-            { key: 'wall_open', label: 'Wall Open (Cover)' },
-            { key: 'wall_solid',label: 'Wall Solid (Blocking/Impassable)' },
-          ].map(({ key, label }) => (
-            <div key={key} className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: TERRAIN_STYLES[key]?.bg, border: `1px solid ${TERRAIN_STYLES[key]?.border}` }} />
-              <span>{TERRAIN_STYLES[key]?.icon} {label}</span>
-            </div>
-          ))}
-        </div>
+        {terrain.length > 0 && (
+          <div className="flex flex-wrap gap-2 text-xs text-slate-400 border-t border-slate-700 pt-2">
+            {[...new Set(terrain.map(t => t.type))].map(type => {
+              const TERRAIN_LABELS = {
+                barricade: 'Barricade (Cover, -3" Mv)',
+                crater: 'Crater (Cover+Difficult)',
+                forest: 'Forest (Cover+Difficult, LOS)',
+                hill: 'Hill (Cover+Difficult uphill)',
+                minefield: 'Minefield (Dangerous)',
+                pond: 'Pond (Difficult+Dangerous)',
+                ruins: 'Ruins (Cover)',
+                solid_building: 'Building (Impassable, Blocks LOS)',
+                vehicle_wreckage: 'Wreckage (Rush/Charge Dangerous)',
+                wall_open: 'Wall Open (Cover)',
+                wall_solid: 'Wall Solid (Blocking/Impassable)',
+              };
+              const style = TERRAIN_STYLES[type] || TERRAIN_STYLES.default;
+              const label = TERRAIN_LABELS[type] || type;
+              return (
+                <div key={type} className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: style.bg, border: `1px solid ${style.border}` }} />
+                  <span>{style.icon} {label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </Card>
   );
