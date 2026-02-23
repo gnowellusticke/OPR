@@ -107,7 +107,8 @@ export default function Battle() {
   // ─── INIT ────────────────────────────────────────────────────────────────────
 
   const initializeBattle = async (battleData, armyA, armyB, logger) => {
-    const terrain = generateTerrain();
+    const mapTheme = battleData.game_state?.map_theme || 'mixed';
+    const terrain = generateTerrain(mapTheme);
     const objectives = generateObjectives();
     const advRules = battleData.game_state?.advance_rules || {};
     const units = deployArmies(armyA, armyB, advRules);
