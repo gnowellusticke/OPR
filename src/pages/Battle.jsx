@@ -178,10 +178,6 @@ export default function Battle() {
     };
 
     // Theme-based weighted pools
-    const mapTheme = gsRef.current?.advance_rules
-      ? null // will read from initializeBattle param
-      : null;
-    const theme = arguments[0] || 'mixed';
 
     const THEME_WEIGHTS = {
       city_fight: [
