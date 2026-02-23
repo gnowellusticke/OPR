@@ -1,8 +1,8 @@
-import aggressive  from './aggressive.json';
-import cautious    from './cautious.json';
-import opportunist from './opportunist.json';
-import berserker   from './berserker.json';
-import tactician   from './tactician.json';
+import aggressive  from './aggressive.js';
+import cautious    from './cautious.js';
+import opportunist from './opportunist.js';
+import berserker   from './berserker.js';
+import tactician   from './tactician.js';
 
 export const PERSONALITIES = [aggressive, cautious, opportunist, berserker, tactician];
 
