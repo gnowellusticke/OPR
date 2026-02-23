@@ -863,34 +863,37 @@ export default function Battle() {
     const dist = rules.calculateDistance(unit, target);
     const LOS_RANGE = 18;
 
+    // Bug 7 fix: cast at most one spell per activation pass; token check is the sole gate.
+    // Each iteration spends exactly `cost` tokens — loop exits when tokens run out.
+    // Maximum events per round = Caster(X) level (e.g. Caster(3) → max 3 events).
     for (const spell of spells) {
+      // Re-check tokens at the start of each iteration — break immediately if depleted
+      if ((unit.spell_tokens || 0) <= 0) break;
       const cost = spell.spell_cost || 1;
       if ((unit.spell_tokens || 0) < cost) continue;
       if (dist > (spell.range || LOS_RANGE)) continue;
 
-      // Allied helpers: friendly Casters within 18" — AI spends all their spare tokens to help
+      // Allied helpers: friendly Casters within 18" — spend up to 1 token each (not all)
       let friendlyBonus = 0;
       gs.units.forEach(ally => {
         if (ally.id === unit.id || ally.owner !== unit.owner || ally.current_models <= 0) return;
         if (rules.getCasterTokens(ally) === 0) return;
         if (rules.calculateDistance(unit, ally) > 18) return;
-        const spend = ally.spell_tokens || 0;
-        if (spend > 0) {
-          ally.spell_tokens = 0;
-          friendlyBonus += spend;
+        if ((ally.spell_tokens || 0) > 0) {
+          ally.spell_tokens -= 1;
+          friendlyBonus += 1;
         }
       });
 
-      // Enemy counters: enemy Casters within 18" of the target — AI spends all their spare tokens to block
+      // Enemy counters: enemy Casters within 18" of the target — spend up to 1 token each
       let hostileBonus = 0;
       gs.units.forEach(enemy => {
         if (enemy.owner === unit.owner || enemy.current_models <= 0) return;
         if (rules.getCasterTokens(enemy) === 0) return;
         if (rules.calculateDistance(target, enemy) > 18) return;
-        const spend = enemy.spell_tokens || 0;
-        if (spend > 0) {
-          enemy.spell_tokens = 0;
-          hostileBonus += spend;
+        if ((enemy.spell_tokens || 0) > 0) {
+          enemy.spell_tokens -= 1;
+          hostileBonus += 1;
         }
       });
 
@@ -904,12 +907,10 @@ export default function Battle() {
       logger?.logAbility({ round, unit, ability: 'Caster', details: { spell: spell.name, cost, target: target.name, roll: castResult.roll, modified_roll: castResult.modifiedRoll, success: castResult.success, tokens_before: castResult.tokensBefore, tokens_after: castResult.tokensAfter, friendly_bonus: friendlyBonus, hostile_bonus: hostileBonus } });
 
       if (castResult.success) {
-        // Resolve spell as a ranged attack (1 automatic hit, AP from spell)
         const spellWeapon = { name: spell.name, range: spell.range || 18, attacks: 1, ap: spell.ap || 0, special_rules: spell.special_rules || '' };
         const shootResult = rules.resolveShooting(unit, target, spellWeapon, gs.terrain, gs);
         const woundsDealt = shootResult.wounds;
 
-        // Regeneration check
         const regenResult = rules.applyRegeneration(target, woundsDealt, false);
         const finalWounds = regenResult.finalWounds;
         if (regenResult.ignored > 0) {
@@ -920,13 +921,15 @@ export default function Battle() {
         if (target.current_models <= 0) {
           target.status = 'destroyed';
           evs.push({ round, type: 'combat', message: `${target.name} destroyed by ${spell.name}!`, timestamp: new Date().toLocaleTimeString() });
-          logger?.logDestruction({ round, unit: target, cause: `spell (${spell.name}) by ${unit.name}` });
+          logger?.logDestruction({ round, unit: target, cause: `spell (${spell.name}) by ${unit.name}`, actingUnit: unit.name, killedByWeapon: spell.name });
         } else if (finalWounds > 0) {
           evs.push({ round, type: 'combat', message: `${spell.name} deals ${finalWounds} wound(s) to ${target.name}`, timestamp: new Date().toLocaleTimeString() });
         }
       }
 
       await new Promise(r => setTimeout(r, 400));
+      // Break after one cast per activation — only one spell attempt per activation pass
+      break;
     }
   };
 
