@@ -211,30 +211,34 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
       </div>
 
       {/* Legend */}
-      <div className="mt-4 flex flex-wrap gap-4 sm:gap-6 text-xs text-slate-300">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-700 border-2 border-blue-500 rounded" />
-          <span>Agent A</span>
+      <div className="mt-4 space-y-2">
+        <div className="flex flex-wrap gap-3 sm:gap-4 text-xs text-slate-300">
+          <div className="flex items-center gap-1"><div className="w-4 h-4 bg-blue-700 border-2 border-blue-500 rounded" /><span>Agent A</span></div>
+          <div className="flex items-center gap-1"><div className="w-4 h-4 bg-red-700 border-2 border-red-500 rounded" /><span>Agent B</span></div>
+          <div className="flex items-center gap-1"><Users className="w-4 h-4" /><span>Multi-Model</span></div>
+          <div className="flex items-center gap-1"><User className="w-4 h-4" /><span>Single Model</span></div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-500 rounded-full" /><span>Fatigued</span></div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500 rounded-full" /><span>Shaken</span></div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-700 border-2 border-red-500 rounded" />
-          <span>Agent B</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Users className="w-4 h-4" />
-          <span>Multi-Model Unit</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <User className="w-4 h-4" />
-          <span>Single Model</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-yellow-500 rounded-full" />
-          <span>Fatigued</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-red-500 rounded-full" />
-          <span>Shaken</span>
+        <div className="flex flex-wrap gap-2 text-xs text-slate-400 border-t border-slate-700 pt-2">
+          {[
+            { key: 'barricade', label: 'Barricade (Cover, -3" Mv)' },
+            { key: 'crater',    label: 'Crater (Cover+Difficult)' },
+            { key: 'forest',    label: 'Forest (Cover+Difficult, LOS)' },
+            { key: 'hill',      label: 'Hill (Cover+Difficult uphill)' },
+            { key: 'minefield', label: 'Minefield (Dangerous)' },
+            { key: 'pond',      label: 'Pond (Difficult+Dangerous)' },
+            { key: 'ruins',     label: 'Ruins (Cover)' },
+            { key: 'rooftop',   label: 'Rooftop (Flying only)' },
+            { key: 'vehicle_wreckage', label: 'Wreckage (Rush/Charge Dangerous)' },
+            { key: 'wall_open', label: 'Wall Open (Cover)' },
+            { key: 'wall_solid',label: 'Wall Solid (Blocking/Impassable)' },
+          ].map(({ key, label }) => (
+            <div key={key} className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: TERRAIN_STYLES[key]?.bg, border: `1px solid ${TERRAIN_STYLES[key]?.border}` }} />
+              <span>{TERRAIN_STYLES[key]?.icon} {label}</span>
+            </div>
+          ))}
         </div>
       </div>
     </Card>
