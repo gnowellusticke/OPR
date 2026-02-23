@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card } from "@/components/ui/card";
+import { Users, User } from "lucide-react";
 import UnitGroupDisplay from './UnitGroupDisplay';
 
 export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) {
@@ -142,46 +143,33 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
               top: (t.y / GRID_SIZE) * CELL_SIZE,
               width: (t.width / GRID_SIZE) * CELL_SIZE,
               height: (t.height / GRID_SIZE) * CELL_SIZE,
-              backgroundColor: t.type === 'cover' ? 'rgba(34,197,94,0.18)' : 'rgba(234,179,8,0.18)',
-              border: `2px solid ${t.type === 'cover' ? 'rgba(34,197,94,0.5)' : 'rgba(234,179,8,0.5)'}`,
-              backdropFilter: 'blur(1px)'
+              backgroundColor: t.type === 'cover' ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)',
+              border: '2px solid rgba(148,163,184,0.5)'
             }}
           >
-            <span style={{ fontSize: 9, color: '#cbd5e1', padding: '2px 4px', display: 'block', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t.type}</span>
+            <span className="text-xs text-slate-300 p-1">{t.type}</span>
           </div>
         ))}
 
         {/* Objectives */}
-        {objectives.map((obj, idx) => {
-          const ctrl = obj.controlled_by;
-          const ringColor = ctrl === 'agent_a' ? '#3b82f6' : ctrl === 'agent_b' ? '#ef4444' : ctrl === 'contested' ? '#a855f7' : '#94a3b8';
-          const bgColor = ctrl === 'agent_a' ? 'rgba(30,58,138,0.85)' : ctrl === 'agent_b' ? 'rgba(127,29,29,0.85)' : 'rgba(15,23,42,0.85)';
-          return (
-            <div
-              key={`obj-${idx}`}
-              style={{
-                position: 'absolute',
-                left: (obj.x / GRID_SIZE) * CELL_SIZE - 18,
-                top: (obj.y / GRID_SIZE) * CELL_SIZE - 18,
-                width: 36, height: 36,
-                borderRadius: '50%',
-                border: `3px solid ${ringColor}`,
-                backgroundColor: bgColor,
-                boxShadow: `0 0 10px ${ringColor}66`,
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
-                zIndex: 5
-              }}
-            >
-              {/* Flag icon */}
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ marginBottom: 1 }}>
-                <line x1="2" y1="1" x2="2" y2="11" stroke={ringColor} strokeWidth="1.5"/>
-                <path d="M2 1 L10 3 L2 5Z" fill={ringColor} opacity="0.9"/>
-              </svg>
-              <span style={{ fontSize: 9, fontWeight: 700, color: '#f8fafc', lineHeight: 1 }}>{idx + 1}</span>
-            </div>
-          );
-        })}
+        {objectives.map((obj, idx) => (
+          <div
+            key={`obj-${idx}`}
+            className="absolute rounded-full border-4 flex items-center justify-center font-bold"
+            style={{
+              left: (obj.x / GRID_SIZE) * CELL_SIZE - 15,
+              top: (obj.y / GRID_SIZE) * CELL_SIZE - 15,
+              width: 30,
+              height: 30,
+              borderColor: obj.controlled_by === 'agent_a' ? '#3b82f6' : obj.controlled_by === 'agent_b' ? '#ef4444' : '#64748b',
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              color: '#fff',
+              fontSize: 12
+            }}
+          >
+            {idx + 1}
+          </div>
+        ))}
 
         {/* Units */}
         {renderableUnits.map((group, idx) => (
@@ -197,20 +185,30 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
       </div>
 
       {/* Legend */}
-      <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
-        <div className="flex items-center gap-1.5"><div className="w-5 h-4 rounded" style={{ background: '#1e3a8a', border: '2px solid #3b82f6' }} /><span>Agent A</span></div>
-        <div className="flex items-center gap-1.5"><div className="w-5 h-4 rounded" style={{ background: '#7f1d1d', border: '2px solid #ef4444' }} /><span>Agent B</span></div>
-        <div className="flex items-center gap-1.5">
-          <div style={{ width: 18, height: 15, clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)', background: '#1e3a8a', border: '2px solid #3b82f6' }} />
-          <span>Vehicle/Transport</span>
+      <div className="mt-4 flex flex-wrap gap-4 sm:gap-6 text-xs text-slate-300">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-blue-700 border-2 border-blue-500 rounded" />
+          <span>Agent A</span>
         </div>
-        <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full" style={{ background: '#1e3a8a', border: '2px solid #3b82f6' }} /><span>Monster</span></div>
-        <div className="flex items-center gap-1.5"><span style={{ fontSize: 11 }}>⭐</span><span>Hero</span></div>
-        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-orange-400" /><span>Fatigued</span></div>
-        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-500" /><span>Shaken</span></div>
-        <div className="flex items-center gap-1.5">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" fill="none" stroke="#94a3b8" strokeWidth="2"/></svg>
-          <span>Objective (⬤=held)</span>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-red-700 border-2 border-red-500 rounded" />
+          <span>Agent B</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4" />
+          <span>Multi-Model Unit</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4" />
+          <span>Single Model</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-yellow-500 rounded-full" />
+          <span>Fatigued</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 bg-red-500 rounded-full" />
+          <span>Shaken</span>
         </div>
       </div>
     </Card>
