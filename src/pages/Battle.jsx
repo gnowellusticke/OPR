@@ -1124,12 +1124,13 @@ export default function Battle() {
   });
 
   if (defender.current_models <= 0 && defenderWasAlive) {
-  evs.push({ round, type: 'combat', message: `${defender.name} destroyed in melee!`, timestamp: new Date().toLocaleTimeString() });
-  logger?.logDestruction({ round, unit: defender, cause: `melee with ${attacker.name}` });
+    evs.push({ round, type: 'combat', message: `${defender.name} destroyed in melee!`, timestamp: new Date().toLocaleTimeString() });
+    logger?.logDestruction({ round, unit: defender, cause: `melee with ${attacker.name}`, actingUnit: attacker.name, killedByWeapon: atkWpnName });
   }
   if (attacker.current_models <= 0 && attackerWasAlive) {
-  evs.push({ round, type: 'combat', message: `${attacker.name} destroyed in melee!`, timestamp: new Date().toLocaleTimeString() });
-  logger?.logDestruction({ round, unit: attacker, cause: `melee with ${defender.name}` });
+    evs.push({ round, type: 'combat', message: `${attacker.name} destroyed in melee!`, timestamp: new Date().toLocaleTimeString() });
+    const defWpnName = defender.melee_weapon_name && defender.melee_weapon_name !== 'CCW' ? defender.melee_weapon_name : 'Fists';
+    logger?.logDestruction({ round, unit: attacker, cause: `melee with ${defender.name}`, actingUnit: defender.name, killedByWeapon: defWpnName });
   }
 
     // Morale on loser — based on Fear-adjusted wound comparison
