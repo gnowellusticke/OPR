@@ -1077,6 +1077,12 @@ export default function Battle() {
   // Also check defender is alive at melee start
   if (defender.current_models <= 0 || defender.status === 'destroyed') return false;
 
+  // Enhancement 1: capture state BEFORE melee resolution
+  const meleeStateBefore = {
+    acting_unit: { wounds_remaining: attacker.current_models, max_wounds: attacker.total_models, status: attacker.status },
+    target_unit: { wounds_remaining: defender.current_models, max_wounds: defender.total_models, status: defender.status }
+  };
+
   const result = rules.resolveMelee(attacker, defender, gs);
 
   const defenderWasAlive = defender.current_models > 0;
