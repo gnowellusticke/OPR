@@ -315,59 +315,56 @@ export class DMNEngine {
   }
 
   scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState, attritionCritical) {
+    const details = [];
     const meleeWeapons = (unit.weapons || []).filter(w => w.range <= 2);
     const hasMelee = meleeWeapons.length > 0;
     const meleePrimary = this.isMeleePrimary(unit);
 
-    if (!hasMelee) return 0.2;
+    if (!hasMelee) return { score: 0.2, details: [{ label: 'No melee weapons', value: 0.2 }] };
 
     let score = 1.2;
+    details.push({ label: 'Base melee score', value: 1.2 });
     const chargeRange = this.maxChargeDistance(unit);
     const dist = nearestEnemy ? this.getDistance(unit, nearestEnemy) : 99;
-    if (dist > chargeRange) return -99;
+    if (dist > chargeRange) return { score: -99, details: [{ label: 'Out of charge range', value: -99 }] };
 
-    if (meleePrimary) score += 1.5;
-    if (unit.special_rules?.includes('Furious')) score += 0.6;
-    if (unit.special_rules?.includes('Rage')) score += 0.5;
-    if (unit.special_rules?.includes('Hatred')) score += 0.4;
-    if (unit.special_rules?.includes('Fear')) score += 0.3;
-    if (hasMelee) score += 0.5;
+    if (meleePrimary) { score += 1.5; details.push({ label: 'Melee-primary archetype', value: 1.5 }); }
+    if (unit.special_rules?.includes('Furious')) { score += 0.6; details.push({ label: 'Furious (extra attack on charge)', value: 0.6 }); }
+    if (unit.special_rules?.includes('Rage')) { score += 0.5; details.push({ label: 'Rage rule', value: 0.5 }); }
+    if (unit.special_rules?.includes('Hatred')) { score += 0.4; details.push({ label: 'Hatred rule', value: 0.4 }); }
+    if (unit.special_rules?.includes('Fear')) { score += 0.3; details.push({ label: 'Fear: intimidate in melee', value: 0.3 }); }
+    if (hasMelee) { score += 0.5; details.push({ label: 'Has melee weapon', value: 0.5 }); }
 
-    score += ((chargeRange - dist) / chargeRange) * 1.0;
+    const distBonus = +((chargeRange - dist) / chargeRange).toFixed(2);
+    score += distBonus;
+    details.push({ label: `Distance bonus (${dist.toFixed(1)}" of ${chargeRange}")`, value: distBonus });
 
-    // ── 1. SMART TARGET: finish off weak targets ──────────────────────────
     const enemyHealthRatio = nearestEnemy.current_models / (nearestEnemy.total_models || 1);
-    if (enemyHealthRatio < 0.5) score += 0.4;
-    if (enemyHealthRatio < 0.25) score += 0.6;
+    if (enemyHealthRatio < 0.5) { score += 0.4; details.push({ label: 'Target weakened (<50% HP)', value: 0.4 }); }
+    if (enemyHealthRatio < 0.25) { score += 0.6; details.push({ label: 'Target near destroyed (<25% HP)', value: 0.6 }); }
 
-    // ── 1. WEAPON MATCHING: AP weapons vs tough targets ───────────────────
     const unitBestAP = Math.max(...(unit.weapons || []).map(w => w.ap || 0), 0);
     const targetIsTough = nearestEnemy.special_rules?.match(/Tough\((\d+)\)/);
-    if (targetIsTough && unitBestAP >= 2) score += 0.4;
+    if (targetIsTough && unitBestAP >= 2) { score += 0.4; details.push({ label: `AP(${unitBestAP}) weapon vs Tough target`, value: 0.4 }); }
 
-    // ── 5. COUNTER-STRATEGY: vs vehicle heavy, charge with AP ─────────────
     const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
     const archetype = this.detectEnemyArchetype(enemies);
-    if (archetype === 'vehicle_heavy' && unitBestAP >= 2 && meleePrimary) score += 0.5;
+    if (archetype === 'vehicle_heavy' && unitBestAP >= 2 && meleePrimary) { score += 0.5; details.push({ label: 'Counter vehicle-heavy with AP melee', value: 0.5 }); }
 
     const targetOnObjective = gameState.objectives.some(obj =>
       this.getDistance(nearestEnemy, obj) <= 3 && obj.controlled_by !== owner
     );
-    if (targetOnObjective) score += 0.5;
+    if (targetOnObjective) { score += 0.5; details.push({ label: 'Charge enemy holding objective', value: 0.5 }); }
 
-    if ((unit.rounds_without_offense || 0) >= 1) score += 0.4;
-    if ((unit.rounds_without_offense || 0) >= 2) score += 0.5;
+    if ((unit.rounds_without_offense || 0) >= 1) { score += 0.4; details.push({ label: 'Inactive 1+ rounds: push forward', value: 0.4 }); }
+    if ((unit.rounds_without_offense || 0) >= 2) { score += 0.5; details.push({ label: 'Inactive 2+ rounds: strongly push', value: 0.5 }); }
 
     const strengthRatio = unit.current_models / (nearestEnemy.current_models || 1);
-    if (strengthRatio < 0.3) score -= 0.3;
+    if (strengthRatio < 0.3) { score -= 0.3; details.push({ label: 'Badly outnumbered', value: -0.3 }); }
+    if (attritionCritical && enemyHealthRatio > 0.3) { score -= 1.0; details.push({ label: 'Critically wounded: avoid charge', value: -1.0 }); }
+    if (strategicState.isLosing && strategicState.roundsRemaining <= 1) { score += 0.8; details.push({ label: 'Final round desperation charge', value: 0.8 }); }
 
-    // ── 3. ATTRITION: never charge when critically wounded unless killing blow ──
-    if (attritionCritical && enemyHealthRatio > 0.3) score -= 1.0;
-
-    // ── 4. FINAL-ROUND desperation charge ─────────────────────────────────
-    if (strategicState.isLosing && strategicState.roundsRemaining <= 1) score += 0.8;
-
-    return score;
+    return { score, details };
   }
 
   selectTarget(unit, enemies) {
