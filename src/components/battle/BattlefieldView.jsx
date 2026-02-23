@@ -3,6 +3,26 @@ import { Card } from "@/components/ui/card";
 import { Users, User } from "lucide-react";
 import UnitGroupDisplay from './UnitGroupDisplay';
 
+// Visual style map for each terrain type
+const TERRAIN_STYLES = {
+  barricade:        { bg: 'rgba(120,113,108,0.55)', border: '#a8a29e', icon: '🧱', textColor: '#fef3c7' },
+  crater:           { bg: 'rgba(120,83,40,0.45)',   border: '#92400e', icon: '💥', textColor: '#fef9c3' },
+  forest:           { bg: 'rgba(21,128,61,0.45)',   border: '#15803d', icon: '🌲', textColor: '#d1fae5' },
+  hill:             { bg: 'rgba(161,140,100,0.45)', border: '#b45309', icon: '⛰',  textColor: '#fef3c7' },
+  minefield:        { bg: 'rgba(220,38,38,0.25)',   border: '#dc2626', icon: '💣', textColor: '#fee2e2' },
+  pond:             { bg: 'rgba(14,165,233,0.35)',  border: '#0284c7', icon: '💧', textColor: '#e0f2fe', round: true },
+  ruins:            { bg: 'rgba(100,116,139,0.45)', border: '#64748b', icon: '🏚',  textColor: '#e2e8f0' },
+  rooftop:          { bg: 'rgba(99,102,241,0.35)',  border: '#6366f1', icon: '🏗',  textColor: '#ede9fe' },
+  tank_traps:       { bg: 'rgba(234,179,8,0.30)',   border: '#ca8a04', icon: '⚙',  textColor: '#fef9c3' },
+  vehicle_wreckage: { bg: 'rgba(239,68,68,0.30)',   border: '#b91c1c', icon: '🔥', textColor: '#fee2e2' },
+  wall_open:        { bg: 'rgba(148,163,184,0.35)', border: '#94a3b8', icon: '🧱', textColor: '#f1f5f9' },
+  wall_solid:       { bg: 'rgba(51,65,85,0.70)',    border: '#1e293b', icon: '🪨', textColor: '#cbd5e1' },
+  // Legacy fallback
+  cover:            { bg: 'rgba(34,197,94,0.30)',   border: '#22c55e', icon: '🌿', textColor: '#dcfce7' },
+  difficult:        { bg: 'rgba(234,179,8,0.30)',   border: '#eab308', icon: '⚠',  textColor: '#fef9c3' },
+  default:          { bg: 'rgba(100,116,139,0.30)', border: '#64748b', icon: '▪',  textColor: '#e2e8f0' },
+};
+
 export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) {
   const GRID_SIZE = 6;
   const BATTLEFIELD_WIDTH = 72;
