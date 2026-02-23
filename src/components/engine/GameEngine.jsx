@@ -433,7 +433,8 @@ export class DMNEngine {
 
     const strengthRatio = unit.current_models / (nearestEnemy.current_models || 1);
     if (strengthRatio < 0.3) { score -= 0.3; details.push({ label: 'Badly outnumbered', value: -0.3 }); }
-    if (attritionCritical && enemyHealthRatio > 0.3) { score -= 1.0; details.push({ label: 'Critically wounded: avoid charge', value: -1.0 }); }
+    const critPenalty = this.personality?.action_weights?.Charge?.critically_wounded_penalty ?? -1.0;
+    if (attritionCritical && enemyHealthRatio > 0.3) { score += critPenalty; details.push({ label: 'Critically wounded: avoid charge', value: critPenalty }); }
     if (strategicState.isLosing && strategicState.roundsRemaining <= 1) { score += 0.8; details.push({ label: 'Final round desperation charge', value: 0.8 }); }
 
     return { score, details };
