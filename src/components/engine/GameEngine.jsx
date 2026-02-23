@@ -43,12 +43,9 @@ export class DMNEngine {
 
   analyzePastPerformance(analytics) {
     if (!analytics || analytics.length === 0) return null;
-
     const wins = analytics.filter(a => a.result === 'won').length;
     const totalBattles = analytics.length;
     const winRate = totalBattles > 0 ? wins / totalBattles : 0;
-
-    // Aggregate successful actions
     const actionSuccess = {};
     analytics.forEach(a => {
       if (a.successful_actions) {
@@ -57,23 +54,18 @@ export class DMNEngine {
         });
       }
     });
-
     return { winRate, actionSuccess, totalBattles };
   }
 
-  // Classify unit as melee-primary: has at least one melee weapon AND melee weapons >= ranged weapons
-  // Bug 4 fix: Artillery/support units are never melee-primary
   isMeleePrimary(unit) {
-    const isFireSupport = unit.special_rules?.includes('Indirect') || 
-                         /artillery|gun|cannon|mortar|support/i.test(unit.name);
+    const isFireSupport = unit.special_rules?.includes('Indirect') ||
+      /artillery|gun|cannon|mortar|support/i.test(unit.name);
     if (isFireSupport) return false;
-
     const melee = (unit.weapons || []).filter(w => w.range <= 2);
     const ranged = (unit.weapons || []).filter(w => w.range > 2);
     return melee.length > 0 && melee.length >= ranged.length;
   }
 
-  // Maximum charge distance for unit (base 12" for Charge action)
   maxChargeDistance(unit) {
     let base = 12;
     if (unit.special_rules?.includes('Fast')) base += 4;
@@ -81,326 +73,393 @@ export class DMNEngine {
     return Math.max(0, base);
   }
 
+  // ── 1. ENEMY ARCHETYPE DETECTION ─────────────────────────────────────────
+  // Detect the opponent's army composition to adapt counter-strategy.
+  detectEnemyArchetype(enemies) {
+    if (!enemies || enemies.length === 0) return 'unknown';
+    let meleeCount = 0, rangedCount = 0, vehicleCount = 0;
+    enemies.forEach(e => {
+      const toughMatch = e.special_rules?.match(/Tough\((\d+)\)/);
+      const toughVal = toughMatch ? parseInt(toughMatch[1]) : 0;
+      if (toughVal >= 6) vehicleCount++;
+      else if (this.isMeleePrimary(e)) meleeCount++;
+      else rangedCount++;
+    });
+    const total = enemies.length;
+    if (vehicleCount / total >= 0.4) return 'vehicle_heavy';
+    if (meleeCount / total >= 0.5) return 'melee_swarm';
+    if (rangedCount / total >= 0.5) return 'elite_ranged';
+    return 'mixed';
+  }
+
+  // ── 2. FORMATION / POSITIONING: ally cluster & flank exposure ────────────
+  // Returns a positioning penalty if unit is too clustered with allies,
+  // or a bonus for screening fire-support units.
+  scoreFormation(unit, allies, gameState) {
+    let score = 0;
+    const CLUSTER_RADIUS = 8;
+    const nearbyAllies = allies.filter(a => a.id !== unit.id && this.getDistance(unit, a) < CLUSTER_RADIUS);
+
+    // Penalise clustering — spread units across the board
+    score -= nearbyAllies.length * 0.15;
+
+    // Fire support units want allies between them and the enemy
+    const isFireSupport = unit.special_rules?.includes('Indirect') ||
+      /artillery|gun|cannon|mortar|support/i.test(unit.name) ||
+      unit.weapons?.some(w => w.range >= 24);
+    if (isFireSupport) {
+      const screeningAllies = allies.filter(a =>
+        a.id !== unit.id &&
+        this.getDistance(unit, a) < 15 &&
+        !this.isMeleePrimary(a)
+      );
+      score += screeningAllies.length * 0.2;
+    }
+
+    // Bonus for flanking — being in a different column from most allies
+    const allyColumns = allies.filter(a => a.id !== unit.id).map(a => a.x < 24 ? 'left' : a.x < 48 ? 'centre' : 'right');
+    const myCol = unit.x < 24 ? 'left' : unit.x < 48 ? 'centre' : 'right';
+    const uniqueCols = new Set(allyColumns);
+    if (!uniqueCols.has(myCol) || allyColumns.filter(c => c === myCol).length <= 1) score += 0.2;
+
+    return score;
+  }
+
+  // ── 3. ATTRITION / RETREAT LOGIC ─────────────────────────────────────────
+  // Units below 40% health should avoid melee and retreat if possible.
+  isAttritionCritical(unit) {
+    const healthRatio = unit.current_models / Math.max(unit.total_models, 1);
+    return healthRatio < 0.4;
+  }
+
+  // ── 4. THREAT ZONE MAP ────────────────────────────────────────────────────
+  // Returns a threat level at (x, y) given all enemies — used to route units around danger.
+  getThreatLevel(x, y, enemies) {
+    let threat = 0;
+    for (const e of enemies) {
+      const dist = Math.hypot(x - e.x, y - e.y);
+      const toughMatch = e.special_rules?.match(/Tough\((\d+)\)/);
+      const isTough = toughMatch && parseInt(toughMatch[1]) >= 6;
+      const hasLongRange = e.weapons?.some(w => w.range >= 24);
+      const isMelee = this.isMeleePrimary(e);
+      // Heavy melee threats dominate close zones
+      if (isMelee && dist < 14) threat += (14 - dist) / 14 * (isTough ? 2.0 : 1.2);
+      // Ranged threats cover wider zones
+      if (hasLongRange && dist < 30) threat += (30 - dist) / 30 * 0.6;
+    }
+    return threat;
+  }
+
   evaluateActionOptions(unit, gameState, owner) {
     const options = [];
     const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
+    const allies = gameState.units.filter(u => u.owner === owner && u.current_models > 0);
     const nearestEnemy = this.findNearestEnemy(unit, enemies);
     const nearestObjective = this.findNearestObjective(unit, gameState.objectives);
-    
     const strategicState = this.analyzeStrategicPosition(gameState, owner);
+    const enemyArchetype = this.detectEnemyArchetype(enemies);
+    const formationScore = this.scoreFormation(unit, allies, gameState);
+    const attritionCritical = this.isAttritionCritical(unit);
 
     if (unit.embarked_in) {
-      options.push({ action: 'Disembark', score: this.scoreDisembarkAction(unit, gameState, owner), selected: true });
+      options.push({ action: 'Disembark', score: 1.0, selected: true });
       return options;
     }
 
     const isTransport = unit.special_rules?.includes('Transport');
-    
+    const isFireSupport = unit.special_rules?.includes('Indirect') ||
+      /artillery|gun|cannon|mortar|support/i.test(unit.name);
+    const chargeRange = this.maxChargeDistance(unit);
+    const canCharge = nearestEnemy &&
+      this.getDistance(unit, nearestEnemy) <= chargeRange &&
+      !isTransport && !unit.just_charged && !isFireSupport;
+
     options.push({
       action: 'Hold',
-      score: this.scoreHoldAction(unit, gameState, nearestEnemy, strategicState),
+      score: this.scoreHoldAction(unit, gameState, nearestEnemy, strategicState, enemyArchetype, formationScore, attritionCritical),
       selected: false
     });
-
     options.push({
       action: 'Advance',
-      score: this.scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState),
+      score: this.scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState, enemyArchetype, formationScore, attritionCritical),
       selected: false
     });
-
     options.push({
       action: 'Rush',
-      score: this.scoreRushAction(unit, gameState, nearestObjective, strategicState),
+      score: this.scoreRushAction(unit, gameState, nearestObjective, strategicState, enemies, attritionCritical),
       selected: false
     });
 
-    // Charge only offered when enemy is within maximum charge distance and unit hasn't charged this round
-    // Bug 4 fix: Fire support units NEVER charge
-    const isFireSupport = unit.special_rules?.includes('Indirect') || 
-                         /artillery|gun|cannon|mortar|support/i.test(unit.name);
-    const chargeRange = this.maxChargeDistance(unit);
-    const canCharge = nearestEnemy && this.getDistance(unit, nearestEnemy) <= chargeRange && !isTransport && !unit.just_charged && !isFireSupport;
     if (canCharge) {
       options.push({
         action: 'Charge',
-        score: this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState),
+        score: this.scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState, attritionCritical),
         selected: false
       });
     }
 
-    // Apply learning adjustments
-    if (this.learningData && this.learningData.actionSuccess) {
+    // Historical learning adjustments
+    if (this.learningData?.actionSuccess) {
       const totalActions = Object.values(this.learningData.actionSuccess).reduce((a, b) => a + b, 0);
       options.forEach(opt => {
-        const successCount = this.learningData.actionSuccess[opt.action] || 0;
-        const successRate = totalActions > 0 ? successCount / totalActions : 0;
-        // Boost successful actions by up to 20 points based on historical success
+        const successRate = totalActions > 0 ? (this.learningData.actionSuccess[opt.action] || 0) / totalActions : 0;
         opt.score += successRate * 20;
       });
     }
 
-    // Select best option
     options.sort((a, b) => b.score - a.score);
     options[0].selected = true;
-
     return options;
   }
-  
+
   analyzeStrategicPosition(gameState, owner) {
     const myUnits = gameState.units.filter(u => u.owner === owner && u.current_models > 0);
     const enemyUnits = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
-    
-    // Count total strength
     const myStrength = myUnits.reduce((sum, u) => sum + u.current_models, 0);
     const enemyStrength = enemyUnits.reduce((sum, u) => sum + u.current_models, 0);
-    
-    // Count objectives controlled
     const myObjectives = gameState.objectives.filter(o => o.controlled_by === owner).length;
     const enemyObjectives = gameState.objectives.filter(o => o.controlled_by !== owner && o.controlled_by !== null).length;
-    
-    // Determine if we're winning
     const strengthRatio = myStrength / Math.max(enemyStrength, 1);
     const objectivesWinning = myObjectives > enemyObjectives;
     const isWinning = objectivesWinning || strengthRatio > 1.3;
     const isLosing = !objectivesWinning && strengthRatio < 0.7;
-    
+    const round = gameState.current_round || 1;
     return {
-      isWinning,
-      isLosing,
-      myStrength,
-      enemyStrength,
-      strengthRatio,
-      myObjectives,
-      enemyObjectives,
-      roundsRemaining: Math.max(0, 5 - (gameState.current_round || 1))
+      isWinning, isLosing, myStrength, enemyStrength, strengthRatio,
+      myObjectives, enemyObjectives,
+      roundsRemaining: Math.max(0, 5 - round),
+      round
     };
   }
-  
-  predictOpponentResponse(unit, action, gameState, owner) {
-    // Simulate what opponent might do in response
-    const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
-    
-    let threatLevel = 0;
-    
-    for (const enemy of enemies) {
-      const distance = this.getDistance(unit, enemy);
-      
-      // If we're in charge range, opponent might charge us
-      if (distance <= 12 && enemy.weapons?.some(w => w.range <= 2)) {
-        threatLevel += 0.4;
-      }
-      
-      // If we're in shooting range, opponent might shoot us
-      if (distance <= 24 && enemy.weapons?.some(w => w.range > 12)) {
-        threatLevel += 0.2;
-      }
-      
-      // Consider enemy strength
-      const enemyStrength = enemy.current_models * (enemy.quality <= 3 ? 1.5 : 1.0);
-      threatLevel += (enemyStrength / 10) * 0.1;
-    }
-    
-    return threatLevel;
-  }
 
-  scoreDisembarkAction(unit, gameState, owner) {
-    // Always disembark to take actions
-    return 1.0;
-  }
-
-  scoreHoldAction(unit, gameState, nearestEnemy, strategicState) {
+  scoreHoldAction(unit, gameState, nearestEnemy, strategicState, enemyArchetype, formationScore, attritionCritical) {
     let score = 0.3;
 
-    // Bug 6: penalise Hold for units that have been inactive too long
+    if (unit.status === 'shaken') return 1.0; // must hold to recover
+
     if ((unit.rounds_without_offense || 0) >= 2) score -= 0.4;
-    
-    // Bonus if unit has good ranged weapons
+
     const hasRanged = unit.weapons?.some(w => w.range > 12);
     if (hasRanged) score += 0.3;
-    
-    // Bonus if enemies are in range
     if (nearestEnemy && this.getDistance(unit, nearestEnemy) <= 24) score += 0.2;
-    
-    // Penalty if unit is shaken
-    if (unit.status === 'shaken') score = 1.0; // Must hold to recover
-    
-    // Strategic adjustments
-    if (strategicState.isWinning && hasRanged) {
-      // If winning, defensive shooting is good
-      score += 0.2;
-    }
-    
-    // If on an objective, holding is valuable
-    const onObjective = gameState.objectives.some(obj => 
-      this.getDistance(unit, obj) <= 3
-    );
-    if (onObjective) score += 0.3;
-    
+
+    // ── 4. OBJECTIVE-AWARE: holding on objective is valuable ──────────────
+    const onObjective = gameState.objectives.some(obj => this.getDistance(unit, obj) <= 3);
+    if (onObjective) score += 0.4;
+
+    // ── 4. ROUND-PHASE scoring: late game + winning = stay put ────────────
+    if (strategicState.isWinning && hasRanged) score += 0.2;
+    if (strategicState.isWinning && onObjective && strategicState.roundsRemaining <= 2) score += 0.5;
+
+    // ── 5. COUNTER-STRATEGY: vs melee swarm, ranged units want to hold & shoot ──
+    if (enemyArchetype === 'melee_swarm' && hasRanged) score += 0.35;
+
+    // ── 3. ATTRITION: critically wounded units hold to avoid being wiped ──
+    if (attritionCritical) score += 0.5;
+
+    // ── 2. FORMATION: factored into all scoring ───────────────────────────
+    score += formationScore * 0.3;
+
     return score;
   }
 
-  scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState) {
+  scoreAdvanceAction(unit, gameState, nearestEnemy, nearestObjective, strategicState, enemyArchetype, formationScore, attritionCritical) {
     let score = 0.5;
 
-    // Melee-primary units within or near charge range prefer Charge/Rush over Advance
     if (this.isMeleePrimary(unit) && nearestEnemy) {
       const dist = this.getDistance(unit, nearestEnemy);
       const chargeRange = this.maxChargeDistance(unit);
-      if (dist <= chargeRange) score -= 1.5; // decisive penalty — Charge will win decisively
-      else if (dist <= chargeRange + 8) score -= 0.6; // getting close — Rush preferred
+      if (dist <= chargeRange) score -= 1.5;
+      else if (dist <= chargeRange + 8) score -= 0.6;
     }
-    
-    // Bonus for moving toward objectives
+
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 3) {
       score += 0.3;
       if (strategicState.myObjectives < strategicState.enemyObjectives) score += 0.4;
-      // Extra bonus if the objective is uncontested or enemy-controlled
       if (nearestObjective.controlled_by !== unit.owner) score += 0.2;
     }
-    
-    // Bonus if enemies are at medium range (good for shoot-and-advance units)
+
     if (nearestEnemy) {
       const dist = this.getDistance(unit, nearestEnemy);
       if (dist > 12 && dist < 30) score += 0.2;
     }
-    
+
     if (strategicState.isLosing && strategicState.roundsRemaining < 3) score += 0.3;
-    
+
+    // ── 5. COUNTER-STRATEGY: vs elite ranged, close distance fast ────────
+    if (enemyArchetype === 'elite_ranged' && !this.isMeleePrimary(unit)) score += 0.3;
+    // vs vehicle heavy: advance to AP weapon range
+    if (enemyArchetype === 'vehicle_heavy') {
+      const hasAP = unit.weapons?.some(w => (w.ap || 0) >= 2 || w.special_rules?.includes('AP'));
+      if (hasAP) score += 0.25;
+    }
+
+    // ── 3. ATTRITION: critically wounded ranged units keep distance ───────
+    if (attritionCritical && !this.isMeleePrimary(unit)) score -= 0.3;
+
+    // ── 2. FORMATION bonus ────────────────────────────────────────────────
+    score += formationScore * 0.2;
+
     return score;
   }
 
-  scoreRushAction(unit, gameState, nearestObjective, strategicState) {
+  scoreRushAction(unit, gameState, nearestObjective, strategicState, enemies, attritionCritical) {
     let score = 0.4;
-    
-    // High bonus for getting to objectives quickly
+
     if (nearestObjective && this.getDistance(unit, nearestObjective) > 12) {
       score += 0.4;
       if (nearestObjective.controlled_by !== unit.owner) score += 0.3;
     }
-    
-    // Penalty if unit has shooting weapons (can't shoot after rush)
+
     const hasRanged = unit.weapons?.some(w => w.range > 6);
     if (hasRanged) score -= 0.3;
 
-    // Melee-primary units near (but not quite in) charge range should rush to close the gap
     if (this.isMeleePrimary(unit)) {
-      const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
       const nearest = this.findNearestEnemy(unit, enemies);
       if (nearest) {
         const dist = this.getDistance(unit, nearest);
         const chargeRange = this.maxChargeDistance(unit);
-        if (dist > chargeRange && dist <= chargeRange + 14) {
-          score += 0.8; // rush to get into charge range next turn
-        }
+        if (dist > chargeRange && dist <= chargeRange + 14) score += 0.8;
       }
     }
-    
+
     if (strategicState.isLosing && strategicState.roundsRemaining <= 2) score += 0.5;
     if (strategicState.enemyObjectives > strategicState.myObjectives) score += 0.3;
-    
+
+    // ── 4. ROUND-PHASE: early game rush to contest objectives ─────────────
+    if (strategicState.round <= 2 && nearestObjective) {
+      const dist = this.getDistance(unit, nearestObjective);
+      if (dist > 6) score += 0.3;
+    }
+
+    // ── 3. ATTRITION: critically wounded units don't rush into danger ─────
+    if (attritionCritical) {
+      const nearestEnemy = this.findNearestEnemy(unit, enemies);
+      if (nearestEnemy) {
+        // Only penalise rushing toward enemies when wounded
+        const rushingTowardDanger = this.getDistance(unit, nearestEnemy) < 18;
+        if (rushingTowardDanger) score -= 0.6;
+      }
+    }
+
     return score;
   }
 
-  scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState) {
-    // Base score — high enough that melee-primary units almost always charge when in range.
-    // Ranged units have a low base and no melee bonuses so they rarely beat Advance/Hold.
+  scoreChargeAction(unit, nearestEnemy, gameState, owner, strategicState, attritionCritical) {
     const meleeWeapons = (unit.weapons || []).filter(w => w.range <= 2);
     const hasMelee = meleeWeapons.length > 0;
     const meleePrimary = this.isMeleePrimary(unit);
 
-    // Pure-ranged units: very low charge score so they never charge
     if (!hasMelee) return 0.2;
 
-    let score = 1.2; // raised base so charge competes firmly with advance/hold
+    let score = 1.2;
     const chargeRange = this.maxChargeDistance(unit);
     const dist = nearestEnemy ? this.getDistance(unit, nearestEnemy) : 99;
-
-    // Hard gate: never score Charge if enemy is outside max charge distance
     if (dist > chargeRange) return -99;
 
-    // Melee-primary archetype: decisive bonus — Tri-Scorpions, Spider Walker, Eternals etc.
     if (meleePrimary) score += 1.5;
-
-    // Named rule bonuses
     if (unit.special_rules?.includes('Furious')) score += 0.6;
     if (unit.special_rules?.includes('Rage')) score += 0.5;
     if (unit.special_rules?.includes('Hatred')) score += 0.4;
-    if (unit.special_rules?.includes('Fear')) score += 0.3; // scary units like to charge
-
-    // Melee weapon bonus
+    if (unit.special_rules?.includes('Fear')) score += 0.3;
     if (hasMelee) score += 0.5;
 
-    // Distance scaling: closer = much better (0–1.0 range)
     score += ((chargeRange - dist) / chargeRange) * 1.0;
 
-    // Finish off weak targets
+    // ── 1. SMART TARGET: finish off weak targets ──────────────────────────
     const enemyHealthRatio = nearestEnemy.current_models / (nearestEnemy.total_models || 1);
     if (enemyHealthRatio < 0.5) score += 0.4;
-    if (enemyHealthRatio < 0.25) score += 0.4; // stacked — almost guarantee a kill
+    if (enemyHealthRatio < 0.25) score += 0.6;
 
-    // Objective pressure: contest enemy-held objectives in melee
+    // ── 1. WEAPON MATCHING: AP weapons vs tough targets ───────────────────
+    const unitBestAP = Math.max(...(unit.weapons || []).map(w => w.ap || 0), 0);
+    const targetIsTough = nearestEnemy.special_rules?.match(/Tough\((\d+)\)/);
+    if (targetIsTough && unitBestAP >= 2) score += 0.4;
+
+    // ── 5. COUNTER-STRATEGY: vs vehicle heavy, charge with AP ─────────────
+    const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
+    const archetype = this.detectEnemyArchetype(enemies);
+    if (archetype === 'vehicle_heavy' && unitBestAP >= 2 && meleePrimary) score += 0.5;
+
     const targetOnObjective = gameState.objectives.some(obj =>
       this.getDistance(nearestEnemy, obj) <= 3 && obj.controlled_by !== owner
     );
     if (targetOnObjective) score += 0.5;
 
-    // Inactivity boost — push units that haven't fought in 2+ rounds
     if ((unit.rounds_without_offense || 0) >= 1) score += 0.4;
     if ((unit.rounds_without_offense || 0) >= 2) score += 0.5;
 
-    // Reduce if badly outnumbered and no support
     const strengthRatio = unit.current_models / (nearestEnemy.current_models || 1);
     if (strengthRatio < 0.3) score -= 0.3;
+
+    // ── 3. ATTRITION: never charge when critically wounded unless killing blow ──
+    if (attritionCritical && enemyHealthRatio > 0.3) score -= 1.0;
+
+    // ── 4. FINAL-ROUND desperation charge ─────────────────────────────────
+    if (strategicState.isLosing && strategicState.roundsRemaining <= 1) score += 0.8;
 
     return score;
   }
 
   selectTarget(unit, enemies) {
     if (!enemies || enemies.length === 0) return null;
-    
-    // Score each enemy
     const scoredEnemies = enemies.map(enemy => ({
       enemy,
-      score: this.scoreTarget(unit, enemy)
+      score: this.scoreTarget(unit, enemy, enemies)
     }));
-    
     scoredEnemies.sort((a, b) => b.score - a.score);
     return scoredEnemies[0].enemy;
   }
 
-  scoreTarget(unit, enemy) {
+  // ── 1. SMART TARGET SCORING ───────────────────────────────────────────────
+  scoreTarget(unit, enemy, allEnemies = []) {
     let score = 0;
-    
-    // Prefer weakened targets we can finish off
-    const healthRatio = enemy.current_models / enemy.total_models;
+
+    const healthRatio = enemy.current_models / Math.max(enemy.total_models, 1);
     score += (1 - healthRatio) * 0.5;
-    
-    // Big bonus for nearly destroyed units (finish them off!)
-    if (healthRatio < 0.3) score += 0.4;
-    
-    // Prefer closer targets
+
+    // Opportunity kill: nearly dead — finish them before they act
+    if (healthRatio < 0.3) score += 0.6;
+    if (healthRatio < 0.15) score += 0.6; // stacked — near certain kill
+
     const distance = this.getDistance(unit, enemy);
     score += Math.max(0, (30 - distance) / 30) * 0.3;
-    
-    // Prefer targets we can damage
-    if (enemy.defense <= 3) score += 0.3;
-    
-    // Prioritize threats - units with high quality/firepower
-    if (enemy.quality <= 3) score += 0.2;
-    if (enemy.weapons?.some(w => w.range > 18 && w.attacks >= 3)) score += 0.2;
 
-    // DEADLY units prioritize TOUGH units
-    const hasDeadly = unit.weapons?.some(w => w.special_rules?.includes('Deadly'));
-    if (hasDeadly && enemy.special_rules?.includes('Tough')) {
-      score += 0.5;
-    }
+    // ── 1a. WEAPON MATCHING ────────────────────────────────────────────────
+    // AP weapons prefer high-defence targets
+    const unitBestAP = Math.max(...(unit.weapons || []).map(w => w.ap || 0), 0);
+    if (unitBestAP >= 2 && enemy.defense >= 5) score += 0.4;
 
-    // BLAST units prioritize units with many models
-    const hasBlast = unit.weapons?.some(w => w.special_rules?.includes('Blast'));
-    if (hasBlast && enemy.current_models >= 5) {
-      score += 0.4;
-    }
-    
+    // Blast weapons prefer blob targets
+    const hasBlast = unit.weapons?.some(w => {
+      const sr = Array.isArray(w.special_rules) ? w.special_rules.join(' ') : (w.special_rules || '');
+      return sr.includes('Blast');
+    });
+    if (hasBlast && enemy.current_models >= 5) score += 0.5;
+
+    // Deadly weapons prefer Tough targets
+    const hasDeadly = unit.weapons?.some(w => {
+      const sr = Array.isArray(w.special_rules) ? w.special_rules.join(' ') : (w.special_rules || '');
+      return sr.includes('Deadly');
+    });
+    if (hasDeadly && enemy.special_rules?.match(/Tough\(\d+\)/)) score += 0.5;
+
+    // ── 1b. THREAT ASSESSMENT: prioritise dangerous enemies ───────────────
+    if (enemy.quality <= 3) score += 0.25; // high-quality units are dangerous
+    if (enemy.weapons?.some(w => w.range > 18 && (w.attacks || 1) >= 3)) score += 0.3;
+    if (enemy.special_rules?.includes('Fear')) score += 0.15;
+
+    // ── 1c. ABOUT-TO-ACT: prefer activated-neighbour heuristic (not yet activated) ──
+    // If enemy has not yet activated this round, it's a higher priority kill target
+    // to prevent it from acting. We can't directly know activation order, but
+    // if their wounds are full they likely haven't taken damage yet = priority target
+    if (healthRatio >= 0.95) score += 0.1;
+
+    // ── 5. COUNTER-STRATEGY: match weapon type to archetype target ────────
+    const toughMatch = enemy.special_rules?.match(/Tough\((\d+)\)/);
+    const isVehicle = toughMatch && parseInt(toughMatch[1]) >= 6;
+    if (isVehicle && unitBestAP >= 2) score += 0.4; // prioritise vehicles if we have AP
+
     return score;
   }
 
@@ -424,6 +483,31 @@ export class DMNEngine {
       const dist = this.getDistance(unit, obj);
       return dist < this.getDistance(unit, nearest) ? obj : nearest;
     });
+  }
+
+  // ── 6. MORALE/ATTRITION: find most vulnerable allied unit needing screening ──
+  findMostVulnerableAlly(gameState, owner) {
+    const shaken = gameState.units.filter(u =>
+      u.owner === owner && u.current_models > 0 && u.status === 'shaken'
+    );
+    if (shaken.length > 0) return shaken[0];
+    const critical = gameState.units.filter(u =>
+      u.owner === owner && u.current_models > 0 && this.isAttritionCritical(u)
+    );
+    return critical[0] || null;
+  }
+
+  predictOpponentResponse(unit, action, gameState, owner) {
+    const enemies = gameState.units.filter(u => u.owner !== owner && u.current_models > 0);
+    let threatLevel = 0;
+    for (const enemy of enemies) {
+      const distance = this.getDistance(unit, enemy);
+      if (distance <= 12 && enemy.weapons?.some(w => w.range <= 2)) threatLevel += 0.4;
+      if (distance <= 24 && enemy.weapons?.some(w => w.range > 12)) threatLevel += 0.2;
+      const enemyStrength = enemy.current_models * (enemy.quality <= 3 ? 1.5 : 1.0);
+      threatLevel += (enemyStrength / 10) * 0.1;
+    }
+    return threatLevel;
   }
 
   // ─── DEPLOYMENT DMN ──────────────────────────────────────────────────────
