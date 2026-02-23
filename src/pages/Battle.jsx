@@ -531,6 +531,7 @@ export default function Battle() {
 
     if (unit.is_in_reserve) {
       summaryDeployed.reserves.push(unit.name);
+      unit.is_deployed = true; // reserve units are "deployed" (just off-table)
       logger?.logDeploy({
         unit,
         zone: 'reserve',
