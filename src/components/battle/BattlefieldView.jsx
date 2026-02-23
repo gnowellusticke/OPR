@@ -1,6 +1,5 @@
 import React from 'react';
 import { Card } from "@/components/ui/card";
-import { Users, User } from "lucide-react";
 import UnitGroupDisplay from './UnitGroupDisplay';
 
 export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) {
