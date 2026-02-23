@@ -161,11 +161,86 @@ export class RulesEngine {
     }
     if (terrain && !unit.special_rules?.includes('Strider') && !unit.special_rules?.includes('Flying')) {
       const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
-      if (unitTerrain && unitTerrain.type === 'difficult') base = Math.max(0, base - 2);
+      if (unitTerrain) {
+        // Difficult terrain: -2" movement
+        if (unitTerrain.difficult) base = Math.max(0, base - 2);
+        // Barricades: -3" extra penalty to cross
+        if (unitTerrain.movePenalty > 0) base = Math.max(0, base - unitTerrain.movePenalty);
+        // Rooftops: impassable except for Flying
+        if (unitTerrain.impassable && !unit.special_rules?.includes('Flying')) base = 0;
+        // Tank Traps: difficult only for vehicles (units with Tough(6+) treated as vehicles)
+        if (unitTerrain.vehicleOnly) {
+          const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
+          const isVehicle = toughMatch && parseInt(toughMatch[1]) >= 6;
+          if (isVehicle) base = Math.max(0, base - 2);
+        }
+      }
     }
     if (unit.special_rules?.includes('Fast')) base += (action === 'Advance' ? 2 : 4);
     if (unit.special_rules?.includes('Slow')) base -= (action === 'Advance' ? 2 : 4);
     return Math.max(0, base);
+  }
+
+  // Check if a unit moving through terrain takes dangerous terrain wounds
+  // Returns number of wounds dealt (0 if safe). Call this during Rush/Charge resolution.
+  checkDangerousTerrain(unit, terrain, action) {
+    const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
+    if (!unitTerrain) return 0;
+    // Minefields & Ponds: always dangerous on entry
+    if (unitTerrain.dangerous && !unitTerrain.rushChargeDangerous) {
+      const roll = this.dice.roll();
+      return roll === 1 ? 1 : 0; // fail on a 1
+    }
+    // Vehicle Wreckage: only dangerous on Rush or Charge
+    if (unitTerrain.rushChargeDangerous && (action === 'Rush' || action === 'Charge')) {
+      const roll = this.dice.roll();
+      return roll === 1 ? 1 : 0;
+    }
+    return 0;
+  }
+
+  // Hill elevation: units on a hill top can ignore one terrain feature for LOS
+  isOnHill(unit, terrain) {
+    const t = this.getTerrainAtPosition(unit.x, unit.y, terrain);
+    return t?.type === 'hill';
+  }
+
+  // LOS check considering blocking terrain (Wall Solid) and forests (can't shoot through)
+  checkLineOfSightTerrain(from, to, terrain) {
+    if (!terrain || terrain.length === 0) return true;
+    // If attacker is on a hill, grant one free ignore of blocking terrain
+    const attackerOnHill = this.isOnHill(from, terrain);
+    let hillIgnoreUsed = false;
+
+    for (const t of terrain) {
+      if (!t.blocking && !t.blocksThroughLOS) continue;
+      // Simple AABB line intersection test
+      if (this._lineIntersectsRect(from.x, from.y, to.x, to.y, t.x, t.y, t.x + t.width, t.y + t.height)) {
+        if (attackerOnHill && !hillIgnoreUsed) {
+          hillIgnoreUsed = true; // ignore this one obstacle (Hill rule)
+          continue;
+        }
+        return false; // LOS blocked
+      }
+    }
+    return true;
+  }
+
+  // Liang-Barsky-style line/rect intersection
+  _lineIntersectsRect(x1, y1, x2, y2, rx1, ry1, rx2, ry2) {
+    const dx = x2 - x1; const dy = y2 - y1;
+    const p = [-dx, dx, -dy, dy];
+    const q = [x1 - rx1, rx2 - x1, y1 - ry1, ry2 - y1];
+    let tMin = 0; let tMax = 1;
+    for (let i = 0; i < 4; i++) {
+      if (p[i] === 0) { if (q[i] < 0) return false; }
+      else {
+        const t = q[i] / p[i];
+        if (p[i] < 0) tMin = Math.max(tMin, t);
+        else tMax = Math.min(tMax, t);
+      }
+    }
+    return tMin < tMax;
   }
 
   hasStealth(unit, gameState) {
