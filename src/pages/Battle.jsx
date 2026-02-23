@@ -712,6 +712,13 @@ export default function Battle() {
       if (rushTarget) {
         const result = rules.executeMovement(unit, action, rushTarget, gs.terrain);
         const zone = rules.getZone(unit.x, unit.y);
+        // Dangerous terrain check after moving
+        const dangerWounds = rules.checkDangerousTerrain(unit, gs.terrain, 'Rush');
+        if (dangerWounds > 0) {
+          unit.current_models = Math.max(0, unit.current_models - dangerWounds);
+          evs.push({ round, type: 'combat', message: `⚠ ${unit.name} hit dangerous terrain during Rush! -${dangerWounds} wound(s)`, timestamp: new Date().toLocaleTimeString() });
+          if (unit.current_models <= 0) unit.status = 'destroyed';
+        }
         evs.push({ round, type: 'movement', message: `${unit.name} rushed ${result.distance.toFixed(1)}"`, timestamp: new Date().toLocaleTimeString() });
         logger?.logMove({ round, actingUnit: unit, action, distance: result.distance, zone, dmnReason });
       }
