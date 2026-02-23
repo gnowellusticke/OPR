@@ -142,11 +142,12 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
               top: (t.y / GRID_SIZE) * CELL_SIZE,
               width: (t.width / GRID_SIZE) * CELL_SIZE,
               height: (t.height / GRID_SIZE) * CELL_SIZE,
-              backgroundColor: t.type === 'cover' ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)',
-              border: '2px solid rgba(148,163,184,0.5)'
+              backgroundColor: t.type === 'cover' ? 'rgba(34,197,94,0.18)' : 'rgba(234,179,8,0.18)',
+              border: `2px solid ${t.type === 'cover' ? 'rgba(34,197,94,0.5)' : 'rgba(234,179,8,0.5)'}`,
+              backdropFilter: 'blur(1px)'
             }}
           >
-            <span className="text-xs text-slate-300 p-1">{t.type}</span>
+            <span style={{ fontSize: 9, color: '#cbd5e1', padding: '2px 4px', display: 'block', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{t.type}</span>
           </div>
         ))}
 
