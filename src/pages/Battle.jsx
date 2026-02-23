@@ -217,12 +217,11 @@ export default function Battle() {
     };
 
     const WEIGHTED = THEME_WEIGHTS[theme] || THEME_WEIGHTS.mixed;
-
-    let terrain = [];
-    let attempts = 0;
     const MAX_TERRAIN_PIECES = 15;
     const MAX_ATTEMPTS = 150;
 
+    let terrain = [];
+    let attempts = 0;
     while (terrain.length < MAX_TERRAIN_PIECES && attempts < MAX_ATTEMPTS) {
       const pick = WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
       const def = TERRAIN_TYPES[pick];
@@ -247,74 +246,63 @@ export default function Battle() {
       attempts++;
     }
 
-    // ── Enforce minimum terrain distribution constraints ──────────────────────
+    // ── Post-generation: enforce minimum terrain density rules ────────────────
     // ≥50% must block LOS, ≥33% must provide cover, ≥33% must be difficult terrain
-    let losBlockingCount = terrain.filter(t => t.blocksThroughLOS || t.blocking).length;
-    let coverCount = terrain.filter(t => t.cover).length;
-    let difficultCount = terrain.filter(t => t.difficult).length;
+    const makePiece = (pickType) => {
+      const def = TERRAIN_TYPES[pickType];
+      const isLinear = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid';
+      const isBuilding = pickType === 'solid_building';
+      const w = isLinear ? 8 + Math.random() * 4 : isBuilding ? 4 + Math.random() * 5 : 5 + Math.random() * 6;
+      const h = isLinear ? 1.5 + Math.random() * 1.5 : isBuilding ? 4 + Math.random() * 4 : 4 + Math.random() * 5;
+      return { ...def, type: pickType, x: Math.random() * 54 + 6, y: Math.random() * 34 + 6, width: w, height: h };
+    };
 
-    const totalTerrain = terrain.length;
-    const MIN_LOS_BLOCKING = Math.ceil(totalTerrain * 0.5);
-    const MIN_COVER = Math.ceil(totalTerrain * 0.33);
-    const MIN_DIFFICULT = Math.ceil(totalTerrain * 0.33);
+    const countLOS = () => terrain.filter(t => t.blocksThroughLOS || t.blocking).length;
+    const countCover = () => terrain.filter(t => t.cover).length;
+    const countDifficult = () => terrain.filter(t => t.difficult).length;
 
-    let safetyBreaker = 0;
-    while ((losBlockingCount < MIN_LOS_BLOCKING || coverCount < MIN_COVER || difficultCount < MIN_DIFFICULT) && safetyBreaker < MAX_ATTEMPTS) {
-      // First try adding new pieces if below max
-      if (terrain.length < MAX_TERRAIN_PIECES) {
-        const possiblePicks = [];
-        if (losBlockingCount < MIN_LOS_BLOCKING) possiblePicks.push('forest', 'solid_building', 'wall_solid');
-        if (coverCount < MIN_COVER) possiblePicks.push('barricade', 'crater', 'forest', 'hill', 'ruins', 'wall_open');
-        if (difficultCount < MIN_DIFFICULT) possiblePicks.push('barricade', 'crater', 'forest', 'hill', 'pond');
+    const tryAddPiece = (pickType) => {
+      if (terrain.length >= MAX_TERRAIN_PIECES) return false;
+      const p = makePiece(pickType);
+      const overlaps = terrain.some(e =>
+        p.x < e.x + e.width + 1 && p.x + p.width > e.x - 1 &&
+        p.y < e.y + e.height + 1 && p.y + p.height > e.y - 1
+      );
+      if (!overlaps) { terrain.push(p); return true; }
+      return false;
+    };
 
-        const uniquePicks = [...new Set(possiblePicks)];
-        if (uniquePicks.length > 0) {
-          const pickType = uniquePicks[Math.floor(Math.random() * uniquePicks.length)];
-          const def = TERRAIN_TYPES[pickType];
-          const isLinear = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid';
-          const isBuilding = pickType === 'solid_building';
-          const w = isLinear ? 8 + Math.random() * 4 : isBuilding ? 4 + Math.random() * 5 : 5 + Math.random() * 6;
-          const h = isLinear ? 1.5 + Math.random() * 1.5 : isBuilding ? 4 + Math.random() * 4 : 4 + Math.random() * 5;
-          const newPiece = {
-            ...def,
-            type: pickType,
-            x: Math.random() * 54 + 6,
-            y: Math.random() * 34 + 6,
-            width: w,
-            height: h,
-          };
-          const overlaps = terrain.some(e =>
-            newPiece.x < e.x + e.width + 1 && newPiece.x + newPiece.width > e.x - 1 &&
-            newPiece.y < e.y + e.height + 1 && newPiece.y + newPiece.height > e.y - 1
-          );
-          if (!overlaps) {
-            terrain.push(newPiece);
-            losBlockingCount = terrain.filter(t => t.blocksThroughLOS || t.blocking).length;
-            coverCount = terrain.filter(t => t.cover).length;
-            difficultCount = terrain.filter(t => t.difficult).length;
-          }
-        }
-      }
+    for (let pass = 0; pass < MAX_ATTEMPTS; pass++) {
+      const total = terrain.length;
+      const minLOS = Math.ceil(total * 0.5);
+      const minCover = Math.ceil(total * 0.33);
+      const minDiff = Math.ceil(total * 0.33);
 
-      // Modify existing pieces to satisfy remaining requirements
+      const needLOS = countLOS() < minLOS;
+      const needCover = countCover() < minCover;
+      const needDiff = countDifficult() < minDiff;
+
+      if (!needLOS && !needCover && !needDiff) break;
+
+      // Try adding new pieces that satisfy needs
+      if (needLOS && needDiff) { tryAddPiece('forest'); continue; }
+      if (needLOS) { tryAddPiece('solid_building') || tryAddPiece('wall_solid'); continue; }
+      if (needCover && needDiff) { tryAddPiece('barricade') || tryAddPiece('crater'); continue; }
+      if (needCover) { tryAddPiece('ruins') || tryAddPiece('wall_open'); continue; }
+      if (needDiff) { tryAddPiece('pond') || tryAddPiece('hill'); continue; }
+
+      // If can't add new pieces, upgrade existing ones
       for (let i = 0; i < terrain.length; i++) {
-        let modified = false;
-        if (losBlockingCount < MIN_LOS_BLOCKING && !terrain[i].blocksThroughLOS && !terrain[i].blocking) {
-          if (terrain[i].type === 'ruins') { terrain[i].blocksThroughLOS = true; losBlockingCount++; modified = true; }
-          else if (terrain[i].type === 'wall_open') { terrain[i].blocking = true; terrain[i].type = 'wall_solid'; losBlockingCount++; modified = true; }
-          else if (terrain[i].type === 'barricade') { terrain[i].blocking = true; terrain[i].type = 'solid_building'; losBlockingCount++; modified = true; }
+        if (needLOS && !terrain[i].blocksThroughLOS && !terrain[i].blocking) {
+          terrain[i] = { ...terrain[i], blocksThroughLOS: true }; break;
         }
-        if (!modified && coverCount < MIN_COVER && !terrain[i].cover) {
-          terrain[i].cover = true;
-          coverCount++;
-          modified = true;
+        if (needCover && !terrain[i].cover) {
+          terrain[i] = { ...terrain[i], cover: true }; break;
         }
-        if (!modified && difficultCount < MIN_DIFFICULT && !terrain[i].difficult) {
-          terrain[i].difficult = true;
-          difficultCount++;
+        if (needDiff && !terrain[i].difficult) {
+          terrain[i] = { ...terrain[i], difficult: true }; break;
         }
       }
-      safetyBreaker++;
     }
 
     return terrain;
@@ -928,20 +916,26 @@ export default function Battle() {
   };
 
   // ─── SPELL CASTING ────────────────────────────────────────────────────────────
+  // Called before attacking for any unit with Caster(X) that has enough tokens.
+  // AI strategy: cast any spell whose cost <= available tokens, targeting nearest enemy.
+  // Allied units within 18" spend their own tokens to boost the roll (+1 each).
+  // Enemy units within 18" of their own caster spend tokens to counter (-1 each).
 
   const attemptSpellCasting = async (unit, gs, evs) => {
     const rules = rulesRef.current;
     const logger = loggerRef.current;
     const round = gs.current_round;
 
-    if (rules.getCasterTokens(unit) === 0) return;
+    if (rules.getCasterTokens(unit) === 0) return; // not a caster
     const tokens = unit.spell_tokens || 0;
-    if (tokens === 0) return;
+    if (tokens === 0) return; // no tokens to spend
 
+    // Derive spells from unit weapons with spell_cost field, or a default cost-1 spell
     const spells = (unit.weapons || [])
       .filter(w => w.spell_cost != null)
       .sort((a, b) => (a.spell_cost || 1) - (b.spell_cost || 1));
 
+    // Fallback: treat any remaining tokens as a generic cost-1 offensive spell
     if (spells.length === 0) spells.push({ name: 'Spell', spell_cost: 1, range: 18, attacks: 1, ap: 0, special_rules: '' });
 
     const enemies = gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed');
@@ -951,12 +945,17 @@ export default function Battle() {
     const dist = rules.calculateDistance(unit, target);
     const LOS_RANGE = 18;
 
+    // Bug 7 fix: cast at most one spell per activation pass; token check is the sole gate.
+    // Each iteration spends exactly `cost` tokens — loop exits when tokens run out.
+    // Maximum events per round = Caster(X) level (e.g. Caster(3) → max 3 events).
     for (const spell of spells) {
+      // Re-check tokens at the start of each iteration — break immediately if depleted
       if ((unit.spell_tokens || 0) <= 0) break;
       const cost = spell.spell_cost || 1;
       if ((unit.spell_tokens || 0) < cost) continue;
       if (dist > (spell.range || LOS_RANGE)) continue;
 
+      // Allied helpers: friendly Casters within 18" — spend up to 1 token each (not all)
       let friendlyBonus = 0;
       gs.units.forEach(ally => {
         if (ally.id === unit.id || ally.owner !== unit.owner || ally.current_models <= 0) return;
@@ -968,6 +967,7 @@ export default function Battle() {
         }
       });
 
+      // Enemy counters: enemy Casters within 18" of the target — spend up to 1 token each
       let hostileBonus = 0;
       gs.units.forEach(enemy => {
         if (enemy.owner === unit.owner || enemy.current_models <= 0) return;
@@ -1010,11 +1010,14 @@ export default function Battle() {
       }
 
       await new Promise(r => setTimeout(r, 400));
+      // Break after one cast per activation — only one spell attempt per activation pass
       break;
     }
   };
 
   // ─── SHOOTING ─────────────────────────────────────────────────────────────────
+  // Iterates unit.ranged_weapons exactly once — one shoot event per distinct weapon,
+  // never the same weapon twice. Blast(X) uses X automatic hits with no quality roll.
 
   const attemptShooting = async (unit, gs, evs, dmnReason) => {
   const round = gs.current_round;
@@ -1023,7 +1026,8 @@ export default function Battle() {
   const logger = loggerRef.current;
   let shotFired = false;
 
-  const firedThisActivation = unit._firedThisActivation || new Set();
+  // Use activation-level set (initialised at top of activateUnit — Bug 2 fix).
+    const firedThisActivation = unit._firedThisActivation || new Set();
     unit._firedThisActivation = firedThisActivation;
     const rangedWeapons = (unit.weapons || []).filter(w => {
       if ((w.range ?? 2) <= 2) return false;
@@ -1036,6 +1040,7 @@ export default function Battle() {
   if (rangedWeapons.length === 0) return false;
 
   for (const weapon of rangedWeapons) {
+      // Re-query live enemies before each weapon — never target a destroyed unit
       const liveEnemies = gs.units.filter(u =>
       u.owner !== unit.owner &&
       u.current_models > 0 &&
@@ -1047,9 +1052,11 @@ export default function Battle() {
       const target = dmn.selectTarget(unit, liveEnemies);
       if (!target) continue;
 
+      // Bug 7 fix: Skip destroyed targets entirely
       const liveTarget = gs.units.find(u => u.id === target.id);
       if (!liveTarget || liveTarget.current_models <= 0 || liveTarget.status === 'destroyed') continue;
 
+      // Enhancement 1: snapshot state BEFORE shooting rolls
       const shootStateBefore = {
         acting_unit: { wounds_remaining: unit.current_models, max_wounds: unit.total_models, status: unit.status },
         target_unit: { wounds_remaining: liveTarget.current_models, max_wounds: liveTarget.total_models, status: liveTarget.status }
@@ -1058,6 +1065,8 @@ export default function Battle() {
       const dist = rules.calculateDistance(unit, target);
       if (dist > weapon.range) continue;
 
+      // ── Blast(X): X automatic hits, no quality roll ────────────────────────
+      // Normalise special_rules to a string regardless of whether it came in as array or string
       const weaponSpecialStr = Array.isArray(weapon.special_rules)
         ? weapon.special_rules.join(' ')
         : (weapon.special_rules || '');
@@ -1065,8 +1074,11 @@ export default function Battle() {
       const isBlast = !!blastMatch;
       const blastCount = isBlast ? parseInt(blastMatch[1]) : 0;
 
+      // Ensure the weapon object always has special_rules as a string for RulesEngine
       const normWeapon = { ...weapon, special_rules: weaponSpecialStr };
 
+      // Bug 3 fix: Attack count = ceil(current wounds / wounds-per-model) × weapon attacks
+      // Uses ceil so a partially wounded model still contributes attacks.
       const effectiveTpm = Math.max(unit.tough_per_model || 1, 1);
       const currentModelCount = Math.max(1, Math.ceil(unit.current_models / effectiveTpm));
       const baseAttacks = weapon.attacks || 1;
@@ -1085,6 +1097,7 @@ export default function Battle() {
         loggedAttacks = totalAttacks;
       }
       let woundsDealt = result.wounds;
+      // Regeneration: roll one die per incoming wound, 5+ ignores it (suppressed by Bane)
       const hasBaneWeapon = result.specialRulesApplied?.some(r => r.rule === 'Bane');
       const regenResult = rules.applyRegeneration(target, woundsDealt, hasBaneWeapon);
       if (regenResult.ignored > 0) {
@@ -1105,6 +1118,7 @@ export default function Battle() {
       });
 
       const weaponLabel = isBlast ? `${weapon.name} [Blast(${blastCount})]` : weapon.name;
+      // Bug 8 fix: Set blast flag when Blast rule fires
       const blastFlagValue = isBlast || result.blast || false;
       evs.push({
         round, type: 'combat',
@@ -1120,6 +1134,7 @@ export default function Battle() {
 
       const topScore = liveEnemies.map(e => dmn.scoreTarget(unit, e)).sort((a, b) => b - a)[0]?.toFixed(2);
 
+      // Bug 6 fix: Deduplicate special_rules_applied by rule name
       const seenRules = new Set();
       const deduplicatedRules = (result.specialRulesApplied || []).filter(rule => {
         if (seenRules.has(rule.rule)) return false;
@@ -1144,6 +1159,7 @@ export default function Battle() {
         stateBefore: shootStateBefore
       });
 
+      // Morale on wounded survivor
       if (target.current_models > 0 && target.status === 'normal' && target.current_models <= target.total_models / 2) {
         const moraleStateBefore = { acting_unit: { wounds_remaining: target.current_models, max_wounds: target.total_models, status: target.status } };
         const moraleResult = rules.checkMorale(target, 'wounds');
@@ -1168,9 +1184,12 @@ export default function Battle() {
   const rules = rulesRef.current;
   const logger = loggerRef.current;
 
+  // Guard: attacker must be alive (no zombie melee from destroyed or at-zero-wounds units)
   if (attacker.current_models <= 0 || attacker.status === 'destroyed') return false;
+  // Also check defender is alive at melee start
   if (defender.current_models <= 0 || defender.status === 'destroyed') return false;
 
+  // Enhancement 1: capture state BEFORE melee resolution
   const meleeStateBefore = {
     acting_unit: { wounds_remaining: attacker.current_models, max_wounds: attacker.total_models, status: attacker.status },
     target_unit: { wounds_remaining: defender.current_models, max_wounds: defender.total_models, status: defender.status }
@@ -1181,6 +1200,7 @@ export default function Battle() {
   const defenderWasAlive = defender.current_models > 0;
   const attackerWasAlive = attacker.current_models > 0;
 
+  // Regeneration on defender (check if attacker's weapon had Bane)
   const atkHasBane = result.attacker_results?.results?.some(r => r.specialRulesApplied?.some(s => s.rule === 'Bane'));
   let attackerWoundsToApply = result.attacker_wounds;
   const defRegenResult = rules.applyRegeneration(defender, attackerWoundsToApply, atkHasBane);
@@ -1189,6 +1209,7 @@ export default function Battle() {
     attackerWoundsToApply = defRegenResult.finalWounds;
   }
 
+  // Regeneration on attacker (check if defender's weapon had Bane)
   const defHasBane = result.defender_results?.results?.some(r => r.specialRulesApplied?.some(s => s.rule === 'Bane'));
   let defenderWoundsToApply = result.defender_wounds;
   const atkRegenResult = rules.applyRegeneration(attacker, defenderWoundsToApply, defHasBane);
@@ -1199,6 +1220,7 @@ export default function Battle() {
 
   defender.current_models = Math.max(0, defender.current_models - attackerWoundsToApply);
     attacker.current_models = Math.max(0, attacker.current_models - defenderWoundsToApply);
+    // Bug 1 fix: unconditionally set destroyed when wounds reach 0 — overrides shaken or any other status
     if (defender.current_models <= 0) defender.status = 'destroyed';
     if (attacker.current_models <= 0) attacker.status = 'destroyed';
 
@@ -1223,6 +1245,7 @@ export default function Battle() {
     logger?.logDestruction({ round, unit: attacker, cause: `melee with ${defender.name}`, actingUnit: defender.name, killedByWeapon: defWpnName });
   }
 
+    // Morale on loser — based on Fear-adjusted wound comparison
     const loser = result.winner === attacker ? defender : (result.winner === defender ? attacker : null);
     if (loser && loser.current_models > 0 && loser.status === 'normal') {
       const loserWoundsTaken = loser === defender ? attackerWoundsToApply : defenderWoundsToApply;
@@ -1233,7 +1256,7 @@ export default function Battle() {
       logger?.logMorale({ round, unit: loser, outcome, roll: moraleResult.roll, qualityTarget: loser.quality || 4, specialRulesApplied: moraleResult.specialRulesApplied || [], woundsTaken: loserWoundsTaken, stateBefore: loserStateBefore });
     }
 
-    return defender.current_models <= 0;
+    return defender.current_models <= 0; // returns true if target was killed (for Overrun)
   };
 
   // ─── END ROUND ────────────────────────────────────────────────────────────────
@@ -1246,11 +1269,15 @@ export default function Battle() {
         const logger = loggerRef.current;
         const evs = [...evRef.current];
 
+        // Bug 9 fix: Check if progressive scoring is enabled
         const isProgressiveScoring = gs.advance_rules?.progressiveScoring === true;
-        const isFinalRound = newRound === 5;
+        const isFinalRound = newRound === 5; // After round 4
 
+        // Round-end validation: every living unit must have activated exactly once.
+        // Any unit found missing here is a scheduler bug — log it and give shaken units their recovery.
         const liveUnits = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed' && !u.is_in_reserve);
         const activatedSetEnd = new Set(gs.units_activated || []);
+        // Round-start assertion: log any living unit not in the activated set
         const notActivated = liveUnits.filter(u => !activatedSetEnd.has(u.id));
         if (notActivated.length > 0) {
           console.error(`SCHEDULER END-OF-ROUND: ${notActivated.length} unit(s) never activated:`, notActivated.map(u => u.name));
@@ -1258,6 +1285,7 @@ export default function Battle() {
         notActivated.forEach(u => {
           evs.push({ round: gs.current_round, type: 'warning', message: `⚠ SCHEDULING: ${u.name} (${u.owner}) had no activation in round ${gs.current_round}`, timestamp: new Date().toLocaleTimeString() });
           loggerRef.current?.logAbility({ round: gs.current_round, unit: u, ability: 'scheduling_warning', details: { reason: 'no_activation_this_round' } });
+          // Bug 3 fix: Shaken unit skipped by scheduler must still get a recovery roll at round end
           if (u.status === 'shaken') {
             const quality = u.quality || 4;
             const roll = rules.dice.roll();
@@ -1269,6 +1297,7 @@ export default function Battle() {
           }
         });
 
+        // Deploy Ambush/reserve units at the start of each new round.
         gs.units.forEach(u => {
           if (u.is_in_reserve && u.current_models > 0) {
             const deployed = rules.deployAmbush(u, gs);
@@ -1287,12 +1316,14 @@ export default function Battle() {
           active_agent: 'agent_a',
         };
 
+        // Reset per-round flags — NEVER clear shaken here (only morale recovery rolls can do that)
         newState.units = newState.units.map(u => ({
           ...u,
           fatigued: false, just_charged: false,
           status: u.current_models <= 0 ? 'destroyed' : u.status,
         }));
 
+        // Replenish Caster spell tokens (capped at 6)
         newState.units.forEach(u => {
           const gained = rules.replenishSpellTokens(u);
           if (gained > 0) {
@@ -1301,6 +1332,7 @@ export default function Battle() {
           }
         });
 
+        // Objectives
         rules.updateObjectives(newState);
         const roundA = newState.objectives.filter(o => o.controlled_by === 'agent_a').length;
         const roundB = newState.objectives.filter(o => o.controlled_by === 'agent_b').length;
@@ -1336,8 +1368,10 @@ export default function Battle() {
     const roundA = gs.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const roundB = gs.objectives.filter(o => o.controlled_by === 'agent_b').length;
 
+    // Bug 9 fix: Final score calculation — standard vs progressive
     let aScore, bScore;
     if (isProgressiveScoring) {
+      // Progressive: accumulate all round scores
       aScore = 0;
       bScore = 0;
       evRef.current.forEach(ev => {
@@ -1346,21 +1380,25 @@ export default function Battle() {
           bScore += ev.score.agent_b || 0;
         }
       });
+      // Add final round
       aScore += roundA;
       bScore += roundB;
     } else {
+      // Standard: only final round (after R4) counts
       aScore = roundA;
       bScore = roundB;
     }
     const winner = aScore > bScore ? 'agent_a' : bScore > aScore ? 'agent_b' : 'draw';
 
+    // Bake battle_config into logger — scoring_mode + full advance_rules key list
     const advRules = gs.advance_rules || {};
     const activeRuleKeys = Object.entries(advRules).filter(([, v]) => v).map(([k]) => k);
     logger?.setBattleConfig({
       scoring_mode: advRules.cumulativeScoring ? 'cumulative' : 'per_round',
-      advance_rules: activeRuleKeys,
+      advance_rules: activeRuleKeys,   // top-level array of all enabled rule keys
     });
 
+    // Bug 9 fix: final_score must be cumulative total across all rounds (progressive only)
     const finalScore = { agent_a: aScore, agent_b: bScore };
     logger?.logRoundSummary({ round: gs.current_round, objectives: gs.objectives, score: { agent_a: aScore, agent_b: bScore, mode: isProgressiveScoring ? 'progressive' : 'standard' } });
     logger?.logBattleEnd({ winner, finalScore });
@@ -1370,6 +1408,7 @@ export default function Battle() {
       console.log('=== BATTLE JSON LOG ===');
       console.log(JSON.stringify(log, null, 2));
 
+      // Trigger rule compliance verification
       try {
         const complianceReport = await verifyRuleCompliance(log);
         console.log('=== COMPLIANCE REPORT ===', complianceReport);
