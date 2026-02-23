@@ -656,7 +656,9 @@ export default function Battle() {
     setActiveUnit(liveUnit);
     const evs = [...evRef.current];
     const round = gs.current_round;
-    const dmn = dmnRef.current;
+    // Select the correct DMN engine for this unit's owner
+    const dmn = liveUnit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
+    dmnRef.current = dmn; // keep dmnRef in sync for executeAction references
     const rules = rulesRef.current;
     const logger = loggerRef.current;
 
