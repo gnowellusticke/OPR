@@ -1116,10 +1116,11 @@ export default function Battle() {
 
   const atkWpnName = attacker.melee_weapon_name && attacker.melee_weapon_name !== 'CCW' ? attacker.melee_weapon_name : 'Fists';
   logger?.logMelee({
-  round, actingUnit: attacker, targetUnit: defender,
-  weaponName: atkWpnName,
-  rollResults: result.rollResults,
-  gameState: gs, dmnReason
+    round, actingUnit: attacker, targetUnit: defender,
+    weaponName: atkWpnName,
+    rollResults: result.rollResults,
+    gameState: gs, dmnReason,
+    stateBefore: meleeStateBefore
   });
 
   if (defender.current_models <= 0 && defenderWasAlive) {
