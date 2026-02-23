@@ -897,7 +897,7 @@ export class RulesEngine {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  checkLineOfSight(from, to, terrain) { return true; }
+  checkLineOfSight(from, to, terrain) { return this.checkLineOfSightTerrain(from, to, terrain); }
 
   getTerrainAtPosition(x, y, terrain) {
     if (!terrain) return null;
