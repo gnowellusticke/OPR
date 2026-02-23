@@ -380,7 +380,8 @@ export default function Battle() {
   x: owner === 'agent_a' ? 10 : 60,
   y: owner === 'agent_a' ? 10 : 38,
   current_models: maxWounds, total_models: maxWounds,
-  model_count: modelCount,
+  // For joined heroes, model_count is hero(1) + squad models; for others it's unit.models
+  model_count: unit.joined_squad ? (1 + (unit.joined_squad.models || 0)) : modelCount,
   tough_per_model: toughPerModel,
   status: 'normal', fatigued: false, just_charged: false, rounds_without_offense: 0,
   spell_tokens: 0,
