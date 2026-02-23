@@ -607,11 +607,19 @@ export default function Battle() {
   // ─── ACTIVATE ─────────────────────────────────────────────────────────────────
 
   const activateUnit = async (unit, gs) => {
+    // Bug 2 fix: Guard against double-activation — all unit types (infantry, vehicle, hero)
+    // Read from the latest ref, not the stale gs closure
+    const alreadyActivated = new Set(gsRef.current.units_activated || []);
+    if (alreadyActivated.has(unit.id)) {
+      console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
+      return;
+    }
+
     // Always work on a fresh copy of the unit from gs
-    const liveUnit = gs.units.find(u => u.id === unit.id);
+    const liveUnit = gsRef.current.units.find(u => u.id === unit.id);
     if (!liveUnit || liveUnit.current_models <= 0) {
       // Unit died before activation — just mark it and move on
-      const newGs = { ...gs, units_activated: [...(gs.units_activated || []), unit.id], active_agent: gs.active_agent === 'agent_a' ? 'agent_b' : 'agent_a' };
+      const newGs = { ...gsRef.current, units_activated: [...(gsRef.current.units_activated || []), unit.id], active_agent: gsRef.current.active_agent === 'agent_a' ? 'agent_b' : 'agent_a' };
       commitState(newGs);
       return;
     }
