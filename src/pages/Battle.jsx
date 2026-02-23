@@ -177,8 +177,6 @@ export default function Battle() {
       wall_solid:       { cover: false, difficult: false, dangerous: false, blocking: true,  impassable: true,  movePenalty: 0,  label: 'Wall (Solid)' },
     };
 
-    // Theme-based weighted pools
-
     const THEME_WEIGHTS = {
       city_fight: [
         'solid_building','solid_building','solid_building',
