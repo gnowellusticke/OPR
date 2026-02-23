@@ -419,7 +419,7 @@ export default function Battle() {
   // Alternating deployment phase — one unit per agent per turn, with DMN placement decisions
   // Returns a Promise so we can await staggered timestamps (Bug 1 fix)
   const runDeploymentPhase = async (units, objectives, terrain, logger, advRules) => {
-  const dmn = dmnRef.current;
+  const dmn = dmnARef.current; // deployment uses A's DMN (coin toss logic is neutral)
 
   // Coin toss
   const tossWinner = Math.random() > 0.5 ? 'agent_a' : 'agent_b';
