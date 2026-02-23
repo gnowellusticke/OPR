@@ -491,7 +491,8 @@ export class DMNEngine {
     if (hasDeadly && enemy.special_rules?.match(/Tough\(\d+\)/)) score += 0.5;
 
     // ── 1b. THREAT ASSESSMENT: prioritise dangerous enemies ───────────────
-    if (enemy.quality <= 3) score += 0.25; // high-quality units are dangerous
+    const threatBonus = p?.targeting?.high_quality_threat_bonus ?? 0.25;
+    if (enemy.quality <= 3) score += threatBonus; // high-quality units are dangerous
     if (enemy.weapons?.some(w => w.range > 18 && (w.attacks || 1) >= 3)) score += 0.3;
     if (enemy.special_rules?.includes('Fear')) score += 0.15;
 
