@@ -197,30 +197,20 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
       </div>
 
       {/* Legend */}
-      <div className="mt-4 flex flex-wrap gap-4 sm:gap-6 text-xs text-slate-300">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-700 border-2 border-blue-500 rounded" />
-          <span>Agent A</span>
+      <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-400">
+        <div className="flex items-center gap-1.5"><div className="w-5 h-4 rounded" style={{ background: '#1e3a8a', border: '2px solid #3b82f6' }} /><span>Agent A</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-5 h-4 rounded" style={{ background: '#7f1d1d', border: '2px solid #ef4444' }} /><span>Agent B</span></div>
+        <div className="flex items-center gap-1.5">
+          <div style={{ width: 18, height: 15, clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)', background: '#1e3a8a', border: '2px solid #3b82f6' }} />
+          <span>Vehicle/Transport</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-700 border-2 border-red-500 rounded" />
-          <span>Agent B</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Users className="w-4 h-4" />
-          <span>Multi-Model Unit</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <User className="w-4 h-4" />
-          <span>Single Model</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-yellow-500 rounded-full" />
-          <span>Fatigued</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 bg-red-500 rounded-full" />
-          <span>Shaken</span>
+        <div className="flex items-center gap-1.5"><div className="w-4 h-4 rounded-full" style={{ background: '#1e3a8a', border: '2px solid #3b82f6' }} /><span>Monster</span></div>
+        <div className="flex items-center gap-1.5"><span style={{ fontSize: 11 }}>⭐</span><span>Hero</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-orange-400" /><span>Fatigued</span></div>
+        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-red-500" /><span>Shaken</span></div>
+        <div className="flex items-center gap-1.5">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" fill="none" stroke="#94a3b8" strokeWidth="2"/></svg>
+          <span>Objective (⬤=held)</span>
         </div>
       </div>
     </Card>
