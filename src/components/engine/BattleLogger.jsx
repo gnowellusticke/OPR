@@ -179,7 +179,7 @@ export class BattleLogger {
     });
   }
 
-  logMelee({ round, actingUnit, targetUnit, weaponName, rollResults, gameState, dmnReason }) {
+  logMelee({ round, actingUnit, targetUnit, weaponName, rollResults, gameState, dmnReason, stateBefore }) {
     const isFirstBlood = !this.firstBloodDealt && (rollResults.wounds_dealt > 0);
     if (isFirstBlood) this.firstBloodDealt = true;
 
@@ -193,8 +193,6 @@ export class BattleLogger {
     const isTurningPoint = unitDestroyed && (toughValue >= 6 || targetUnit.status === 'shaken');
 
     const specialRules = rollResults.special_rules_applied || [];
-
-    // Bug 5 fix: Separate AI score from rules narrative
     const { internal_score, ...cleanRollResults } = rollResults;
 
     this.events.push({
@@ -207,6 +205,8 @@ export class BattleLogger {
       zone: null,
       range_bracket: 'close',
       roll_results: { ...cleanRollResults, special_rules_applied: specialRules },
+      // Enhancement 1: unit_state_before snapshot
+      unit_state_before: stateBefore || null,
       unit_state_after: {
         acting_unit: this._unitState(actingUnit),
         target_unit: this._unitState(targetUnit)
