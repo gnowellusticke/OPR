@@ -1586,14 +1586,35 @@ Guidelines:
         </div>
         <div className="lg:col-span-3 space-y-4">
           <CombatResolver combatEvent={currentCombat} />
-          {fullJsonLog ? (
-            <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 flex flex-col" style={{ maxHeight: '500px' }}>
-              <div className="text-slate-300 text-xs font-semibold mb-2">Battle JSON Log</div>
-              <textarea readOnly className="flex-1 bg-slate-800 text-green-300 text-xs font-mono rounded p-2 resize-none outline-none border border-slate-600" style={{ minHeight: '420px' }} value={JSON.stringify(fullJsonLog, null, 2)} onFocus={e => e.target.select()} />
-            </div>
-          ) : (
-            <ActionLog events={events} />
-          )}
+          {commentary ? (
+              <div className="bg-slate-900 border border-purple-700 rounded-lg p-3 flex flex-col overflow-y-auto" style={{ maxHeight: '500px' }}>
+                <div className="text-purple-300 text-xs font-semibold mb-2">🎬 {commentary.title}</div>
+                <div className="text-slate-300 text-xs mb-2 italic">{commentary.intro}</div>
+                {commentary.rounds?.map(r => (
+                  <div key={r.round} className="mb-2">
+                    <div className="text-yellow-400 text-xs font-bold">Round {r.round}: {r.headline}</div>
+                    <div className="text-slate-300 text-xs">{r.commentary}</div>
+                  </div>
+                ))}
+                {commentary.turning_point && <div className="mb-2"><div className="text-red-400 text-xs font-bold">⚡ Turning Point</div><div className="text-slate-300 text-xs">{commentary.turning_point}</div></div>}
+                {commentary.outro && <div><div className="text-green-400 text-xs font-bold">🏆 Result</div><div className="text-slate-300 text-xs">{commentary.outro}</div></div>}
+                <Button size="sm" variant="outline" className="mt-2 border-slate-600 text-slate-400 text-xs" onClick={() => {
+                  const text = [commentary.title, '', commentary.intro, '', ...(commentary.rounds?.map(r => `Round ${r.round}: ${r.headline}\n${r.commentary}`) || []), '', `TURNING POINT: ${commentary.turning_point}`, '', commentary.outro].join('\n');
+                  navigator.clipboard.writeText(text);
+                }}>Copy Script</Button>
+              </div>
+            ) : generatingCommentary ? (
+              <div className="bg-slate-900 border border-purple-700 rounded-lg p-6 flex items-center justify-center">
+                <div className="text-purple-300 text-sm">🔮 Generating battle commentary...</div>
+              </div>
+            ) : fullJsonLog ? (
+              <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 flex flex-col" style={{ maxHeight: '500px' }}>
+                <div className="text-slate-300 text-xs font-semibold mb-2">Battle JSON Log</div>
+                <textarea readOnly className="flex-1 bg-slate-800 text-green-300 text-xs font-mono rounded p-2 resize-none outline-none border border-slate-600" style={{ minHeight: '380px' }} value={JSON.stringify(fullJsonLog, null, 2)} onFocus={e => e.target.select()} />
+              </div>
+            ) : (
+              <ActionLog events={events} />
+            )}
         </div>
       </div>
     </div>
