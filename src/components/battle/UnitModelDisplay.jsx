@@ -1,12 +1,11 @@
 import React from 'react';
 
-// Renders the individual model dots for a unit, with special borders for characters and special weapon models.
-// Size and shape scale with highest Tough value present in the unit (including joined characters):
-//   no Tough (1 wound)  → 9px circle
-//   Tough(1-2)          → 9px circle
-//   Tough(3-5)          → 13px circle
-//   Tough(6-9)          → 18px circle (large circle — not yet a vehicle)
-//   Tough(10+)          → 22px rounded square (vehicle/monster)
+// Renders individual model dots for a unit. Each dot is sized independently by its own Tough value:
+//   Tough 1-2   →  9px circle
+//   Tough 3-5   → 13px circle
+//   Tough 6-9   → 18px circle
+//   Tough 10+   → 22px rounded square
+// Joined characters render as one larger gold-bordered dot among the squad's own-sized dots.
 
 const MODEL_GAP = 2;
 const COLS = 5;
