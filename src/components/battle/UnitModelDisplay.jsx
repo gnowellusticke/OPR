@@ -94,10 +94,21 @@ export function buildModelList(unit) {
   const aliveModels = Math.max(0, Math.min(deployedModels, Math.ceil((unit.current_models || 0) / toughPerModel)));
   const total = Math.max(1, aliveModels);
 
+  // Count distinct special weapons to mark the correct number of models
+  const specialWeaponCount = hasSpecial ? Math.min(countSpecialWeapons(unit), total - (isChar ? 1 : 0)) : 0;
+
   return Array.from({ length: total }, (_, i) => {
     let type = 'standard';
-    if (isChar && i === 0) type = 'character';
-    else if (hasSpecial && !isChar && total > 1 && i === total - 1) type = 'special_weapon';
+    if (isChar && i === 0) {
+      type = 'character';
+    } else {
+      // Mark the last N models (where N = specialWeaponCount) as special_weapon
+      const nonCharStart = isChar ? 1 : 0;
+      const specialStart = total - specialWeaponCount;
+      if (hasSpecial && total > 1 && i >= specialStart && i >= nonCharStart) {
+        type = 'special_weapon';
+      }
+    }
     return { index: i, type, toughValue: toughPerModel };
   });
 }
