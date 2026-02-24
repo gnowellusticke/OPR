@@ -942,11 +942,19 @@ export default function Battle() {
     // Bug 7 fix: cast at most one spell per activation pass; token check is the sole gate.
     // Each iteration spends exactly `cost` tokens — loop exits when tokens run out.
     // Maximum events per round = Caster(X) level (e.g. Caster(3) → max 3 events).
-    for (const spell of spells) {
-      // Re-check tokens at the start of each iteration — break immediately if depleted
+    // Bug 7A/B fix: sort spells by cost descending (expensive hostile first), skip unaffordable
+    const sortedSpells = [...spells].sort((a, b) => {
+      const aHostile = a.range > 2 && (a.ap || 0) >= 0; // offensive
+      const bHostile = b.range > 2 && (b.ap || 0) >= 0;
+      if (aHostile !== bHostile) return aHostile ? -1 : 1;
+      return (b.spell_cost || 1) - (a.spell_cost || 1);
+    });
+
+    for (const spell of sortedSpells) {
+      // Bug 7A fix: always check affordability before attempting
       if ((unit.spell_tokens || 0) <= 0) break;
       const cost = spell.spell_cost || 1;
-      if ((unit.spell_tokens || 0) < cost) continue;
+      if ((unit.spell_tokens || 0) < cost) continue; // Bug 7B: skip and try cheaper
       if (dist > (spell.range || LOS_RANGE)) continue;
 
       // Allied helpers: friendly Casters within 18" — spend up to 1 token each (not all)
