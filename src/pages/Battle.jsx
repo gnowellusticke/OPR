@@ -1721,6 +1721,25 @@ Guidelines:
         </div>
         <div className="lg:col-span-3 space-y-4">
           <CombatResolver combatEvent={currentCombat} />
+          {/* Live narrative commentary box */}
+          {narrativeActive && (
+            <div className="bg-slate-900 border border-cyan-800 rounded-lg p-3">
+              <div className="text-cyan-400 text-xs font-semibold mb-2 flex items-center justify-between">
+                <span>🎙 Live Narrative</span>
+                {narrativeStreaming && <span className="text-slate-500 text-xs animate-pulse">Generating...</span>}
+                {currentNarrativeIndex != null && !narrativeStreaming && (
+                  <span className="text-slate-500 text-xs">#{currentNarrativeIndex + 1} / {activationSummaries.length}</span>
+                )}
+              </div>
+              <NarrativeCommentaryBox
+                text={currentNarrativeText}
+                significance={currentNarrativeSignificance}
+                round={currentNarrativeRound}
+                unit={currentNarrativeUnit}
+                isStreaming={narrativeStreaming && !currentNarrativeText}
+              />
+            </div>
+          )}
           {commentary ? (
               <div className="bg-slate-900 border border-purple-700 rounded-lg p-3 flex flex-col overflow-y-auto" style={{ maxHeight: '500px' }}>
                 <div className="text-purple-300 text-xs font-semibold mb-2">🎬 {commentary.title}</div>
