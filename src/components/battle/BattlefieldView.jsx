@@ -215,11 +215,11 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
       {/* Legend */}
       <div className="mt-4 space-y-2">
         <div className="flex flex-wrap gap-3 sm:gap-4 text-xs text-slate-300">
-          <div className="flex items-center gap-1"><div className="w-4 h-4 bg-blue-700 border-2 border-blue-500 rounded" /><span>Agent A</span></div>
-          <div className="flex items-center gap-1"><div className="w-4 h-4 bg-red-700 border-2 border-red-500 rounded" /><span>Agent B</span></div>
-          <div className="flex items-center gap-1"><Users className="w-4 h-4" /><span>Multi-Model</span></div>
-          <div className="flex items-center gap-1"><User className="w-4 h-4" /><span>Single Model</span></div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-500 rounded-full" /><span>Fatigued</span></div>
+          <div className="flex items-center gap-1"><div className="w-4 h-4 bg-blue-900 border-2 border-blue-500 rounded" /><span>Agent A</span></div>
+          <div className="flex items-center gap-1"><div className="w-4 h-4 bg-red-900 border-2 border-red-500 rounded" /><span>Agent B</span></div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-amber-400" style={{ boxShadow: '0 0 4px rgba(245,158,11,0.8)' }} /><span>Character</span></div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-emerald-400" style={{ boxShadow: '0 0 4px rgba(52,211,153,0.7)' }} /><span>Special Weapon</span></div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-400 rounded-full" /><span>Fatigued</span></div>
           <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500 rounded-full" /><span>Shaken</span></div>
         </div>
         {terrain.length > 0 && (
