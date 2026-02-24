@@ -290,6 +290,18 @@ export class RulesEngine {
 
   // Shooting
   resolveShooting(attacker, defender, weapon, terrain, gameState) {
+    // Indirect weapons ignore LOS entirely; all others require effective LOS
+    const rulesStrLos = this._rulesStr(weapon.special_rules);
+    if (!rulesStrLos.includes('Indirect') && terrain) {
+      if (!this.checkEffectiveLOS(attacker, defender, terrain)) {
+        return {
+          weapon: weapon.name, hit_rolls: [], hits: 0,
+          defense_rolls: [], saves: 0, wounds: 0,
+          blast: false, baneProcs: 0,
+          specialRulesApplied: [{ rule: 'LOS', value: null, effect: 'no line of sight from unit footprint to target' }]
+        };
+      }
+    }
     if (this.trackLimitedWeapon(weapon, attacker.id)) {
       return {
         weapon: weapon.name, hit_rolls: [], hits: 0,
