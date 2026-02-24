@@ -79,8 +79,8 @@ export function buildModelList(unit) {
 }
 
 export default function UnitModelDisplay({ unit, owner }) {
-  const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
-  const { size, radius } = getModelStyle(toughPerModel);
+  const effectiveTough = resolveEffectiveTough(unit);
+  const { size, radius } = getModelStyle(effectiveTough);
   const step = size + MODEL_GAP;
 
   const models = buildModelList(unit);
