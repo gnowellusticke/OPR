@@ -32,22 +32,13 @@ export default function UnitGroupDisplay({ group, activeUnit, onUnitClick, CELL_
           ${hasActiveUnit ? 'drop-shadow-[0_0_6px_rgba(250,204,21,0.9)]' : ''}
           ${displayUnit.status === 'shaken' ? 'opacity-60' : ''}`}
       >
-        {isTransport ? (
-          <div
-            className="flex flex-col items-center justify-center text-white rounded-lg border-2"
-            style={{
-              width: 36, height: 36,
-              backgroundColor: displayUnit.owner === 'agent_a' ? '#1e3a6e' : '#7f1d1d',
-              borderColor: displayUnit.owner === 'agent_a' ? '#3b82f6' : '#ef4444',
-            }}
-          >
-            <Users className="w-4 h-4" />
-            {embarkedCount > 0 && (
-              <div className="text-[9px] font-bold leading-none">+{embarkedCount}</div>
-            )}
+        {/* All units — transports and infantry — render as model dots */}
+        <UnitModelDisplay unit={displayUnit} owner={displayUnit.owner} />
+        {/* Embarked passenger count badge on transports */}
+        {isTransport && embarkedCount > 0 && (
+          <div className="absolute -top-2 -right-2 w-4 h-4 bg-cyan-500 rounded-full flex items-center justify-center text-[8px] font-bold text-white border border-slate-900">
+            {embarkedCount}
           </div>
-        ) : (
-          <UnitModelDisplay unit={displayUnit} owner={displayUnit.owner} />
         )}
 
         {/* Status indicators */}
