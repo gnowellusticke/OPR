@@ -493,6 +493,7 @@ export default function Battle() {
   owner,
   x: owner === 'agent_a' ? 10 : 60,
   y: owner === 'agent_a' ? 10 : 38,
+  is_deployed: false, // hidden until deployment phase places them
   current_models: maxWounds, total_models: maxWounds,
   model_count: joinedModelCount,
   tough_per_model: toughPerModel,
