@@ -28,11 +28,15 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
   const BATTLEFIELD_HEIGHT = 48;
   const CELL_SIZE = 60;
 
-  // Hide units only when we're in the pre-deployment pending state
+  // Hide all units before Play is pressed; during/after deployment show placed units normally
   const isPendingDeployment = gameState?.pending_deployment === true;
-  const units = (gameState?.units || []).filter(u =>
-    u.current_models > 0 && (!isPendingDeployment || u.is_deployed === true)
-  );
+  const isDeploying = gameState?.deployment_in_progress === true;
+  const units = (gameState?.units || []).filter(u => {
+    if (u.current_models <= 0) return false;
+    if (isPendingDeployment) return false; // nothing shown before Play
+    if (isDeploying) return u.is_deployed === true; // show units one by one as they deploy
+    return true; // combat phase — show everything alive
+  });
   const terrain = gameState?.terrain || [];
   const objectives = gameState?.objectives || [];
 
