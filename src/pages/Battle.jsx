@@ -1111,8 +1111,9 @@ export default function Battle() {
         target_unit: { wounds_remaining: liveTarget.current_models, max_wounds: liveTarget.total_models, status: liveTarget.status }
       };
 
+      // Use effective range (furthest model position toward target) instead of unit center
+      if (!rules.checkEffectiveRange(unit, target, weapon.range)) continue;
       const dist = rules.calculateDistance(unit, target);
-      if (dist > weapon.range) continue;
 
       // ── Blast(X): X automatic hits, no quality roll ────────────────────────
       // Normalise special_rules to a string regardless of whether it came in as array or string
