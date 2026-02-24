@@ -56,25 +56,52 @@ export function hasSpecialWeapons(unit) {
 }
 
 // Build a list of model descriptors for a unit.
-// Models are typed: 'character', 'special_weapon', or 'standard'.
-// Uses actual model count (not wounds) and shows remaining alive models proportionally.
+// Each model carries its own 'toughValue' so the character dot can be a different size from squad dots.
+// For a joined-character unit: first model = the hero (using hero's own Tough), rest = squad models.
 export function buildModelList(unit) {
-  // model_count = deployed number of models, total_models = max wounds
-  // tough_per_model = wounds per model (use own tough only for model count, not joined character's)
-  const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
-  const deployedModels = unit.model_count || Math.ceil((unit.total_models || 1) / toughPerModel);
-  // Remaining alive models = ceil(current wounds / wounds-per-model)
-  const aliveModels = Math.max(0, Math.min(deployedModels, Math.ceil((unit.current_models || 0) / toughPerModel)));
-  const total = Math.max(1, aliveModels);
-
   const isChar = isCharacterUnit(unit);
   const hasSpecial = hasSpecialWeapons(unit);
+
+  if (unit.joined_squad) {
+    // Hero merged into a squad:
+    // - hero = 1 model with hero's own Tough value (alive if hero wounds > 0)
+    // - squad models = squad model count, each with squad Tough
+    const heroTough = Math.max(unit.tough_per_model || parseTough(unit.special_rules), 1);
+    const squadTough = Math.max(parseTough(unit.joined_squad.special_rules), 1);
+    const squadModelCount = unit.joined_squad.models || 0;
+
+    // Hero alive check: hero has heroTough wounds; total wounds minus squad wounds = hero wounds
+    const squadWounds = unit.current_models > 0
+      ? Math.min(squadModelCount * squadTough, unit.current_models)
+      : 0;
+    const heroWoundsRemaining = Math.max(0, unit.current_models - squadWounds);
+    const heroAlive = heroWoundsRemaining > 0;
+
+    // Alive squad models
+    const aliveSquadModels = Math.min(squadModelCount, Math.ceil(squadWounds / squadTough));
+
+    const models = [];
+    if (heroAlive) {
+      models.push({ index: 0, type: 'character', toughValue: heroTough });
+    }
+    for (let i = 0; i < aliveSquadModels; i++) {
+      const type = hasSpecial && i === aliveSquadModels - 1 ? 'special_weapon' : 'standard';
+      models.push({ index: models.length, type, toughValue: squadTough });
+    }
+    return models;
+  }
+
+  // Standard unit (no joined squad)
+  const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
+  const deployedModels = unit.model_count || Math.ceil((unit.total_models || 1) / toughPerModel);
+  const aliveModels = Math.max(0, Math.min(deployedModels, Math.ceil((unit.current_models || 0) / toughPerModel)));
+  const total = Math.max(1, aliveModels);
 
   return Array.from({ length: total }, (_, i) => {
     let type = 'standard';
     if (isChar && i === 0) type = 'character';
     else if (hasSpecial && !isChar && total > 1 && i === total - 1) type = 'special_weapon';
-    return { index: i, type };
+    return { index: i, type, toughValue: toughPerModel };
   });
 }
 
