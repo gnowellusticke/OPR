@@ -60,36 +60,35 @@ export function buildModelList(unit) {
 }
 
 export default function UnitModelDisplay({ unit, owner }) {
+  const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
+  const { size, radius } = getModelStyle(toughPerModel);
+  const step = size + MODEL_GAP;
+
   const models = buildModelList(unit);
   const cols = Math.min(COLS, models.length);
   const rows = Math.ceil(models.length / cols);
 
-  const width = cols * (MODEL_SIZE + MODEL_GAP) - MODEL_GAP;
-  const height = rows * (MODEL_SIZE + MODEL_GAP) - MODEL_GAP;
+  const width = cols * step - MODEL_GAP;
+  const height = rows * step - MODEL_GAP;
 
   const baseColor = owner === 'agent_a' ? '#3b82f6' : '#ef4444';
 
   return (
-    <div
-      className="relative"
-      style={{ width, height }}
-    >
+    <div className="relative" style={{ width, height }}>
       {models.map((model, i) => {
         const col = i % cols;
         const row = Math.floor(i / cols);
-        const x = col * (MODEL_SIZE + MODEL_GAP);
-        const y = row * (MODEL_SIZE + MODEL_GAP);
 
         let borderColor = baseColor;
         let borderWidth = 1;
         let boxShadow = 'none';
 
         if (model.type === 'character') {
-          borderColor = '#f59e0b'; // amber-400 gold
+          borderColor = '#f59e0b';
           borderWidth = 2;
           boxShadow = '0 0 4px rgba(245,158,11,0.8)';
         } else if (model.type === 'special_weapon') {
-          borderColor = '#34d399'; // emerald-400
+          borderColor = '#34d399';
           borderWidth = 2;
           boxShadow = '0 0 4px rgba(52,211,153,0.7)';
         }
@@ -100,11 +99,11 @@ export default function UnitModelDisplay({ unit, owner }) {
             title={model.type === 'character' ? 'Character' : model.type === 'special_weapon' ? 'Special Weapon' : undefined}
             style={{
               position: 'absolute',
-              left: x,
-              top: y,
-              width: MODEL_SIZE,
-              height: MODEL_SIZE,
-              borderRadius: '50%',
+              left: col * step,
+              top: row * step,
+              width: size,
+              height: size,
+              borderRadius: radius,
               backgroundColor: baseColor,
               border: `${borderWidth}px solid ${borderColor}`,
               boxShadow,
