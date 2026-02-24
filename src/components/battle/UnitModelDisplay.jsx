@@ -42,6 +42,16 @@ export function hasSpecialWeapons(unit) {
   );
 }
 
+// Count how many special weapons a unit has (used to mark multiple models)
+function countSpecialWeapons(unit) {
+  return (unit.weapons || []).filter(w =>
+    (w.range > 18) ||
+    (typeof w.special_rules === 'string' && (w.special_rules.includes('Blast') || w.special_rules.includes('Deadly'))) ||
+    (Array.isArray(w.special_rules) && w.special_rules.some(r => ['Blast', 'Deadly'].includes(r))) ||
+    (w.ap && w.ap >= 2)
+  ).length;
+}
+
 // Build a list of model descriptors for a unit.
 // Each model carries its own 'toughValue' so the character dot can be a different size from squad dots.
 // For a joined-character unit: first model = the hero (using hero's own Tough), rest = squad models.
