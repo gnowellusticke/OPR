@@ -1,11 +1,22 @@
 import React from 'react';
 
 // Renders the individual model dots for a unit, with special borders for characters and special weapon models.
-// Each model is a small circle; positioned relative to the unit token's top-left corner.
+// Size and shape scale with Tough value:
+//   no Tough (1 wound)  → 9px circle
+//   Tough(1-2)          → 9px circle
+//   Tough(3-5)          → 13px circle
+//   Tough(6-9)          → 18px rounded square
+//   Tough(10+) / heavy  → 22px rounded square
 
-const MODEL_SIZE = 10; // px diameter of each model dot
-const MODEL_GAP = 2;   // px gap between dots
-const COLS = 5;        // max models per row
+const MODEL_GAP = 2;
+const COLS = 5;
+
+function getModelStyle(toughPerModel) {
+  if (toughPerModel >= 10) return { size: 22, radius: '4px', isSquare: true };
+  if (toughPerModel >= 6)  return { size: 18, radius: '4px', isSquare: true };
+  if (toughPerModel >= 3)  return { size: 13, radius: '50%', isSquare: false };
+  return                          { size: 9,  radius: '50%', isSquare: false };
+}
 
 // Detect if a unit is a character (Hero rule or solo Tough model treated as hero)
 export function isCharacterUnit(unit) {
