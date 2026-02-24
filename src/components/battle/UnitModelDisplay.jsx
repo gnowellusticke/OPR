@@ -24,18 +24,6 @@ function parseTough(special_rules) {
   return m ? parseInt(m[1]) : 1;
 }
 
-// Resolve the effective tough-per-model for display sizing,
-// considering that a joined character may have a higher Tough value than the squad.
-function resolveEffectiveTough(unit) {
-  const ownTough = unit.tough_per_model || parseTough(unit.special_rules);
-  // joined_squad means this unit IS the character merged into a squad — check squad tough too
-  if (unit.joined_squad) {
-    const squadTough = parseTough(unit.joined_squad.special_rules);
-    return Math.max(ownTough, squadTough);
-  }
-  return Math.max(ownTough, 1);
-}
-
 // Detect if a unit is a character (Hero rule or solo Tough model treated as hero)
 export function isCharacterUnit(unit) {
   const rules = typeof unit.special_rules === 'string'
