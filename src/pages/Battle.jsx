@@ -1662,6 +1662,27 @@ Guidelines:
                       }}>
                         <Download className="w-4 h-4 mr-2" /> Download Log
                       </Button>
+                      {/* Live Narrative */}
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={narrativeStyle}
+                          onChange={e => setNarrativeStyle(e.target.value)}
+                          className="bg-slate-800 border border-slate-600 text-slate-300 text-xs rounded px-2 py-1"
+                        >
+                          <option value="dramatic">Dramatic</option>
+                          <option value="tactical">Tactical</option>
+                          <option value="humorous">Humorous</option>
+                        </select>
+                        {narrativeActive ? (
+                          <Button variant="outline" className="border-yellow-600 text-yellow-400 hover:bg-yellow-900/20" onClick={stopLiveNarrative}>
+                            ⏹ Stop Narrative
+                          </Button>
+                        ) : (
+                          <Button variant="outline" className="border-cyan-600 text-cyan-400 hover:bg-cyan-900/20" disabled={narrativeStreaming} onClick={startLiveNarrative}>
+                            {narrativeStreaming ? '⏳ Loading...' : '🎙 Live Narrative'}
+                          </Button>
+                        )}
+                      </div>
                       <Button
                         variant="outline"
                         className="border-purple-600 text-purple-400 hover:bg-purple-900/20"
