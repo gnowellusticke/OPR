@@ -32,38 +32,38 @@ export default function UnitGroupDisplay({ group, activeUnit, onUnitClick, CELL_
           ${hasActiveUnit ? 'ring-4 ring-yellow-400 scale-110' : ''}
           ${displayUnit.status === 'shaken' ? 'opacity-60' : ''}`}
         style={{
-          width: 40,
-          height: 40,
-          backgroundColor: displayUnit.owner === 'agent_a' ? '#1e40af' : '#991b1b',
-          borderColor: displayUnit.owner === 'agent_a' ? '#3b82f6' : '#ef4444',
+          width: 44,
+          minHeight: 44,
+          padding: 4,
+          backgroundColor: displayUnit.owner === 'agent_a' ? '#1e3a6e' : '#7f1d1d',
+          borderColor: isCharacterUnit(displayUnit)
+            ? '#f59e0b'
+            : hasSpecialWeapons(displayUnit)
+              ? '#34d399'
+              : displayUnit.owner === 'agent_a' ? '#3b82f6' : '#ef4444',
+          borderWidth: isCharacterUnit(displayUnit) || hasSpecialWeapons(displayUnit) ? 2 : 2,
+          boxShadow: isCharacterUnit(displayUnit)
+            ? '0 0 8px rgba(245,158,11,0.5)'
+            : hasSpecialWeapons(displayUnit)
+              ? '0 0 8px rgba(52,211,153,0.4)'
+              : 'none',
         }}
       >
-        <div className="flex flex-col items-center justify-center h-full text-white">
-          {isTransport ? (
+        {isTransport ? (
+          <div className="flex flex-col items-center justify-center w-full h-full text-white" style={{ minHeight: 36 }}>
             <Users className="w-5 h-5 mb-0.5" />
-          ) : displayUnit.current_models > 1 ? (
-            <Users className="w-5 h-5 mb-0.5" />
-          ) : (
-            <User className="w-5 h-5 mb-0.5" />
-          )}
-          <div className="text-[10px] font-bold leading-none">
-            {isTransport
-              ? (embarkedCount > 0 ? `+${embarkedCount}` : 'TR')
-              : (displayUnit.current_models > 1 ? displayUnit.current_models : '1')}
+            <div className="text-[10px] font-bold leading-none">
+              {embarkedCount > 0 ? `+${embarkedCount}` : 'TR'}
+            </div>
           </div>
-        </div>
+        ) : (
+          <UnitModelDisplay unit={displayUnit} owner={displayUnit.owner} />
+        )}
 
         {/* Transport passenger badge */}
         {isTransport && embarkedCount > 0 && (
           <div className="absolute -top-2 -right-2 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white border-2 border-slate-900">
             {embarkedCount}
-          </div>
-        )}
-
-        {/* Model count badge for multi-model ground units */}
-        {!isTransport && displayUnit.current_models > 1 && (
-          <div className="absolute -top-2 -right-2 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center text-[9px] font-bold text-black border-2 border-slate-900">
-            {displayUnit.current_models}
           </div>
         )}
 
