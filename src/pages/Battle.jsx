@@ -429,15 +429,11 @@ export default function Battle() {
   // Standard units (no Tough): each model = 1 wound → toughPerModel = 1
   const toughMatch = unit.special_rules?.match(/Tough\((\d+)\)/);
   const toughValue = toughMatch ? parseInt(toughMatch[1]) : 0;
-  const isHero = unit.special_rules?.toLowerCase?.().includes('hero');
   const modelCount = unit.models || 1;
-  // toughPerModel is wounds-per-model for attack scaling purposes
-  let toughPerModel;
-  if (toughValue > 0) {
-    toughPerModel = toughValue; // Tough(X) = X wounds per model for both heroes and squads
-  } else {
-    toughPerModel = 1; // standard: 1 wound per model
-  }
+  // toughPerModel = wounds per model for attack scaling. Tough(X) → X per model.
+  const toughPerModel = toughValue > 0 ? toughValue : 1;
+  // model_count: for joined heroes = hero(1) + squad; otherwise use unit.models
+  const joinedModelCount = unit.joined_squad ? (1 + (unit.joined_squad.models || 0)) : modelCount;
 
   // Placeholder positions — real positions set during alternating deployment phase
   return {
