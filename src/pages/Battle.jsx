@@ -26,6 +26,9 @@ export default function Battle() {
   const [playing, setPlaying] = useState(false);
   const [fullJsonLog, setFullJsonLog] = useState(null);
   const [loadingStatus, setLoadingStatus] = useState("Initializing...");
+  const [simulationSpeed, setSimulationSpeed] = useState(800); // ms per action step
+  const [commentary, setCommentary] = useState(null);
+  const [generatingCommentary, setGeneratingCommentary] = useState(false);
 
   // Engines (stable refs, never recreated)
   // Personality is loaded after battle data arrives — two separate DMN engines, one per agent
@@ -61,8 +64,8 @@ export default function Battle() {
   useEffect(() => {
     if (!playing || !gsRef.current || battleRef.current?.status === 'completed') return;
     const timer = setTimeout(() => {
-      if (playingRef.current) processNextAction();
-    }, 800);
+        if (playingRef.current) processNextAction();
+      }, simulationSpeed);
     return () => clearTimeout(timer);
   }, [playing, gameState]);
 
