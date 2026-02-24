@@ -897,6 +897,83 @@ export class RulesEngine {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  // ─── UNIT FOOTPRINT ───────────────────────────────────────────────────────────
+  // Estimates the physical radius (in inches) of a unit's model spread on the board.
+  // Based on model count and size (tough_per_model determines model base size).
+  getUnitFootprintRadius(unit) {
+    const modelCount = unit.model_count || Math.ceil((unit.total_models || 1) / Math.max(unit.tough_per_model || 1, 1));
+    const tpm = unit.tough_per_model || 1;
+    // Base size per model: large models (tpm≥6) take more space
+    const modelSpacing = tpm >= 6 ? 1.5 : tpm >= 3 ? 1.0 : 0.6;
+    // Radius = rough radius of a circle that fits all models in a grid
+    const cols = Math.min(5, modelCount);
+    const rows = Math.ceil(modelCount / cols);
+    const w = cols * modelSpacing;
+    const h = rows * modelSpacing;
+    return Math.sqrt(w * w + h * h) / 2;
+  }
+
+  // Returns the position of the furthest model in the direction of the target.
+  // Used for range checks: "at least one model can reach".
+  getFurthestModelPosition(unit, target) {
+    const dx = target.x - unit.x;
+    const dy = target.y - unit.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist === 0) return { x: unit.x, y: unit.y };
+    const radius = this.getUnitFootprintRadius(unit);
+    const nx = dx / dist;
+    const ny = dy / dist;
+    return { x: unit.x + nx * radius, y: unit.y + ny * radius };
+  }
+
+  // Effective range check: distance from the furthest model (closest edge of footprint toward target) to target center.
+  // Returns true if at least one model could be in range.
+  checkEffectiveRange(attacker, target, weaponRange) {
+    const furthest = this.getFurthestModelPosition(attacker, target);
+    const dx = target.x - furthest.x;
+    const dy = target.y - furthest.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return dist <= weaponRange;
+  }
+
+  // Effective LOS: checks LOS from the nearest edge of the attacker's footprint facing the target.
+  // Also checks from unit center (fallback). Returns true if any sightline is clear.
+  checkEffectiveLOS(attacker, target, terrain) {
+    // Primary check: from the leading edge of the footprint
+    const furthest = this.getFurthestModelPosition(attacker, target);
+    if (this.checkLineOfSightTerrain(furthest, target, terrain)) return true;
+    // Fallback: from unit center
+    return this.checkLineOfSightTerrain(attacker, target, terrain);
+  }
+
+  // Estimates how many models in the unit can contribute attacks to a target.
+  // Uses the furthest model position to determine effective distance, then
+  // calculates what fraction of the unit's footprint falls within weapon range.
+  // Returns a model count (integer, at least 1 if any LOS/range exists at all).
+  getModelsInRange(unit, target, weaponRange) {
+    const totalModels = unit.model_count || Math.ceil((unit.total_models || 1) / Math.max(unit.tough_per_model || 1, 1));
+    const currentModels = Math.min(totalModels, Math.max(1, Math.ceil((unit.current_models || 1) / Math.max(unit.tough_per_model || 1, 1))));
+
+    const distToCenter = this.calculateDistance(unit, target);
+    const radius = this.getUnitFootprintRadius(unit);
+
+    // Distance from the furthest model to target — if even the furthest is out of range, 0 models contribute
+    const distFurthest = Math.max(0, distToCenter - radius);
+    if (distFurthest > weaponRange) return 0;
+
+    // Distance from the nearest model (back of footprint) to target
+    const distNearest = distToCenter + radius;
+
+    // Fraction of the footprint diameter that falls within weapon range
+    const footprintDiameter = radius * 2;
+    if (footprintDiameter <= 0) return currentModels;
+
+    const rangeOverlap = Math.min(distNearest, weaponRange) - distFurthest;
+    const fraction = Math.min(1, Math.max(0, rangeOverlap / footprintDiameter));
+
+    return Math.max(1, Math.round(currentModels * fraction));
+  }
+
   checkLineOfSight(from, to, terrain) { return this.checkLineOfSightTerrain(from, to, terrain); }
 
   getTerrainAtPosition(x, y, terrain) {
