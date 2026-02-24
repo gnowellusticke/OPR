@@ -60,7 +60,7 @@ export function hasSpecialWeapons(unit) {
 // Uses actual model count (not wounds) and shows remaining alive models proportionally.
 export function buildModelList(unit) {
   // model_count = deployed number of models, total_models = max wounds
-  // tough_per_model = wounds per model
+  // tough_per_model = wounds per model (use own tough only for model count, not joined character's)
   const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
   const deployedModels = unit.model_count || Math.ceil((unit.total_models || 1) / toughPerModel);
   // Remaining alive models = ceil(current wounds / wounds-per-model)
