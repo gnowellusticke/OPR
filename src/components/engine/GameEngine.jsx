@@ -595,29 +595,33 @@ export class DMNEngine {
   const yMax = isAgentA ? 16 : 45;
   const yCentre = (yMin + yMax) / 2;
 
-  // Helper: score terrain near a position for cover/LOS value
-  const scoreTerrainAt = (cx, cy, wantCover) => {
+  // Helper: count terrain pieces near a position that block LOS (forests, buildings, walls)
+  const countLOSTerrainNear = (cx, cy, radius = 12) => {
     if (!terrain || terrain.length === 0) return 0;
-    let t = 0;
-    for (const piece of terrain) {
-      const dist = Math.hypot(cx - (piece.x + piece.width / 2), cy - (piece.y + piece.height / 2));
-      if (dist > 10) continue;
-      // Cover-seeking units (ranged/fire support) want terrain nearby for protection
-      if (wantCover && (piece.cover || piece.blocksThroughLOS || piece.blocking)) t += Math.max(0, 10 - dist) * 1.5;
-      // Melee units don't need cover but can use LOS-blocking terrain to advance unseen
-      if (!wantCover && (piece.blocksThroughLOS || piece.blocking)) t += Math.max(0, 10 - dist) * 0.8;
-      // Penalise impassable terrain that would trap a unit
-      if (piece.impassable) t -= Math.max(0, 6 - dist) * 2.0;
-    }
-    return t;
+    return terrain.filter(t => {
+      if (!t.blocksThroughLOS && !t.blocking) return false;
+      const tcx = t.x + (t.width || 4) / 2;
+      const tcy = t.y + (t.height || 4) / 2;
+      return Math.hypot(cx - tcx, cy - tcy) < radius;
+    }).length;
+  };
+
+  // Helper: count cover terrain near position
+  const countCoverTerrainNear = (cx, cy, radius = 8) => {
+    if (!terrain || terrain.length === 0) return 0;
+    return terrain.filter(t => {
+      if (!t.cover) return false;
+      const tcx = t.x + (t.width || 4) / 2;
+      const tcy = t.y + (t.height || 4) / 2;
+      return Math.hypot(cx - tcx, cy - tcy) < radius;
+    }).length;
   };
 
   // Score candidate positions (sample a grid of x positions across 3 columns)
-  // Add per-column y variation to break straight-line rows
   const candidates = [
-    { col: 'left',   x: 10 + Math.random() * 8,  y: yMin + Math.random() * (yMax - yMin), label: 'left flank' },
-    { col: 'centre', x: 30 + Math.random() * 12, y: yMin + Math.random() * (yMax - yMin), label: 'centre' },
-    { col: 'right',  x: 52 + Math.random() * 8,  y: yMin + Math.random() * (yMax - yMin), label: 'right flank' },
+  { col: 'left',   x: 10 + Math.random() * 8,  label: 'left flank' },
+  { col: 'centre', x: 30 + Math.random() * 12, label: 'centre' },
+  { col: 'right',  x: 52 + Math.random() * 8,  label: 'right flank' },
   ];
 
   let bestScore = -Infinity;
@@ -625,13 +629,8 @@ export class DMNEngine {
 
   for (const cand of candidates) {
   const cx = cand.x;
-  const cy = cand.y;
+  const cy = yCentre;
   let score = 0;
-
-  // Terrain awareness — cover-seekers want nearby terrain, melee wants LOS-blockers for advance routes
-  const wantsCover = !isMeleePrimary && !isFast;
-  const terrainScore = scoreTerrainAt(cx, cy, wantsCover);
-  score += terrainScore;
 
   // Objective proximity bonus for objective-seekers
   if (objectives?.length > 0) {
@@ -654,10 +653,54 @@ export class DMNEngine {
     score += Math.max(0, 60 - enemyDist) * 0.6;
   }
 
-  // Fire support: prefer flanks AND nearby cover terrain
+  // ── TERRAIN AWARENESS ─────────────────────────────────────────────────────
+  const nearbyLOS = countLOSTerrainNear(cx, cy, 14);
+  const nearbyCover = countCoverTerrainNear(cx, cy, 10);
+
+  // Fire support / long-range shooters: want LOS-blocking terrain behind them
+  // (screens them from counter-fire) but NOT in front (so they can shoot)
+  if (isFireSupport || hasLongRange) {
+    // Penalise positions directly in front of LOS blockers (can't shoot through them)
+    const frontY = isAgentA ? cy - 8 : cy + 8; // direction toward enemy
+    const losInFront = countLOSTerrainNear(cx, frontY, 10);
+    score -= losInFront * 8;
+    // Bonus for cover nearby (protection from return fire)
+    score += nearbyCover * 4;
+  }
+
+  // Melee and general infantry: WANT to deploy near LOS-blocking terrain
+  // so they can advance toward the enemy using cover as concealment
+  if (isMeleePrimary || (!isFireSupport && !hasLongRange)) {
+    score += nearbyLOS * 5;  // LOS blockers on approach lane are valuable
+    score += nearbyCover * 3;
+  }
+
+  // Ranged non-fire-support units: prefer cover but not LOS blockers
+  if (hasLongRange && !isFireSupport) {
+    score += nearbyCover * 5;
+    score -= nearbyLOS * 3;
+  }
+
+  // Squads (not fire support): prefer to be near LOS-blocking terrain to break line-of-sight from enemy
+  if (!isFireSupport && !isHeavy) {
+    // Bonus if there's a LOS blocker between this position and the enemy deployment zone
+    const enemyZoneY = isAgentA ? 38 : 8;
+    const midpointY = (cy + enemyZoneY) / 2;
+    const losOnApproach = countLOSTerrainNear(cx, midpointY, 10);
+    score += losOnApproach * 6;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Bug 4 fix: Fire support units NEVER charge
+  // For deployment, fire support prefer rear flanks
   if (isFireSupport) {
     if (cand.col !== 'centre') score += 25;
+    // Rear deployment for fire support — further from enemy lines
+    const deployZone = isAgentA ? 3 : 42;
+    const depthFromFront = isAgentA ? (deployZone - cand.y) : (cand.y - deployZone);
+    score += Math.max(0, depthFromFront) * 0.5;
   } else if (hasLongRange && !hasIndirect) {
+    // Long-range fire support without Indirect: prefer centre for maximum arc
     if (cand.col === 'centre') score += 20;
   }
 
@@ -681,10 +724,11 @@ export class DMNEngine {
     score += Math.max(0, 20 - friendlyDist) * 0.4;
   }
 
-  // Hard penalty for already-occupied zone (max 2 per zone)
+  // Bug 6 fix: hard penalty for using an already-occupied zone (max 2 per zone)
   const candidateZoneCol = cand.col === 'left' ? 'left' : cand.col === 'right' ? 'right' : 'centre';
   const candidateZoneRow = isAgentA ? 'south' : 'north';
   const candidateZone = `${candidateZoneRow}-${candidateZoneCol}`;
+  // Count current units in this zone — allow only 2 per zone
   const unitsInZone = deployedFriendlies.filter(f => {
     const fZoneCol = f.x < 24 ? 'left' : f.x < 48 ? 'centre' : 'right';
     const fZoneRow = isAgentA ? 'south' : 'north';
@@ -703,6 +747,7 @@ export class DMNEngine {
       const t = e.special_rules?.match(/Tough\((\d+)\)/);
       return t && parseInt(t[1]) >= 6;
     });
+    // Fragile units avoid big threats
     if (!isHeavy && !isMeleePrimary) score -= bigThreats.length * 10;
   }
 
