@@ -1513,49 +1513,14 @@ ${JSON.stringify(summaries, null, 2)}`;
     });
     narrativeControllerRef.current = controller;
 
-    // PLACEHOLDER: In a real implementation, call the Anthropic streaming API here.
-    // For now, simulate the stream using InvokeLLM (non-streaming) and replay activation-by-activation.
-    try {
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: userMsg,
-        response_json_schema: {
-          type: 'object',
-          properties: {
-            activations: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  index: { type: 'number' },
-                  commentary: { type: 'string' },
-                  significance: { type: 'string' }
-                }
-              }
-            }
-          }
-        }
-      });
-
-      // Seed the controller's narrative cache with all generated commentary
-      (result?.activations || []).forEach(a => {
-        controller.narrative[a.index] = a.commentary || '';
-        // Also resolve any pending callbacks
-        controller.onActivationReady(a.index, a.commentary || '');
-      });
-
-      // Fallback: if no structured response, generate per-activation text
-      if (!result?.activations?.length) {
-        summaries.forEach((s, i) => {
-          const text = `Round ${s.round}: ${s.unit} performs a ${s.action}${s.target ? ` against ${s.target}` : ''}.`;
-          controller.narrative[i] = text;
-          controller.onActivationReady(i, text);
-        });
-      }
-    } catch (err) {
-      console.error('Narrative generation failed:', err);
-      setNarrativeStreaming(false);
-      return;
-    }
+    // TODO: Replace this stub with a real LLM/streaming API call when ready.
+    summaries.forEach((s, i) => {
+      const actionLabel = s.action === 'shoot' ? `fires at ${s.target}` : s.action === 'charge' ? `charges ${s.target}` : s.action === 'melee' ? `fights ${s.target}` : s.action;
+      const woundsNote = s.key_numbers.wounds_dealt ? ` — ${s.key_numbers.wounds_dealt} wound(s) dealt` : '';
+      const destroyedNote = s.destruction ? ` ${s.destruction.unit_killed} is destroyed!` : '';
+      const text = `[Round ${s.round}] ${s.unit} ${actionLabel}${woundsNote}.${destroyedNote}`;
+      controller.onActivationReady(i, text);
+    });
 
     setNarrativeStreaming(false);
     controller.start();
