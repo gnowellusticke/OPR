@@ -1127,14 +1127,11 @@ export default function Battle() {
       // Ensure the weapon object always has special_rules as a string for RulesEngine
       const normWeapon = { ...weapon, special_rules: weaponSpecialStr };
 
-      // Bug 3 fix: Attack count = ceil(current wounds / wounds-per-model) × weapon attacks
-      // Uses ceil so a partially wounded model still contributes attacks.
-      // Bug 3 fix: model count = ceil(current wounds / wounds-per-model), never exceeds deployed model count
-      const effectiveTpm = Math.max(unit.tough_per_model || 1, 1);
-      const deployedModels = unit.model_count || Math.ceil(unit.total_models / effectiveTpm);
-      const currentModelCount = Math.min(deployedModels, Math.max(1, Math.ceil(unit.current_models / effectiveTpm)));
+      // Use footprint-based model count: how many models can actually reach the target from their spread.
+      // Falls back to full model count if target is well within range.
+      const modelsInRange = rules.getModelsInRange(unit, target, weapon.range);
       const baseAttacks = weapon.attacks || 1;
-      const totalAttacks = baseAttacks * currentModelCount;
+      const totalAttacks = baseAttacks * modelsInRange;
 
       let result;
       let loggedAttacks;
