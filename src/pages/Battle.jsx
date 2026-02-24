@@ -1323,7 +1323,7 @@ export default function Battle() {
           status: u.current_models <= 0 ? 'destroyed' : u.status,
         }));
 
-        // Replenish Caster spell tokens (Bug 7C fix: capped at caster_level * 2)
+        // Replenish Caster spell tokens (capped at 6)
         newState.units.forEach(u => {
           const gained = rules.replenishSpellTokens(u);
           if (gained > 0) {
