@@ -1413,6 +1413,8 @@ export default function Battle() {
       console.log('=== BATTLE JSON LOG ===');
       console.log(JSON.stringify(log, null, 2));
 
+      // Generate commentary button will appear in UI — handled separately
+
       // Trigger rule compliance verification
       try {
         const complianceReport = await verifyRuleCompliance(log);
@@ -1449,6 +1451,64 @@ export default function Battle() {
 
     evs.push({ round: 4, type: 'victory', message: `Battle over! ${winner === 'draw' ? 'Draw' : winner === 'agent_a' ? 'Agent A wins' : 'Agent B wins'} (${aScore}–${bScore})`, timestamp: new Date().toLocaleTimeString() });
     commitState(gs, evs);
+  };
+
+  // ─── COMMENTARY GENERATION ───────────────────────────────────────────────
+
+  const generateCommentary = async () => {
+    if (!fullJsonLog) return;
+    setGeneratingCommentary(true);
+    setCommentary(null);
+    try {
+      const persAName = battle?.game_state?.personality_a || 'opportunist';
+      const persBName = battle?.game_state?.personality_b || 'opportunist';
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt: `You are a dramatic Warhammer-style battle commentator creating a YouTube battle report script.
+
+BATTLE DATA:
+${JSON.stringify(fullJsonLog, null, 2)}
+
+PERSONALITIES:
+- Agent A (${fullJsonLog.agent_a?.faction}) plays with a "${persAName}" personality
+- Agent B (${fullJsonLog.agent_b?.faction}) plays with a "${persBName}" personality
+
+Write a compelling battle report script for a YouTube video. Structure it as follows:
+1. An exciting INTRO (set the scene, introduce both armies and their personalities)
+2. A ROUND-BY-ROUND narrative — for each round, highlight the most dramatic moments: charges, kills, morale breaks, objective captures. Explain why the AI made key decisions (reference personality traits). Include dice roll drama ("rolling a 6 when they needed a 5!").
+3. A TURNING POINT section — identify the single moment that decided the battle
+4. An OUTRO — recap the final score, declare the winner, and offer strategic analysis
+
+Guidelines:
+- Write as two commentator personas that reflect the army personalities (e.g. an aggressive commentator for a berserker army vs a measured analyst for a tactician army)
+- Keep it exciting and accessible — explain rules simply when referenced
+- Each round commentary should be 3-5 sentences
+- Timestamp hints: reference the round number for video sync
+- Total length: 400-600 words`,
+        response_json_schema: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            intro: { type: 'string' },
+            rounds: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  round: { type: 'number' },
+                  headline: { type: 'string' },
+                  commentary: { type: 'string' }
+                }
+              }
+            },
+            turning_point: { type: 'string' },
+            outro: { type: 'string' }
+          }
+        }
+      });
+      setCommentary(result);
+    } finally {
+      setGeneratingCommentary(false);
+    }
   };
 
   // ─── RENDER ───────────────────────────────────────────────────────────────────
