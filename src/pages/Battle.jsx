@@ -1479,15 +1479,40 @@ export default function Battle() {
             <RotateCcw className="w-4 h-4 mr-2" /> Reset
           </Button>
           {fullJsonLog && (
-            <Button variant="outline" className="border-green-600 text-green-400 hover:bg-green-900/20" onClick={() => {
-              const blob = new Blob([JSON.stringify(fullJsonLog, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a'); a.href = url; a.download = `battle-log-${battle.id}.json`; a.click();
-              URL.revokeObjectURL(url);
-            }}>
-              <Download className="w-4 h-4 mr-2" /> Download Log
-            </Button>
-          )}
+                    <>
+                      <Button variant="outline" className="border-green-600 text-green-400 hover:bg-green-900/20" onClick={() => {
+                        const blob = new Blob([JSON.stringify(fullJsonLog, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href = url; a.download = `battle-log-${battle.id}.json`; a.click();
+                        URL.revokeObjectURL(url);
+                      }}>
+                        <Download className="w-4 h-4 mr-2" /> Download Log
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-purple-600 text-purple-400 hover:bg-purple-900/20"
+                        disabled={generatingCommentary}
+                        onClick={generateCommentary}
+                      >
+                        {generatingCommentary ? '🔮 Generating...' : '🎬 Generate Commentary'}
+                      </Button>
+                    </>
+                  )}
+                  {/* Speed control */}
+                  <div className="flex items-center gap-2 text-slate-300 text-sm">
+                    <span>Speed:</span>
+                    {[{ label: 'Fast', ms: 300 }, { label: 'Normal', ms: 800 }, { label: 'Slow', ms: 2000 }].map(({ label, ms }) => (
+                      <Button
+                        key={ms}
+                        size="sm"
+                        variant={simulationSpeed === ms ? 'default' : 'outline'}
+                        className={simulationSpeed === ms ? 'bg-blue-700 text-white' : 'border-slate-600 text-slate-300'}
+                        onClick={() => setSimulationSpeed(ms)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
         </div>
       </div>
 
