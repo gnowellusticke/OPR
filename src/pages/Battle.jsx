@@ -79,6 +79,11 @@ export default function Battle() {
   // Play loop — triggers on playing flag change or after each state update
   useEffect(() => {
     if (!playing || !gsRef.current || battleRef.current?.status === 'completed') return;
+    // If deployment hasn't run yet, kick it off first
+    if (gsRef.current.pending_deployment) {
+      runPendingDeployment();
+      return;
+    }
     const timer = setTimeout(() => {
         if (playingRef.current) processNextAction();
       }, simulationSpeed);
