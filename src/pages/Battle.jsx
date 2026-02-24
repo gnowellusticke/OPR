@@ -617,13 +617,15 @@ export default function Battle() {
         }
       }
 
-      // Place within chosen zone — jitter within x-band + random y in deployment strip
+      // Place within chosen zone — use DMN suggested position if available, else jitter in zone
       const baseX = ZONE_X[finalCol];
-      const finalX = Math.max(4, Math.min(68, baseX + (Math.random() - 0.5) * 10));
-      const finalY = yMin + Math.random() * (yMax - yMin);
+      const suggestedX = decision.x && finalCol === decidedCol ? decision.x : baseX + (Math.random() - 0.5) * 10;
+      const suggestedY = decision.y && finalCol === decidedCol ? decision.y : yMin + 2 + Math.random() * (yMax - yMin - 4);
+      const finalX = Math.max(5, Math.min(65, suggestedX));
+      const finalY = Math.max(yMin + 1, Math.min(yMax - 1, suggestedY));
 
       unit.x = finalX;
-      unit.y = Math.max(yMin, Math.min(yMax, finalY));
+      unit.y = finalY;
       unit.is_deployed = true;
       myDeployed.push({ x: unit.x, y: unit.y, name: unit.name, special_rules: unit.special_rules });
       myUsedZones.add(finalZone);
