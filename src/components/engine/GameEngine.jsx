@@ -612,28 +612,20 @@ export class DMNEngine {
     return t;
   };
 
-  // Generate a dense grid of candidate positions across the full deployment strip
-  // This breaks the rigid 3-column row pattern and allows natural scatter
+  // Generate 40 random candidates scattered across the full deployment strip.
+  // x is picked from a spread of columns, y is fully random within the strip.
+  // This prevents any row-alignment pattern.
   const candidates = [];
-  const xPositions = [8, 16, 24, 32, 40, 48, 56, 62];
-  const yPositions = [
-    yMin + 2,
-    yMin + (yMax - yMin) * 0.33,
-    yMin + (yMax - yMin) * 0.66,
-    yMax - 2,
-  ];
-  for (const bx of xPositions) {
-    for (const by of yPositions) {
-      const jx = bx + (Math.random() - 0.5) * 8;
-      const jy = by + (Math.random() - 0.5) * 3;
-      const col = jx < 24 ? 'left' : jx < 48 ? 'centre' : 'right';
-      candidates.push({
-        x: Math.max(5, Math.min(65, jx)),
-        y: Math.max(yMin + 1, Math.min(yMax - 1, jy)),
-        col,
-        label: `${col} (${jx.toFixed(0)},${jy.toFixed(0)})`
-      });
-    }
+  for (let i = 0; i < 40; i++) {
+    const bx = 6 + Math.random() * 58; // fully random x across the board
+    const by = yMin + Math.random() * (yMax - yMin); // fully random y within strip
+    const col = bx < 24 ? 'left' : bx < 48 ? 'centre' : 'right';
+    candidates.push({
+      x: Math.max(5, Math.min(65, bx)),
+      y: Math.max(yMin + 1, Math.min(yMax - 1, by)),
+      col,
+      label: `${col} (${bx.toFixed(0)},${by.toFixed(0)})`
+    });
   }
 
   let bestScore = -Infinity;
