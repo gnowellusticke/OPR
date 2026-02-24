@@ -157,44 +157,73 @@ export default function Battle() {
       advance_rules: activeRuleKeys,
     });
 
-    // Log objectives_placed event (Bug 4 fix)
-    const diceRoll = objectives._diceRoll || 3;
-    const numObjectives = objectives._numObjectives || objectives.length;
-    logger.logObjectivesPlaced({ diceRoll, numObjectives, objectives });
-
-    // Run alternating deployment phase (mutates unit positions, logs coin toss + deploy events)
-    const { firstActivation } = await runDeploymentPhase(units, objectives, terrain, logger, advRules);
-
-    // Grant initial spell tokens to all Caster units before round 1
-    const rules = rulesRef.current;
-    units.forEach(u => rules.replenishSpellTokens(u));
-
-    const initialState = {
-    units,
-    terrain,
-    objectives,
-    active_agent: firstActivation,
-    current_round: 1,
-    units_activated: [],
-    advance_rules: advRules,
-    cumulative_score: { agent_a: 0, agent_b: 0 },
+    // Store everything ready-to-go but don't deploy yet — wait for Play
+    // Units have placeholder positions until deployment runs
+    const pendingState = {
+      units,
+      terrain,
+      objectives,
+      active_agent: 'agent_a',
+      current_round: 0,
+      units_activated: [],
+      advance_rules: advRules,
+      cumulative_score: { agent_a: 0, agent_b: 0 },
+      pending_deployment: true, // flag: deployment hasn't happened yet
     };
 
     const log = [{
       round: 0, type: 'setup',
-      message: 'Battle initialized. Terrain placed, objectives set, armies deployed.',
+      message: 'Terrain placed, objectives set. Press Play to begin deployment.',
       timestamp: new Date().toLocaleTimeString()
     }];
 
-    commitState(initialState, log);
-
-    await base44.entities.Battle.update(battleData.id, {
-      status: 'in_progress', current_round: 1,
-      game_state: initialState, event_log: log
-    });
-
+    commitState(pendingState, log);
     battleRef.current = { ...battleRef.current, status: 'in_progress', current_round: 1 };
     setBattle({ ...battleRef.current });
+  };
+
+  // Called when Play is pressed and pending_deployment is true — runs deployment then starts combat
+  const runPendingDeployment = async () => {
+    const gs = gsRef.current;
+    const bat = battleRef.current;
+    if (!gs?.pending_deployment) return;
+
+    const advRules = gs.advance_rules || {};
+    const logger = loggerRef.current;
+
+    // Log objectives
+    const diceRoll = gs.objectives._diceRoll || gs.objectives.length;
+    const numObjectives = gs.objectives._numObjectives || gs.objectives.length;
+    logger.logObjectivesPlaced({ diceRoll, numObjectives, objectives: gs.objectives });
+
+    const { firstActivation } = await runDeploymentPhase(
+      gs.units, gs.objectives, gs.terrain, logger, advRules
+    );
+
+    // Grant initial spell tokens
+    const rules = rulesRef.current;
+    gs.units.forEach(u => rules.replenishSpellTokens(u));
+
+    const readyState = {
+      ...gsRef.current,
+      active_agent: firstActivation,
+      current_round: 1,
+      units_activated: [],
+      pending_deployment: false,
+      deployment_in_progress: false,
+    };
+
+    const log = [
+      ...evRef.current,
+      { round: 1, type: 'setup', message: 'Deployment complete — Round 1 begins!', timestamp: new Date().toLocaleTimeString() }
+    ];
+
+    commitState(readyState, log);
+
+    await base44.entities.Battle.update(bat.id, {
+      status: 'in_progress', current_round: 1,
+      game_state: readyState, event_log: log
+    });
   };
 
   // ─── TERRAIN / OBJECTIVES ────────────────────────────────────────────────────
