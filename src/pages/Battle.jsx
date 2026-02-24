@@ -14,6 +14,8 @@ import { BattleLogger } from '../components/engine/BattleLogger';
 import { verifyRuleCompliance } from '../components/engine/RuleComplianceVerifier';
 import { attachFactionSpells } from '../components/engine/spells/SpellRegistry';
 import { getPersonality, DEFAULT_PERSONALITY } from '../components/engine/personalities/PersonalityRegistry';
+import { processLogToActivations, NARRATIVE_SYSTEM_PROMPT, STYLE_SUFFIXES, parseNarrativeStream, BattleReplayController, getActivationDuration } from '../components/engine/NarrativeEngine';
+import NarrativeCommentaryBox from '../components/battle/NarrativeCommentaryBox';
 
 export default function Battle() {
   const navigate = useNavigate();
