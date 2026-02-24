@@ -1327,7 +1327,7 @@ export default function Battle() {
         newState.units.forEach(u => {
           const gained = rules.replenishSpellTokens(u);
           if (gained > 0) {
-            evs.push({ round: newRound, type: 'ability', message: `${u.name} gains ${gained} spell token(s) (now ${u.spell_tokens}/6)`, timestamp: new Date().toLocaleTimeString() });
+            evs.push({ round: newRound, type: 'ability', message: `${u.name} gains ${gained} spell token(s) (now ${u.spell_tokens}/6 max)`, timestamp: new Date().toLocaleTimeString() });
             logger?.logAbility({ round: newRound, unit: u, ability: 'Caster', details: { tokens_gained: gained, tokens_total: u.spell_tokens } });
           }
         });
