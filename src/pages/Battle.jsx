@@ -1088,8 +1088,10 @@ export default function Battle() {
 
       // Bug 3 fix: Attack count = ceil(current wounds / wounds-per-model) × weapon attacks
       // Uses ceil so a partially wounded model still contributes attacks.
+      // Bug 3 fix: model count = ceil(current wounds / wounds-per-model), never exceeds deployed model count
       const effectiveTpm = Math.max(unit.tough_per_model || 1, 1);
-      const currentModelCount = Math.max(1, Math.ceil(unit.current_models / effectiveTpm));
+      const deployedModels = unit.model_count || Math.ceil(unit.total_models / effectiveTpm);
+      const currentModelCount = Math.min(deployedModels, Math.max(1, Math.ceil(unit.current_models / effectiveTpm)));
       const baseAttacks = weapon.attacks || 1;
       const totalAttacks = baseAttacks * currentModelCount;
 
