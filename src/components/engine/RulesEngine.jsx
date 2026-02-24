@@ -811,14 +811,15 @@ export class RulesEngine {
     return casterMatch ? parseInt(casterMatch[1]) : 0;
   }
 
-  // Replenish spell tokens at the start of a round. Tokens cap at 6.
+  // Replenish spell tokens at the start of a round. Bug 7C fix: cap = caster_level * 2.
   replenishSpellTokens(unit) {
     const gain = this.getCasterTokens(unit);
     if (gain === 0) return 0;
+    const cap = gain * 2; // Caster(X) → cap at X*2
     const current = unit.spell_tokens || 0;
-    const after = Math.min(6, current + gain);
+    const after = Math.min(cap, current + gain);
     unit.spell_tokens = after;
-    return after - current; // actual amount gained
+    return after - current; // actual tokens gained (may be < gain if near cap)
   }
 
   // Cast one spell:
