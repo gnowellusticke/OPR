@@ -1464,7 +1464,110 @@ export default function Battle() {
     commitState(gs, evs);
   };
 
-  // ─── COMMENTARY GENERATION ───────────────────────────────────────────────
+  // ─── LIVE NARRATIVE (streaming, activation-synced) ───────────────────────
+
+  const startLiveNarrative = async () => {
+    if (!fullJsonLog) return;
+
+    // Pre-process log into activation summaries
+    const summaries = processLogToActivations(fullJsonLog);
+    setActivationSummaries(summaries);
+    narrativeCacheRef.current = {};
+
+    setNarrativeActive(true);
+    setNarrativeStreaming(true);
+    setCurrentNarrativeText('');
+    setCurrentNarrativeIndex(null);
+
+    const systemPrompt = NARRATIVE_SYSTEM_PROMPT + '\n\nSTYLE: ' + (STYLE_SUFFIXES[narrativeStyle] || '');
+    const userMsg = `Generate commentary for this battle.
+
+Factions: ${fullJsonLog.agent_a?.faction} (Agent A) vs ${fullJsonLog.agent_b?.faction} (Agent B)
+Final score: ${fullJsonLog.final_score?.agent_a ?? 0}–${fullJsonLog.final_score?.agent_b ?? 0}
+Winner: ${fullJsonLog.winner}
+Rounds played: ${Math.max(...fullJsonLog.events.map(e => e.round || 0))}
+
+Activations:
+${JSON.stringify(summaries, null, 2)}`;
+
+    // Wire up the replay controller
+    const controller = new BattleReplayController({
+      log: fullJsonLog,
+      activations: summaries,
+      onPlayActivation: async (activation) => {
+        setCurrentNarrativeIndex(activation.index);
+        setCurrentNarrativeUnit(activation.unit);
+        setCurrentNarrativeRound(activation.round);
+        setCurrentNarrativeText('');
+        // Brief pause to simulate activation animation sync
+        await new Promise(r => setTimeout(r, 300));
+      },
+      onShowCommentary: (text, significance) => {
+        setCurrentNarrativeText(text);
+        setCurrentNarrativeSignificance(significance);
+        setNarrativeByActivation(prev => ({ ...prev, [narrativeCacheRef.current._lastIndex ?? 0]: text }));
+      },
+      onComplete: () => {
+        setNarrativeStreaming(false);
+      },
+    });
+    narrativeControllerRef.current = controller;
+
+    // PLACEHOLDER: In a real implementation, call the Anthropic streaming API here.
+    // For now, simulate the stream using InvokeLLM (non-streaming) and replay activation-by-activation.
+    try {
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt: userMsg,
+        response_json_schema: {
+          type: 'object',
+          properties: {
+            activations: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  index: { type: 'number' },
+                  commentary: { type: 'string' },
+                  significance: { type: 'string' }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Seed the controller's narrative cache with all generated commentary
+      (result?.activations || []).forEach(a => {
+        controller.narrative[a.index] = a.commentary || '';
+        // Also resolve any pending callbacks
+        controller.onActivationReady(a.index, a.commentary || '');
+      });
+
+      // Fallback: if no structured response, generate per-activation text
+      if (!result?.activations?.length) {
+        summaries.forEach((s, i) => {
+          const text = `Round ${s.round}: ${s.unit} performs a ${s.action}${s.target ? ` against ${s.target}` : ''}.`;
+          controller.narrative[i] = text;
+          controller.onActivationReady(i, text);
+        });
+      }
+    } catch (err) {
+      console.error('Narrative generation failed:', err);
+      setNarrativeStreaming(false);
+      return;
+    }
+
+    setNarrativeStreaming(false);
+    controller.start();
+  };
+
+  const stopLiveNarrative = () => {
+    narrativeControllerRef.current?.stop();
+    setNarrativeActive(false);
+    setCurrentNarrativeText('');
+  };
+
+  // ─── COMMENTARY GENERATION (legacy post-battle summary) ──────────────────
 
   const generateCommentary = async () => {
     if (!fullJsonLog) return;
