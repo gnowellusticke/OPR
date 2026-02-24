@@ -106,14 +106,15 @@ export function buildModelList(unit) {
 }
 
 export default function UnitModelDisplay({ unit, owner }) {
-  const effectiveTough = resolveEffectiveTough(unit);
-  const { size, radius } = getModelStyle(effectiveTough);
-  const step = size + MODEL_GAP;
-
   const models = buildModelList(unit);
   const cols = Math.min(COLS, models.length);
-  const rows = Math.ceil(models.length / cols);
 
+  // Use the largest model size to determine the grid step (keeps alignment consistent)
+  const maxTough = models.reduce((m, mdl) => Math.max(m, mdl.toughValue || 1), 1);
+  const { size: maxSize } = getModelStyle(maxTough);
+  const step = maxSize + MODEL_GAP;
+
+  const rows = Math.ceil(models.length / cols);
   const width = cols * step - MODEL_GAP;
   const height = rows * step - MODEL_GAP;
 
@@ -125,6 +126,8 @@ export default function UnitModelDisplay({ unit, owner }) {
         const col = i % cols;
         const row = Math.floor(i / cols);
 
+        const { size, radius } = getModelStyle(model.toughValue || 1);
+
         let borderColor = baseColor;
         let borderWidth = 1;
         let boxShadow = 'none';
@@ -132,12 +135,15 @@ export default function UnitModelDisplay({ unit, owner }) {
         if (model.type === 'character') {
           borderColor = '#f59e0b';
           borderWidth = 2;
-          boxShadow = '0 0 4px rgba(245,158,11,0.8)';
+          boxShadow = '0 0 5px rgba(245,158,11,0.9)';
         } else if (model.type === 'special_weapon') {
           borderColor = '#34d399';
           borderWidth = 2;
           boxShadow = '0 0 4px rgba(52,211,153,0.7)';
         }
+
+        // Centre smaller dots within the grid cell so they align neatly with larger ones
+        const offset = Math.floor((maxSize - size) / 2);
 
         return (
           <div
@@ -145,8 +151,8 @@ export default function UnitModelDisplay({ unit, owner }) {
             title={model.type === 'character' ? 'Character' : model.type === 'special_weapon' ? 'Special Weapon' : undefined}
             style={{
               position: 'absolute',
-              left: col * step,
-              top: row * step,
+              left: col * step + offset,
+              top: row * step + offset,
               width: size,
               height: size,
               borderRadius: radius,
