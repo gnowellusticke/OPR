@@ -90,29 +90,7 @@ export function processLogToActivations(log) {
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
 
-export const NARRATIVE_SYSTEM_PROMPT = `You are a battle reporter narrating a Grimdark Future tabletop wargame in real time.
-You will receive a JSON array of activation summaries. Write vivid, punchy commentary for each one.
-
-FORMAT — strictly output activations in this exact format, no other text:
-[ACTIVATION:0]
-<commentary>
-[ACTIVATION:1]
-<commentary>
-...and so on for every activation in order.
-
-RULES:
-- One commentary block per activation, index must match exactly
-- 1 sentence for 'minor' significance. 2 sentences for 'standard'. Up to 3 for 'notable' or 'major'.
-- Use unit names naturally. "The Vigilant Sisters cut through the hull" not "Unit A dealt 3 wounds to Unit B".
-- Reference specific outcomes when dramatic:
-    - A morale roll of 1 is a catastrophic failure — call it out
-    - wounds_dealt equal to target wounds_remaining means a killing blow — say so
-    - A unit fighting on at less than 25% wounds_remaining is worth noting
-- Track momentum across the battle. If one side is winning on objectives, reflect the pressure.
-- When a unit is destroyed, give it a moment. Don't rush past deaths.
-- Vary your sentence structure and energy. Not every activation gets the same cadence.
-- Never invent rules, dice, or events not present in the data.
-- Objective changes (e.g. an objective flipping faction) are high-drama moments — flag them.`;
+export const NARRATIVE_SYSTEM_PROMPT = `You are a battle reporter narrating a Grimdark Future tabletop wargame in real time.`;
 
 export const STYLE_SUFFIXES = {
   tactical:  'Write in a dry, precise military debriefing style. Focus on tactical decisions and outcomes.',
@@ -121,8 +99,6 @@ export const STYLE_SUFFIXES = {
 };
 
 // ─── Stream Parser ────────────────────────────────────────────────────────────
-// Used when connecting directly to the Anthropic streaming API.
-// Parses SSE data lines and fires callbacks as each [ACTIVATION:N] block completes.
 
 export async function parseNarrativeStream(stream, totalActivations, { onActivationReady, onActivationPartial } = {}) {
   const narrativeByActivation = {};
