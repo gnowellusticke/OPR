@@ -582,47 +582,20 @@ export default function Battle() {
     } else {
       const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain, myUsedZones);
 
-      // Enforce max 2 units per zone at deployment time.
-      // Count which zone the DMN decision lands in, then find a free zone if needed.
+      // Use the DMN's chosen position directly — it already picks from a dense grid
+      // within the deployment strip. Just clamp hard to the correct y-band.
+      const yMin = isAgentA ? 4 : 33;
+      const yMax = isAgentA ? 15 : 44;
       const zoneRow = isAgentA ? 'south' : 'north';
-      const yMin = isAgentA ? 3 : 32;
-      const yMax = isAgentA ? 16 : 45;
 
-      const getZoneCol = (x) => x < 24 ? 'left' : x < 48 ? 'centre' : 'right';
-      const countInZone = (col) => myDeployed.filter(u => getZoneCol(u.x) === col).length;
+      // Apply a small spread jitter so units in the same logical position don't stack
+      const jx = decision.x + (Math.random() - 0.5) * 6;
+      const jy = decision.y + (Math.random() - 0.5) * 3;
 
-      const ZONE_X = { left: 10, centre: 34, right: 58 };
-      const decidedCol = getZoneCol(decision.x);
-      const decidedZone = `${zoneRow}-${decidedCol}`;
-
-      let finalCol = decidedCol;
-      let finalZone = decidedZone;
-
-      if (countInZone(decidedCol) >= 2) {
-        // Try each zone in preference order: desired, then others
-        const ordered = ['left', 'centre', 'right'].filter(c => c !== decidedCol);
-        ordered.unshift(decidedCol); // put preferred first (already full, will skip)
-        for (const col of ['left', 'centre', 'right']) {
-          if (countInZone(col) < 2) {
-            finalCol = col;
-            finalZone = `${zoneRow}-${col}`;
-            break;
-          }
-        }
-        // If all zones are full (> 6 units per side), just use the least-full zone
-        if (finalCol === decidedCol) {
-          finalCol = ['left', 'centre', 'right'].reduce((best, col) =>
-            countInZone(col) < countInZone(best) ? col : best, 'left');
-          finalZone = `${zoneRow}-${finalCol}`;
-        }
-      }
-
-      // Place within chosen zone — use DMN suggested position if available, else jitter in zone
-      const baseX = ZONE_X[finalCol];
-      const suggestedX = decision.x && finalCol === decidedCol ? decision.x : baseX + (Math.random() - 0.5) * 10;
-      const suggestedY = decision.y && finalCol === decidedCol ? decision.y : yMin + 2 + Math.random() * (yMax - yMin - 4);
-      const finalX = Math.max(5, Math.min(65, suggestedX));
-      const finalY = Math.max(yMin + 1, Math.min(yMax - 1, suggestedY));
+      const finalX = Math.max(5, Math.min(65, jx));
+      const finalY = Math.max(yMin, Math.min(yMax, jy));
+      const finalCol = finalX < 24 ? 'left' : finalX < 48 ? 'centre' : 'right';
+      const finalZone = `${zoneRow}-${finalCol}`;
 
       unit.x = finalX;
       unit.y = finalY;
