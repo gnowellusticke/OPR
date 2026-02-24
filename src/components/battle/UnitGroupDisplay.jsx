@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Users, User } from "lucide-react";
+import UnitModelDisplay, { isCharacterUnit, hasSpecialWeapons } from './UnitModelDisplay';
 
 export default function UnitGroupDisplay({ group, activeUnit, onUnitClick, CELL_SIZE, GRID_SIZE }) {
   const [showTooltip, setShowTooltip] = useState(false);
