@@ -729,8 +729,12 @@ export default function Battle() {
     const rules = rulesRef.current;
     const logger = loggerRef.current;
 
-    // Bug 2 fix: initialise firedThisActivation at very top of activation — before ANY action resolution
+    // Bug 2 fix: initialise firedThisActivation unconditionally for ALL unit types (infantry, vehicle, hero)
     liveUnit._firedThisActivation = new Set();
+    // Guard: mark in gsRef immediately to prevent concurrent re-entry for vehicles/heroes
+    if (!gsRef.current.units_activated?.includes(liveUnit.id)) {
+      gsRef.current = { ...gsRef.current, units_activated: [...(gsRef.current.units_activated || []), liveUnit.id] };
+    }
 
     // Bug 6 fix: Shaken recovery roll fires at START of unit's own activation, FIRST event
     let canAct = true;
