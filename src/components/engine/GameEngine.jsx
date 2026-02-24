@@ -612,13 +612,29 @@ export class DMNEngine {
     return t;
   };
 
-  // Score candidate positions (sample a grid of x positions across 3 columns)
-  // Add per-column y variation to break straight-line rows
-  const candidates = [
-    { col: 'left',   x: 10 + Math.random() * 8,  y: yMin + Math.random() * (yMax - yMin), label: 'left flank' },
-    { col: 'centre', x: 30 + Math.random() * 12, y: yMin + Math.random() * (yMax - yMin), label: 'centre' },
-    { col: 'right',  x: 52 + Math.random() * 8,  y: yMin + Math.random() * (yMax - yMin), label: 'right flank' },
+  // Generate a dense grid of candidate positions across the full deployment strip
+  // This breaks the rigid 3-column row pattern and allows natural scatter
+  const candidates = [];
+  const xPositions = [8, 16, 24, 32, 40, 48, 56, 62];
+  const yPositions = [
+    yMin + 2,
+    yMin + (yMax - yMin) * 0.33,
+    yMin + (yMax - yMin) * 0.66,
+    yMax - 2,
   ];
+  for (const bx of xPositions) {
+    for (const by of yPositions) {
+      const jx = bx + (Math.random() - 0.5) * 8;
+      const jy = by + (Math.random() - 0.5) * 3;
+      const col = jx < 24 ? 'left' : jx < 48 ? 'centre' : 'right';
+      candidates.push({
+        x: Math.max(5, Math.min(65, jx)),
+        y: Math.max(yMin + 1, Math.min(yMax - 1, jy)),
+        col,
+        label: `${col} (${jx.toFixed(0)},${jy.toFixed(0)})`
+      });
+    }
+  }
 
   let bestScore = -Infinity;
   let best = candidates[0];
