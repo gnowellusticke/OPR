@@ -28,10 +28,9 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
   const BATTLEFIELD_HEIGHT = 48;
   const CELL_SIZE = 60;
 
-  const isPending = gameState?.pending_deployment; // waiting for Play — show nothing yet
-  const isDeploying = gameState?.deployment_in_progress;
+  // Only show units that have been explicitly placed on the board
   const units = (gameState?.units || []).filter(u =>
-    u.current_models > 0 && !isPending && (!isDeploying || u.is_deployed)
+    u.current_models > 0 && u.is_deployed === true
   );
   const terrain = gameState?.terrain || [];
   const objectives = gameState?.objectives || [];
