@@ -96,8 +96,8 @@ export default function UnitModelDisplay({ unit, owner }) {
   const models = buildModelList(unit);
   const cols = Math.min(COLS, models.length);
 
-  // Use the largest model size to determine the grid step (keeps alignment consistent)
-  const maxTough = models.reduce((m, mdl) => Math.max(m, mdl.toughValue || 1), 1);
+  // Grid step is based on the largest dot present so everything aligns neatly
+  const maxTough = models.reduce((max, m) => Math.max(max, m.toughValue || 1), 1);
   const { size: maxSize } = getModelStyle(maxTough);
   const step = maxSize + MODEL_GAP;
 
