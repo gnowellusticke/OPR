@@ -1224,10 +1224,10 @@ export default function Battle() {
   }
 
   defender.current_models = Math.max(0, defender.current_models - attackerWoundsToApply);
-    attacker.current_models = Math.max(0, attacker.current_models - defenderWoundsToApply);
-    // Bug 1 fix: unconditionally set destroyed when wounds reach 0 — overrides shaken or any other status
-    if (defender.current_models <= 0) defender.status = 'destroyed';
-    if (attacker.current_models <= 0) attacker.status = 'destroyed';
+  attacker.current_models = Math.max(0, attacker.current_models - defenderWoundsToApply);
+  // Bug 1 fix: unconditionally set destroyed when wounds reach 0 — overrides shaken, normal, anything
+  if (defender.current_models <= 0) { defender.status = 'destroyed'; defender.current_models = 0; }
+  if (attacker.current_models <= 0) { attacker.status = 'destroyed'; attacker.current_models = 0; }
 
   evs.push({ round, type: 'combat', message: `⚔ ${attacker.name} vs ${defender.name} — dealt ${result.attacker_wounds}, took ${result.defender_wounds}`, timestamp: new Date().toLocaleTimeString() });
 
