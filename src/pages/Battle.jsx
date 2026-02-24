@@ -32,6 +32,20 @@ export default function Battle() {
   const [commentary, setCommentary] = useState(null);
   const [generatingCommentary, setGeneratingCommentary] = useState(false);
 
+  // Live narrative state
+  const [narrativeActive, setNarrativeActive] = useState(false);
+  const [narrativeStyle, setNarrativeStyle] = useState('dramatic');
+  const [narrativeByActivation, setNarrativeByActivation] = useState({});
+  const [currentNarrativeIndex, setCurrentNarrativeIndex] = useState(null);
+  const [currentNarrativeText, setCurrentNarrativeText] = useState('');
+  const [currentNarrativeSignificance, setCurrentNarrativeSignificance] = useState('standard');
+  const [currentNarrativeUnit, setCurrentNarrativeUnit] = useState(null);
+  const [currentNarrativeRound, setCurrentNarrativeRound] = useState(null);
+  const [narrativeStreaming, setNarrativeStreaming] = useState(false);
+  const [activationSummaries, setActivationSummaries] = useState([]);
+  const narrativeControllerRef = useRef(null);
+  const narrativeCacheRef = useRef({});
+
   // Engines (stable refs, never recreated)
   // Personality is loaded after battle data arrives — two separate DMN engines, one per agent
   const dmnARef = useRef(new DMNEngine());
