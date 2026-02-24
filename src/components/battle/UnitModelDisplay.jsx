@@ -27,16 +27,22 @@ export function hasSpecialWeapons(unit) {
 
 // Build a list of model descriptors for a unit.
 // Models are typed: 'character', 'special_weapon', or 'standard'.
+// Uses actual model count (not wounds) and shows remaining alive models proportionally.
 export function buildModelList(unit) {
-  const total = unit.current_models || 1;
+  // model_count = deployed number of models, total_models = max wounds
+  // tough_per_model = wounds per model
+  const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
+  const deployedModels = unit.model_count || Math.ceil((unit.total_models || 1) / toughPerModel);
+  // Remaining alive models = ceil(current wounds / wounds-per-model)
+  const aliveModels = Math.max(0, Math.min(deployedModels, Math.ceil((unit.current_models || 0) / toughPerModel)));
+  const total = Math.max(1, aliveModels);
+
   const isChar = isCharacterUnit(unit);
   const hasSpecial = hasSpecialWeapons(unit);
 
   return Array.from({ length: total }, (_, i) => {
     let type = 'standard';
-    // The first model of a character unit is always the character
     if (isChar && i === 0) type = 'character';
-    // Special weapon bearer: last model of multi-model units that have special weapons
     else if (hasSpecial && !isChar && total > 1 && i === total - 1) type = 'special_weapon';
     return { index: i, type };
   });
