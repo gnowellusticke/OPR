@@ -1059,16 +1059,19 @@ export default function Battle() {
   const logger = loggerRef.current;
   let shotFired = false;
 
-  // Use activation-level set (initialised at top of activateUnit — Bug 2 fix).
-    const firedThisActivation = unit._firedThisActivation || new Set();
-    unit._firedThisActivation = firedThisActivation;
-    const rangedWeapons = (unit.weapons || []).filter(w => {
-      if ((w.range ?? 2) <= 2) return false;
-      const key = w.name || w.id || JSON.stringify(w);
-      if (firedThisActivation.has(key)) return false;
-      firedThisActivation.add(key);
-      return true;
-    });
+  // Bug 1 fix: Single universal dedup gate — never re-assign the set, only read it.
+  // _firedThisActivation is initialised once at the top of activateUnit and never recreated.
+  // This prevents double-fire for ALL unit types (infantry, vehicle, hero) in ALL action states.
+  const firedThisActivation = unit._firedThisActivation;
+  if (!firedThisActivation) return false; // safety: should always be set by activateUnit
+
+  const rangedWeapons = (unit.weapons || []).filter(w => {
+    if ((w.range ?? 2) <= 2) return false;
+    const key = `${w.name}|${w.range}|${w.attacks}`; // canonical key matching weapon dedup
+    if (firedThisActivation.has(key)) return false;
+    firedThisActivation.add(key);
+    return true;
+  });
 
   if (rangedWeapons.length === 0) return false;
 
