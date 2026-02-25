@@ -4,6 +4,14 @@ import { Users, User } from "lucide-react";
 import UnitGroupDisplay from './UnitGroupDisplay';
 
 // Sprite assets for ruins and buildings — randomly assigned per terrain piece using a seeded index
+const HILL_SPRITES = [
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/1c0c23085_Big_Hills.png',
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/1aa5be922_Big_Hills2.png',
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/677633854_Big_Hills3.png',
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/df9b96fcd_Big_Hills4.png',
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/4e8a26efe_Big_Hills1.png',
+];
+
 const FOREST_SPRITES = [
   'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/43bb12b83_Rocks11.png',
   'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/a1b19589e_Rocks12.png',
