@@ -1227,18 +1227,19 @@ export default function Battle() {
         stateBefore: shootStateBefore
       });
 
-      // Morale on wounded survivor — Bug 4 fix: use model_count threshold for squads,
-      // wound threshold only for single-model units (vehicles/lone heroes/monsters)
+      // Bug 5 fix: Morale must fire whenever threshold is crossed — even if unit reaches 0
+      // (destruction doesn't exempt from morale; the check runs before destruction is finalised).
+      // Use model_count threshold for squads; wound threshold for single-model units.
       const targetIsSingleModel = (target.model_count || 1) === 1;
       const targetMoraleThreshold = targetIsSingleModel
         ? target.current_models <= target.total_models / 2
-        : Math.ceil(target.current_models / Math.max(target.tough_per_model, 1)) <= Math.floor((target.model_count || 1) / 2);
-      if (target.current_models > 0 && target.status === 'normal' && targetMoraleThreshold) {
+        : Math.ceil(target.current_models / Math.max(target.tough_per_model || 1, 1)) <= Math.floor((target.model_count || 1) / 2);
+      if (target.status !== 'routed' && target.status !== 'destroyed' && targetMoraleThreshold && woundsDealt > 0) {
         const moraleStateBefore = { acting_unit: { wounds_remaining: target.current_models, max_wounds: target.total_models, status: target.status } };
         const moraleResult = rules.checkMorale(target, 'wounds');
-        if (!moraleResult.passed) {
-          const outcome = rules.applyMoraleResult(target, false, 'wounds');
-          evs.push({ round, type: 'morale', message: `${target.name} morale failed — ${outcome}`, timestamp: new Date().toLocaleTimeString() });
+        const outcome = rules.applyMoraleResult(target, moraleResult.passed, 'wounds');
+        if (outcome !== 'passed') {
+          evs.push({ round, type: 'morale', message: `${target.name} morale ${moraleResult.passed ? 'passed' : 'failed'} — ${outcome}`, timestamp: new Date().toLocaleTimeString() });
           logger?.logMorale({ round, unit: target, outcome, roll: moraleResult.roll, qualityTarget: target.quality || 4, specialRulesApplied: moraleResult.specialRulesApplied || [], woundsTaken: woundsDealt, stateBefore: moraleStateBefore });
         }
       }
