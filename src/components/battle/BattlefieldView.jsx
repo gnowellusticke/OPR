@@ -3,6 +3,18 @@ import { Card } from "@/components/ui/card";
 import { Users, User } from "lucide-react";
 import UnitGroupDisplay from './UnitGroupDisplay';
 
+// Sprite assets for ruins and buildings — randomly assigned per terrain piece using a seeded index
+const RUINS_SPRITES = [
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/7c2e0d007__Big_Buildings1.png',
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/5a74f3a50__Big_Buildings5.png',
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/6808aaf7e__Big_Buildings.png',
+];
+const BUILDING_SPRITES = [
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/972a4c6cf__Big_Buildings2.png',
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/367423a26__Big_Buildings3.png',
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/85e70e9cf__Big_Buildings6.png',
+];
+
 // Visual style map for each terrain type
 const TERRAIN_STYLES = {
   barricade:        { bg: 'rgba(120,113,108,0.55)', border: '#a8a29e', icon: '🧱', textColor: '#fef3c7' },
@@ -11,8 +23,8 @@ const TERRAIN_STYLES = {
   hill:             { bg: 'rgba(161,140,100,0.45)', border: '#b45309', icon: '⛰',  textColor: '#fef3c7' },
   minefield:        { bg: 'rgba(220,38,38,0.25)',   border: '#dc2626', icon: '💣', textColor: '#fee2e2' },
   pond:             { bg: 'rgba(14,165,233,0.35)',  border: '#0284c7', icon: '💧', textColor: '#e0f2fe', round: true },
-  ruins:            { bg: 'rgba(100,116,139,0.45)', border: '#64748b', icon: '🏚',  textColor: '#e2e8f0' },
-  solid_building:   { bg: 'rgba(30,41,59,0.90)',    border: '#475569', icon: '🏢', textColor: '#cbd5e1' },
+  ruins:            { bg: 'transparent',            border: 'transparent', icon: '', textColor: '#e2e8f0', useSprite: true, sprites: RUINS_SPRITES },
+  solid_building:   { bg: 'transparent',            border: 'transparent', icon: '', textColor: '#cbd5e1', useSprite: true, sprites: BUILDING_SPRITES },
   vehicle_wreckage: { bg: 'rgba(239,68,68,0.30)',   border: '#b91c1c', icon: '🔥', textColor: '#fee2e2' },
   wall_open:        { bg: 'rgba(148,163,184,0.35)', border: '#94a3b8', icon: '🧱', textColor: '#f1f5f9' },
   wall_solid:       { bg: 'rgba(51,65,85,0.70)',    border: '#1e293b', icon: '🪨', textColor: '#cbd5e1' },
