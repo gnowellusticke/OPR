@@ -782,37 +782,23 @@ export default function Battle() {
     const activationFiredSet = new Set();
     liveUnit._firedThisActivation = activationFiredSet;
 
-    // Bug 6 fix: Shaken recovery roll fires at START of unit's own activation, FIRST event
-    let canAct = true;
+    // Bug 6 fix: Shaken units MUST spend activation idle (OPR rule).
+    // The unit spends its activation doing nothing — shaken is removed at end of idle turn.
+    // No DMN scoring, no shooting, no charging allowed while shaken.
     if (liveUnit.status === 'shaken') {
-    const quality = liveUnit.quality || 4;
-    const roll = rules.dice.roll();
-    const recovered = roll >= quality;
-    if (recovered && liveUnit.current_models > 0) {
-      // Bug 2 fix: only clear shaken if still alive — destroyed units always stay 'destroyed'
-      liveUnit.status = 'normal';
-    } else {
-      canAct = false;
-    }
-    const outcome = recovered ? 'recovered' : 'still_shaken';
-    evs.push({ round, type: 'morale', message: `${liveUnit.name} Shaken recovery: rolled ${roll} vs ${quality}+ — ${recovered ? 'recovered' : 'still shaken, cannot act'}`, timestamp: new Date().toLocaleTimeString() });
-    logger?.logMorale({ round, unit: liveUnit, outcome, roll, qualityTarget: quality, dmnReason: 'shaken recovery check at activation start' });
-    }
-
-    // Bug 4 fix: Failed shaken recovery ends activation immediately
-    if (!canAct) {
+      liveUnit.status = 'normal'; // shaken removed by spending activation idle
+      evs.push({ round, type: 'morale', message: `${liveUnit.name} is Shaken — spends activation idle, recovers Shaken status`, timestamp: new Date().toLocaleTimeString() });
+      logger?.logMorale({ round, unit: liveUnit, outcome: 'recovered', roll: null, qualityTarget: null, dmnReason: 'Shaken — idle activation, shaken removed' });
       liveUnit.just_charged = false;
       const nextAgent = liveUnit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-      const updatedGs = {
-        ...gsRef.current,
-        units_activated: [...(gsRef.current.units_activated || []), liveUnit.id],
-        active_agent: nextAgent,
-      };
+      const activatedSetShaken = new Set(gsRef.current.units_activated || []);
+      activatedSetShaken.add(liveUnit.id);
       evRef.current = evs;
-      commitState(updatedGs, evs);
+      commitState({ ...gsRef.current, units_activated: Array.from(activatedSetShaken), active_agent: nextAgent }, evs);
       setActiveUnit(null);
       return;
     }
+    const canAct = true;
 
     // Commit state immediately after shaken check so recovery is logged before any target actions
     evRef.current = evs;
