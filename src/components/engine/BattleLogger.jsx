@@ -383,6 +383,8 @@ export class BattleLogger {
   }
 
   logRoundSummary({ round, objectives, score }) {
+    // Bug 8 fix: Deduplicate — only one round_summary per round number.
+    if (this.events.some(e => e.event_type === 'round_summary' && e.round === round)) return;
     const summary = {
       event_type: 'round_summary',
       round,
