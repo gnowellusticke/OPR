@@ -16,7 +16,7 @@ export default function UnitGroupDisplay({ group, activeUnit, onUnitClick, CELL_
 
   return (
     <div
-      className="absolute"
+      className="absolute flex flex-col items-center"
       style={{
         left: px - 20,
         top: py - 20,
