@@ -323,8 +323,8 @@ export default function Battle() {
       const isScatter = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid' || pickType === 'vehicle_wreckage';
       const isLarge = pickType === 'solid_building' || pickType === 'forest' || pickType === 'hill';
       const isMedium = pickType === 'ruins' || pickType === 'crater' || pickType === 'pond';
-      const w = isScatter ? 1 + Math.random() * 2 : isLarge ? 6 + Math.random() * 6 : isMedium ? 4 + Math.random() * 4 : 3 + Math.random() * 3;
-      const h = isScatter ? 1 + Math.random() * 2 : isLarge ? 6 + Math.random() * 6 : isMedium ? 4 + Math.random() * 4 : 3 + Math.random() * 3;
+      const w = isScatter ? 3 + Math.random() * 3 : isLarge ? 8 + Math.random() * 6 : isMedium ? 5 + Math.random() * 4 : 4 + Math.random() * 3;
+      const h = isScatter ? 2 + Math.random() * 2 : isLarge ? 8 + Math.random() * 6 : isMedium ? 5 + Math.random() * 4 : 4 + Math.random() * 3;
       const isAngular = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid';
       const angle = isAngular ? (Math.random() - 0.5) * 90 : (Math.random() - 0.5) * 40;
       return { ...def, type: pickType, x: Math.random() * 54 + 6, y: Math.random() * 42 + 4, width: w, height: h, angle };
