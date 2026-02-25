@@ -207,6 +207,54 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
           const h = (t.height / GRID_SIZE) * CELL_SIZE;
           const cx = (t.x / GRID_SIZE) * CELL_SIZE + w / 2;
           const cy = (t.y / GRID_SIZE) * CELL_SIZE + h / 2;
+
+          // Forests: render a cluster of tree sprites instead of one sprite
+          if (t.type === 'forest') {
+            // Seed deterministic positions from idx
+            const treeCount = 3 + (idx % 3); // 3–5 trees
+            const trees = [];
+            for (let i = 0; i < treeCount; i++) {
+              const seed = (idx * 7 + i * 13) % 100;
+              const tx = (seed / 100) * w * 0.75;
+              const ty = ((seed * 3 % 100) / 100) * h * 0.75;
+              const treeSize = w * 0.45 + (seed % 20) / 20 * w * 0.2;
+              const spriteIdx = (idx + i) % FOREST_SPRITES.length;
+              trees.push({ tx, ty, treeSize, spriteIdx });
+            }
+            return (
+              <div
+                key={`terrain-${idx}`}
+                className="absolute overflow-hidden"
+                style={{
+                  left: cx - w / 2,
+                  top: cy - h / 2,
+                  width: w,
+                  height: h,
+                  transform: `rotate(${angle}deg)`,
+                  transformOrigin: 'center center',
+                }}
+              >
+                {trees.map((tree, ti) => (
+                  <img
+                    key={ti}
+                    src={FOREST_SPRITES[tree.spriteIdx]}
+                    alt="tree"
+                    style={{
+                      position: 'absolute',
+                      left: tree.tx,
+                      top: tree.ty,
+                      width: tree.treeSize,
+                      height: tree.treeSize,
+                      objectFit: 'contain',
+                      pointerEvents: 'none',
+                    }}
+                    draggable={false}
+                  />
+                ))}
+              </div>
+            );
+          }
+
           // Pick a deterministic sprite from the pool using the terrain index
           const spriteUrl = style.useSprite && style.sprites
             ? style.sprites[idx % style.sprites.length]
