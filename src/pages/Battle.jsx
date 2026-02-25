@@ -279,18 +279,19 @@ export default function Battle() {
       const pick = WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
       const def = TERRAIN_TYPES[pick];
       if (!def) { attempts++; continue; }
-      // OPR sizing: scatter terrain 1–3", large terrain 4–8" (up to 12" for big features)
+      // OPR sizing (in game inches): scatter 1–3", medium 4–8", large 6–12"
+      // Minimum 3" enforced so pieces remain visible on the 72x48" rendered table
       const isScatter = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid' || pick === 'vehicle_wreckage';
       const isLarge = pick === 'solid_building' || pick === 'forest' || pick === 'hill';
       const isMedium = pick === 'ruins' || pick === 'crater' || pick === 'pond';
-      const w = isScatter ? 1 + Math.random() * 2   // 1–3"
-              : isLarge   ? 6 + Math.random() * 6   // 6–12"
-              : isMedium  ? 4 + Math.random() * 4   // 4–8"
-              :             3 + Math.random() * 3;  // 3–6" fallback
-      const h = isScatter ? 1 + Math.random() * 2
-              : isLarge   ? 6 + Math.random() * 6
-              : isMedium  ? 4 + Math.random() * 4
-              :             3 + Math.random() * 3;
+      const w = isScatter ? 3 + Math.random() * 3   // 3–6" (1–3" OPR, boosted for visibility)
+              : isLarge   ? 8 + Math.random() * 6   // 8–14"
+              : isMedium  ? 5 + Math.random() * 4   // 5–9"
+              :             4 + Math.random() * 3;  // 4–7" fallback
+      const h = isScatter ? 2 + Math.random() * 2   // 2–4" (walls are thinner)
+              : isLarge   ? 8 + Math.random() * 6
+              : isMedium  ? 5 + Math.random() * 4
+              :             4 + Math.random() * 3;
       const isLinear = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid';
       const isBuilding = pick === 'solid_building';
       // Random angle: walls/barricades get strong angles, other terrain mild rotation
