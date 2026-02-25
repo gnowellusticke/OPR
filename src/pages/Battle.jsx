@@ -283,14 +283,19 @@ export default function Battle() {
       const isBuilding = pick === 'solid_building';
       const w = isLinear ? 8 + Math.random() * 4 : isBuilding ? 4 + Math.random() * 5 : 5 + Math.random() * 6;
       const h = isLinear ? 1.5 + Math.random() * 1.5 : isBuilding ? 4 + Math.random() * 4 : 4 + Math.random() * 5;
-      // Terrain only in contested middle zone — never in deployment strips (y<16 or y>32)
+      // Random angle: walls/barricades get strong angles, other terrain mild rotation
+      const isAngular = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid';
+      const angle = isAngular
+        ? (Math.random() - 0.5) * 90  // -45° to +45°
+        : (Math.random() - 0.5) * 40; // -20° to +20°
       const t = {
         ...def,
         type: pick,
         x: Math.random() * 54 + 6,
-        y: 16 + Math.random() * 16, // y=16..32, safely between both deployment zones
+        y: Math.random() * 42 + 4, // full battlefield coverage including deployment zones
         width: w,
         height: h,
+        angle,
       };
       const overlaps = terrain.some(e =>
         t.x < e.x + e.width + 1 && t.x + t.width > e.x - 1 &&
