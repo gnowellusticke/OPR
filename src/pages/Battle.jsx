@@ -347,8 +347,8 @@ export default function Battle() {
       if (terrain.length >= MAX_TERRAIN_PIECES) return false;
       const p = makePiece(pickType);
       const overlaps = terrain.some(e =>
-        p.x < e.x + e.width + 1 && p.x + p.width > e.x - 1 &&
-        p.y < e.y + e.height + 1 && p.y + p.height > e.y - 1
+        p.x < e.x + e.width - 2 && p.x + p.width > e.x + 2 &&
+        p.y < e.y + e.height - 2 && p.y + p.height > e.y + 2
       );
       if (!overlaps) { terrain.push(p); return true; }
       return false;
