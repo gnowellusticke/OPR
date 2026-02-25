@@ -125,9 +125,14 @@ export class BattleLogger {
 
   _unitState(unit) {
     if (!unit) return null;
+    const tpm = Math.max(unit.tough_per_model || 1, 1);
+    const mc = unit.model_count || Math.ceil((unit.total_models || 1) / tpm);
+    const currentMc = Math.max(0, Math.ceil((unit.current_models || 0) / tpm));
     return {
       wounds_remaining: unit.current_models,
       max_wounds: unit.total_models,
+      model_count: currentMc,
+      starting_model_count: mc,
       status: unit.current_models <= 0 ? 'destroyed' : (unit.status || 'normal')
     };
   }
