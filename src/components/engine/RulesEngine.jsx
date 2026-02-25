@@ -870,8 +870,13 @@ export class RulesEngine {
 
   applyMoraleResult(unit, passed, reason) {
     if (!passed) {
-      const atHalfStrength = unit.current_models <= unit.total_models / 2;
-      if (reason === 'melee_loss' && atHalfStrength) {
+      // Bug 4 fix: Rout fires for ANY failed morale at or below 50% strength (not just melee_loss).
+      // Use model_count for squads, wound-based for single-model units.
+      const isSingleModel = (unit.model_count || 1) === 1;
+      const belowHalf = isSingleModel
+        ? unit.current_models <= unit.total_models / 2
+        : Math.ceil(unit.current_models / Math.max(unit.tough_per_model || 1, 1)) <= Math.floor((unit.model_count || 1) / 2);
+      if (belowHalf) {
         unit.current_models = 0;
         unit.status = 'routed';
         return 'routed';
