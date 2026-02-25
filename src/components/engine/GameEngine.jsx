@@ -613,13 +613,11 @@ export class DMNEngine {
     return t;
   };
 
-  // Generate 40 random candidates scattered across the full deployment strip.
-  // x is picked from a spread of columns, y is fully random within the strip.
-  // This prevents any row-alignment pattern.
+  // Generate 40 random candidates strictly within the deployment strip.
   const candidates = [];
   for (let i = 0; i < 40; i++) {
     const bx = 6 + Math.random() * 58; // fully random x across the board
-    const by = yMin + Math.random() * (yMax - yMin); // fully random y within strip
+    const by = yMin + 1 + Math.random() * (yMax - yMin - 2); // strictly inside strip
     const col = bx < 24 ? 'left' : bx < 48 ? 'centre' : 'right';
     candidates.push({
       x: Math.max(5, Math.min(65, bx)),
