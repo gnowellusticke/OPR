@@ -313,7 +313,9 @@ export default function Battle() {
       const isBuilding = pickType === 'solid_building';
       const w = isLinear ? 8 + Math.random() * 4 : isBuilding ? 4 + Math.random() * 5 : 5 + Math.random() * 6;
       const h = isLinear ? 1.5 + Math.random() * 1.5 : isBuilding ? 4 + Math.random() * 4 : 4 + Math.random() * 5;
-      return { ...def, type: pickType, x: Math.random() * 54 + 6, y: 16 + Math.random() * 16, width: w, height: h };
+      const isAngular = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid';
+      const angle = isAngular ? (Math.random() - 0.5) * 90 : (Math.random() - 0.5) * 40;
+      return { ...def, type: pickType, x: Math.random() * 54 + 6, y: Math.random() * 42 + 4, width: w, height: h, angle };
     };
 
     const countLOS = () => terrain.filter(t => t.blocksThroughLOS || t.blocking).length;
