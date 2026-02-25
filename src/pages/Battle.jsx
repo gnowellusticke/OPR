@@ -1195,8 +1195,13 @@ export default function Battle() {
         stateBefore: shootStateBefore
       });
 
-      // Morale on wounded survivor
-      if (target.current_models > 0 && target.status === 'normal' && target.current_models <= target.total_models / 2) {
+      // Morale on wounded survivor — Bug 4 fix: use model_count threshold for squads,
+      // wound threshold only for single-model units (vehicles/lone heroes/monsters)
+      const targetIsSingleModel = (target.model_count || 1) === 1;
+      const targetMoraleThreshold = targetIsSingleModel
+        ? target.current_models <= target.total_models / 2
+        : Math.ceil(target.current_models / Math.max(target.tough_per_model, 1)) <= Math.floor((target.model_count || 1) / 2);
+      if (target.current_models > 0 && target.status === 'normal' && targetMoraleThreshold) {
         const moraleStateBefore = { acting_unit: { wounds_remaining: target.current_models, max_wounds: target.total_models, status: target.status } };
         const moraleResult = rules.checkMorale(target, 'wounds');
         if (!moraleResult.passed) {
