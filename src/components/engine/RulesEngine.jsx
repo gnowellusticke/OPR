@@ -656,13 +656,8 @@ export class RulesEngine {
         weaponSpecialRules.push({ rule: 'Thrust', value: null, effect: '+1 to hit and AP(+1) on charge' });
       }
 
-      if (attacker.just_charged && !attacker.fatigued && rulesStr.includes('Impact')) {
-        const impactMatch = rulesStr.match(/Impact\((\d+)\)/);
-        const impactDice = impactMatch ? parseInt(impactMatch[1]) : 1;
-        const impactHits = Array.from({ length: impactDice }, () => this.dice.roll()).filter(r => r >= 2).length;
-        modifiedWeapon.attacks = (weapon.attacks || 1) + impactHits;
-        weaponSpecialRules.push({ rule: 'Impact', value: impactDice, effect: `${impactHits} extra hits from Impact(${impactDice})` });
-      }
+      // Impact is resolved at CHARGE time in executeAction (Battle.js), NOT here in melee.
+      // Do NOT apply Impact bonus attacks inside resolveMeleeStrikes — that causes phantom wounds.
 
       const baseAttacks = modifiedWeapon.attacks || 1;
       const scaledAttacks = baseAttacks * Math.max(currentModelCount, 1);
