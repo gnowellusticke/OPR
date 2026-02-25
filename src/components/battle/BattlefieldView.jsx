@@ -33,7 +33,7 @@ const TERRAIN_STYLES = {
   barricade:        { bg: 'rgba(120,113,108,0.55)', border: '#a8a29e', icon: '🧱', textColor: '#fef3c7' },
   crater:           { bg: 'rgba(120,83,40,0.45)',   border: '#92400e', icon: '💥', textColor: '#fef9c3' },
   forest:           { bg: 'transparent', border: 'transparent', icon: '', textColor: '#d1fae5', useSprite: true, sprites: FOREST_SPRITES },
-  hill:             { bg: 'rgba(161,140,100,0.45)', border: '#b45309', icon: '⛰',  textColor: '#fef3c7' },
+  hill:             { bg: 'transparent', border: 'transparent', icon: '', textColor: '#fef3c7', useSprite: true, sprites: HILL_SPRITES },
   minefield:        { bg: 'rgba(220,38,38,0.25)',   border: '#dc2626', icon: '💣', textColor: '#fee2e2' },
   pond:             { bg: 'rgba(14,165,233,0.35)',  border: '#0284c7', icon: '💧', textColor: '#e0f2fe', round: true },
   ruins:            { bg: 'transparent',            border: 'transparent', icon: '', textColor: '#e2e8f0', useSprite: true, sprites: RUINS_SPRITES },
