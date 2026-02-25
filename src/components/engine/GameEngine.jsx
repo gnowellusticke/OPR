@@ -398,15 +398,33 @@ export class DMNEngine {
     const hasMelee = meleeWeapons.length > 0;
     const meleePrimary = this.isMeleePrimary(unit);
 
-    if (!hasMelee) return { score: 0.2, details: [{ label: 'No melee weapons', value: 0.2 }] };
+    // Impact units (vehicles, cavalry) can always charge even without dedicated melee weapons
+    const specialStr = Array.isArray(unit.special_rules) ? unit.special_rules.join(' ') : (unit.special_rules || '');
+    const impactMatch = specialStr.match(/Impact\((\d+)\)/);
+    const hasImpact = !!impactMatch;
 
-      const pCharge = this.personality?.action_weights?.Charge;
-      const chargeBase = pCharge?.base_score ?? 1.2;
-      let score = chargeBase;
-      details.push({ label: 'Base melee score', value: chargeBase });
+    if (!hasMelee && !hasImpact) return { score: 0.2, details: [{ label: 'No melee weapons or Impact', value: 0.2 }] };
+
+    const pCharge = this.personality?.action_weights?.Charge;
+    const chargeBase = pCharge?.base_score ?? 1.2;
+    let score = chargeBase;
+    details.push({ label: 'Base melee score', value: chargeBase });
     const chargeRange = this.maxChargeDistance(unit);
     const dist = nearestEnemy ? this.getDistance(unit, nearestEnemy) : 99;
     if (dist > chargeRange) return { score: -99, details: [{ label: 'Out of charge range', value: -99 }] };
+
+    // Impact bonus — vehicles/cavalry should be very eager to charge
+    if (hasImpact) {
+      const impactDice = parseInt(impactMatch[1]);
+      const impactBonus = impactDice * 0.1;
+      score += impactBonus;
+      details.push({ label: `Impact(${impactDice}) charge bonus`, value: +impactBonus.toFixed(2) });
+    }
+
+    // Proximity bonus — very close enemies make charge almost free
+    if (dist <= 2)  { score += 0.8; details.push({ label: 'In base contact — charge free', value: 0.8 }); }
+    else if (dist <= 6)  { score += 0.5; details.push({ label: 'Very close — near-certain charge', value: 0.5 }); }
+    else if (dist <= 12) { score += 0.25; details.push({ label: 'Medium range — likely charge', value: 0.25 }); }
 
     if (meleePrimary) { score += 1.5; details.push({ label: 'Melee-primary archetype', value: 1.5 }); }
     if (unit.special_rules?.includes('Furious')) { score += 0.6; details.push({ label: 'Furious (extra attack on charge)', value: 0.6 }); }
