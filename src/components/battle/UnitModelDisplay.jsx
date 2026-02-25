@@ -113,39 +113,67 @@ export function buildModelList(unit) {
   });
 }
 
-// Generate stable per-unit jitter offsets using a seeded-style approach (based on unit id + model index)
-function seededJitter(seed, range) {
-  // Simple deterministic hash so jitter is stable across re-renders
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+// Deterministic hash from a string seed
+function hash(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(33, h) ^ str.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+// Stable pseudo-random float [0,1) from a string seed
+function rand(seed) {
+  return (hash(seed) % 100000) / 100000;
+}
+
+// Scatter models in a natural organic cluster.
+// Uses a sunflower/phyllotaxis-inspired layout with noise so they look like
+// soldiers standing in a loose group rather than a grid.
+function computeScatterPositions(count, uid, dotSize) {
+  if (count === 0) return [];
+  const spacing = dotSize + 3; // min gap between model centres
+  const positions = [];
+
+  if (count === 1) {
+    return [{ x: 0, y: 0 }];
   }
-  return ((Math.abs(h) % 1000) / 1000 - 0.5) * range * 2;
+
+  // Golden angle spiral — each model placed further out on a golden spiral
+  // then perturbed with stable noise to break any obvious pattern
+  const goldenAngle = 2.399963; // radians ≈ 137.5°
+  for (let i = 0; i < count; i++) {
+    const r = spacing * 0.55 * Math.sqrt(i + 0.5);
+    const theta = i * goldenAngle;
+    const nx = (rand(`${uid}_${i}_nx`) - 0.5) * spacing * 0.55;
+    const ny = (rand(`${uid}_${i}_ny`) - 0.5) * spacing * 0.55;
+    positions.push({
+      x: r * Math.cos(theta) + nx,
+      y: r * Math.sin(theta) + ny,
+    });
+  }
+
+  // Normalise so the bounding box starts at (0,0)
+  const minX = Math.min(...positions.map(p => p.x));
+  const minY = Math.min(...positions.map(p => p.y));
+  return positions.map(p => ({ x: p.x - minX, y: p.y - minY }));
 }
 
 export default function UnitModelDisplay({ unit, owner }) {
   const models = buildModelList(unit);
-  const cols = Math.min(COLS, models.length);
-
-  // Grid step is based on the largest dot present
   const maxTough = models.reduce((max, m) => Math.max(max, m.toughValue || 1), 1);
   const { size: maxSize } = getModelStyle(maxTough);
-  const step = maxSize + MODEL_GAP;
-
-  const rows = Math.ceil(models.length / cols);
-  const jitterRange = maxSize * 0.6; // jitter up to 60% of dot size in any direction
-  const width = cols * step + jitterRange * 2;
-  const height = rows * step + jitterRange * 2;
-
-  const baseColor = owner === 'agent_a' ? '#3b82f6' : '#ef4444';
   const uid = unit.id || unit.name || 'u';
 
-  return (
-    <div className="relative" style={{ width, height }}>
-      {models.map((model, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
+  const positions = computeScatterPositions(models.length, uid, maxSize);
 
+  const maxX = positions.length ? Math.max(...positions.map(p => p.x)) + maxSize : maxSize;
+  const maxY = positions.length ? Math.max(...positions.map(p => p.y)) + maxSize : maxSize;
+
+  const baseColor = owner === 'agent_a' ? '#3b82f6' : '#ef4444';
+
+  return (
+    <div className="relative" style={{ width: maxX, height: maxY }}>
+      {models.map((model, i) => {
+        const pos = positions[i] || { x: 0, y: 0 };
         const { size, radius } = getModelStyle(model.toughValue || 1);
 
         let borderColor = baseColor;
@@ -163,9 +191,6 @@ export default function UnitModelDisplay({ unit, owner }) {
         }
 
         const offset = Math.floor((maxSize - size) / 2);
-        // Stable random scatter — different for x and y using different seeds
-        const jx = seededJitter(`${uid}_${i}_x`, jitterRange);
-        const jy = seededJitter(`${uid}_${i}_y`, jitterRange);
 
         return (
           <div
@@ -173,8 +198,8 @@ export default function UnitModelDisplay({ unit, owner }) {
             title={model.type === 'character' ? 'Character' : model.type === 'special_weapon' ? 'Special Weapon' : undefined}
             style={{
               position: 'absolute',
-              left: col * step + offset + jitterRange + jx,
-              top: row * step + offset + jitterRange + jy,
+              left: pos.x + offset,
+              top: pos.y + offset,
               width: size,
               height: size,
               borderRadius: radius,
