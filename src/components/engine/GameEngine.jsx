@@ -590,9 +590,10 @@ export class DMNEngine {
   const isFast = unit.special_rules?.includes('Fast');
   const isScreener = !isHeavy && !isMeleePrimary && (unit.total_models <= 3 || unit.special_rules?.includes('Scout'));
 
-  // Deployment band: agent_a deploys in y=3..16, agent_b in y=32..45
-  const yMin = isAgentA ? 3 : 32;
-  const yMax = isAgentA ? 16 : 45;
+  // Deployment band: agent_a deploys in y=4..15, agent_b in y=33..44
+  // These MUST match the hard clamp in runDeploymentPhase
+  const yMin = isAgentA ? 4 : 33;
+  const yMax = isAgentA ? 15 : 44;
   const yCentre = (yMin + yMax) / 2;
 
   // Helper: score terrain near a position for cover/LOS value
