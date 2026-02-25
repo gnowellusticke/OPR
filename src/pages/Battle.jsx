@@ -319,10 +319,11 @@ export default function Battle() {
     // ≥50% must block LOS, ≥33% must provide cover, ≥33% must be difficult terrain
     const makePiece = (pickType) => {
       const def = TERRAIN_TYPES[pickType];
-      const isLinear = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid';
-      const isBuilding = pickType === 'solid_building';
-      const w = isLinear ? 8 + Math.random() * 4 : isBuilding ? 4 + Math.random() * 5 : 5 + Math.random() * 6;
-      const h = isLinear ? 1.5 + Math.random() * 1.5 : isBuilding ? 4 + Math.random() * 4 : 4 + Math.random() * 5;
+      const isScatter = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid' || pickType === 'vehicle_wreckage';
+      const isLarge = pickType === 'solid_building' || pickType === 'forest' || pickType === 'hill';
+      const isMedium = pickType === 'ruins' || pickType === 'crater' || pickType === 'pond';
+      const w = isScatter ? 1 + Math.random() * 2 : isLarge ? 6 + Math.random() * 6 : isMedium ? 4 + Math.random() * 4 : 3 + Math.random() * 3;
+      const h = isScatter ? 1 + Math.random() * 2 : isLarge ? 6 + Math.random() * 6 : isMedium ? 4 + Math.random() * 4 : 3 + Math.random() * 3;
       const isAngular = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid';
       const angle = isAngular ? (Math.random() - 0.5) * 90 : (Math.random() - 0.5) * 40;
       return { ...def, type: pickType, x: Math.random() * 54 + 6, y: Math.random() * 42 + 4, width: w, height: h, angle };
