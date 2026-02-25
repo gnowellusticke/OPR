@@ -163,18 +163,25 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
         {/* Terrain */}
         {terrain.map((t, idx) => {
           const style = TERRAIN_STYLES[t.type] || TERRAIN_STYLES.default;
+          const angle = t.angle || 0;
+          const w = (t.width / GRID_SIZE) * CELL_SIZE;
+          const h = (t.height / GRID_SIZE) * CELL_SIZE;
+          const cx = (t.x / GRID_SIZE) * CELL_SIZE + w / 2;
+          const cy = (t.y / GRID_SIZE) * CELL_SIZE + h / 2;
           return (
             <div
               key={`terrain-${idx}`}
               className="absolute flex items-start justify-start overflow-hidden"
               style={{
-                left: (t.x / GRID_SIZE) * CELL_SIZE,
-                top: (t.y / GRID_SIZE) * CELL_SIZE,
-                width: (t.width / GRID_SIZE) * CELL_SIZE,
-                height: (t.height / GRID_SIZE) * CELL_SIZE,
+                left: cx - w / 2,
+                top: cy - h / 2,
+                width: w,
+                height: h,
                 backgroundColor: style.bg,
                 border: `2px solid ${style.border}`,
                 borderRadius: style.round ? '50%' : '4px',
+                transform: `rotate(${angle}deg)`,
+                transformOrigin: 'center center',
               }}
             >
               <span style={{ fontSize: 9, color: style.textColor || '#e2e8f0', padding: '1px 3px', lineHeight: 1.2, fontWeight: 600, textShadow: '0 0 3px #000' }}>
