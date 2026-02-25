@@ -291,28 +291,49 @@ export default function Battle() {
       // OPR sizing (in game inches): scatter 1–3", medium 4–8", large 6–12"
       // Minimum 3" enforced so pieces remain visible on the 72x48" rendered table
       const isScatter = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid' || pick === 'vehicle_wreckage';
-      const isLarge = pick === 'solid_building' || pick === 'forest' || pick === 'hill';
-      const isMedium = pick === 'ruins' || pick === 'crater' || pick === 'pond';
-      const w = isScatter ? 3 + Math.random() * 3   // 3–6" (1–3" OPR, boosted for visibility)
-              : isLarge   ? 8 + Math.random() * 6   // 8–14"
-              : isMedium  ? 5 + Math.random() * 4   // 5–9"
-              :             4 + Math.random() * 3;  // 4–7" fallback
-      const h = isScatter ? 2 + Math.random() * 2   // 2–4" (walls are thinner)
-              : isLarge   ? 8 + Math.random() * 6
-              : isMedium  ? 5 + Math.random() * 4
-              :             4 + Math.random() * 3;
-      const isLinear = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid';
       const isBuilding = pick === 'solid_building';
+      const isHill = pick === 'hill';
+      const isForest = pick === 'forest';
+      const isLarge = isBuilding || isForest || isHill;
+      const isMedium = pick === 'ruins' || pick === 'crater' || pick === 'pond';
+      const w = isScatter  ? 3 + Math.random() * 3    // 3–6"
+              : isBuilding ? 10 + Math.random() * 8   // 10–18" — big imposing buildings
+              : isHill     ? 10 + Math.random() * 8   // 10–18" — hills placed at edges
+              : isForest   ? 10 + Math.random() * 8   // 10–18" — forest clusters
+              : isMedium   ? 5 + Math.random() * 4    // 5–9"
+              :              4 + Math.random() * 3;   // 4–7" fallback
+      const h = isScatter  ? 2 + Math.random() * 2
+              : isBuilding ? 10 + Math.random() * 8
+              : isHill     ? 10 + Math.random() * 8
+              : isForest   ? 10 + Math.random() * 8
+              : isMedium   ? 5 + Math.random() * 4
+              :              4 + Math.random() * 3;
       // Random angle: walls/barricades get strong angles, other terrain mild rotation
       const isAngular = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid';
       const angle = isAngular
         ? (Math.random() - 0.5) * 90  // -45° to +45°
-        : (Math.random() - 0.5) * 40; // -20° to +20°
+        : (Math.random() - 0.5) * 30; // -15° to +15°
+
+      // Hills go on board edges; all other terrain in the main field but clamped from overflow
+      let px, py;
+      if (isHill) {
+        // Place on one of the 4 edges
+        const edge = Math.floor(Math.random() * 4);
+        if (edge === 0) { px = Math.random() * (72 - w); py = 0; }           // top edge
+        else if (edge === 1) { px = Math.random() * (72 - w); py = 48 - h; } // bottom edge
+        else if (edge === 2) { px = 0; py = Math.random() * (48 - h); }      // left edge
+        else { px = 72 - w; py = Math.random() * (48 - h); }                 // right edge
+      } else {
+        // Interior placement, clamped so pieces don't overflow the board
+        px = Math.random() * (72 - w - 4) + 2;
+        py = Math.random() * (48 - h - 4) + 2;
+      }
+
       const t = {
         ...def,
         type: pick,
-        x: Math.random() * 54 + 6,
-        y: Math.random() * 42 + 4, // full battlefield coverage including deployment zones
+        x: px,
+        y: py,
         width: w,
         height: h,
         angle,
