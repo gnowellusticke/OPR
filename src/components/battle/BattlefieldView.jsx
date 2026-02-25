@@ -159,7 +159,11 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
   return (
     <Card className="bg-slate-900 border-slate-700 p-4">
       <div
-        className="relative bg-slate-800 border-2 border-slate-600 rounded-lg overflow-hidden mx-auto"
+        className="relative border-2 border-slate-600 rounded-lg overflow-hidden mx-auto"
+        style={{
+          backgroundImage: 'url(https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/52470e506_ClassicCloudyImage.jpg)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
         style={{
           width: (BATTLEFIELD_WIDTH / GRID_SIZE) * CELL_SIZE,
           height: (BATTLEFIELD_HEIGHT / GRID_SIZE) * CELL_SIZE,
