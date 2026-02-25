@@ -933,6 +933,22 @@ export default function Battle() {
         const chargeSpecialRules = [];
         if (unit.special_rules?.includes('Furious')) chargeSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack in melee on charge' });
         if (unit.special_rules?.includes('Rage')) chargeSpecialRules.push({ rule: 'Rage', value: null, effect: 'charge modifier' });
+        // Bug 3 fix: Impact resolves HERE at charge time, for the charging unit only.
+        // It must NOT be applied inside resolveMeleeStrikes (defender Impact is never triggered).
+        const impactSpecialStr = Array.isArray(unit.special_rules) ? unit.special_rules.join(' ') : (unit.special_rules || '');
+        const impactChargeMatch = impactSpecialStr.match(/Impact\((\d+)\)/);
+        if (impactChargeMatch && !unit.fatigued && liveTarget && liveTarget.current_models > 0) {
+          const impactDice = parseInt(impactChargeMatch[1]);
+          const impactHits = Array.from({ length: impactDice }, () => rules.dice.roll()).filter(r => r >= 2).length;
+          if (impactHits > 0) {
+            const impactWounds = impactHits; // Impact hits have no AP, no Deadly — 1 wound per hit
+            liveTarget.current_models = Math.max(0, liveTarget.current_models - impactWounds);
+            if (liveTarget.current_models <= 0) liveTarget.status = 'destroyed';
+            chargeSpecialRules.push({ rule: 'Impact', value: impactDice, effect: `${impactHits} hits (2+) from ${impactDice} dice → ${impactWounds} wounds` });
+            evs.push({ round, type: 'combat', message: `⚡ ${unit.name} Impact(${impactDice}): ${impactHits} hits → ${impactWounds} wounds on ${target.name}`, timestamp: new Date().toLocaleTimeString() });
+          }
+        }
+
         evs.push({ round, type: 'movement', message: `${unit.name} charges ${target.name}!`, timestamp: new Date().toLocaleTimeString() });
         logger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason, chargeTarget: target.name, chargeTargetState: { wounds_remaining: target.current_models, max_wounds: target.total_models, status: target.status || 'normal' }, chargeSpecialRules });
         // Guard: no overwatch in OPR — charger should never be dead here, but be safe
