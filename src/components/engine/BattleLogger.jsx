@@ -415,7 +415,9 @@ export class BattleLogger {
     this.roundShaken = [];
   }
 
-  logBattleEnd({ winner, finalScore, armyA, armyB }) {
+  logBattleEnd({ winner, finalScore }) {
+    // Bug 8 fix: Deduplicate — only log one battle_end event; skip if already present.
+    if (this.events.some(e => e.event_type === 'battle_end')) return;
     this.events.push({
       round: null,
       timestamp: this._timestamp(),
@@ -425,9 +427,9 @@ export class BattleLogger {
       weapon_used: null,
       zone: null,
       range_bracket: null,
-      roll_results: {},
+      roll_results: { winner, final_score: finalScore },
       unit_state_after: {},
-      dmn_reason: null,
+      dmn_reason: `Battle ended — ${winner}`,
       flags: { turning_point: true, first_blood: false, unit_destroyed: false }
     });
   }
