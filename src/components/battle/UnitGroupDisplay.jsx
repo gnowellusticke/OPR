@@ -50,10 +50,10 @@ export default function UnitGroupDisplay({ group, activeUnit, onUnitClick, CELL_
         )}
       </div>
 
-      {/* Unit name label */}
+      {/* Unit name label — floated below via margin, never affects model layout */}
       <div
-        className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-white bg-slate-900/90 px-1.5 py-0.5 rounded whitespace-nowrap"
-        style={{ maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis' }}
+        className="text-[9px] font-semibold text-white bg-slate-900/90 px-1.5 py-0.5 rounded whitespace-nowrap mt-1"
+        style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center' }}
       >
         {isTransport ? `[T] ${displayUnit.name}` : displayUnit.name}
       </div>
