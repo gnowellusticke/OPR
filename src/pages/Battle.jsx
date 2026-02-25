@@ -245,21 +245,27 @@ export default function Battle() {
 
     const THEME_WEIGHTS = {
       city_fight: [
-        'solid_building','solid_building','solid_building',
-        'ruins','ruins','ruins',
-        'barricade','barricade','wall_open','wall_open','wall_solid',
-        'crater','vehicle_wreckage',
+        'solid_building','solid_building','solid_building','solid_building','solid_building',
+        'ruins','ruins','ruins','ruins',
+        'wall_open','wall_open','wall_solid','wall_solid',
+        'barricade','barricade','barricade',
+        'crater','crater','vehicle_wreckage','vehicle_wreckage',
+        'pond',
       ],
       forest: [
-        'forest','forest','forest','forest',
-        'hill','hill','pond','pond',
-        'ruins','barricade','crater',
+        'forest','forest','forest','forest','forest','forest',
+        'hill','hill','hill','hill',
+        'pond','pond','pond',
+        'ruins','ruins','crater','crater',
+        'barricade','wall_open','vehicle_wreckage',
       ],
       wasteland: [
-        'crater','crater','crater',
-        'vehicle_wreckage','vehicle_wreckage',
-        'barricade','barricade','ruins','ruins',
-        'hill','wall_open',
+        'crater','crater','crater','crater','crater',
+        'ruins','ruins','ruins','ruins',
+        'hill','hill','hill',
+        'vehicle_wreckage','vehicle_wreckage','vehicle_wreckage',
+        'barricade','barricade','wall_open','wall_solid',
+        'pond','solid_building',
       ],
       mixed: [
         'ruins','ruins','ruins','ruins',
