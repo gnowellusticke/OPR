@@ -1334,11 +1334,14 @@ export default function Battle() {
         });
 
         // Deploy Ambush/reserve units at the start of each new round.
+        // Bug 6 fix: mark newly deployed units as NOT yet activated this round so they
+        // enter the activation queue and won't be silenced after an ability-only entry.
         gs.units.forEach(u => {
           if (u.is_in_reserve && u.current_models > 0) {
             const deployed = rules.deployAmbush(u, gs);
             if (deployed) {
               u.is_in_reserve = false;
+              u._justDeployed = true; // activation queue will see them as unactivated
               evs.push({ round: newRound, type: 'ability', message: `${u.name} deploys from Ambush!`, timestamp: new Date().toLocaleTimeString() });
               loggerRef.current?.logAbility({ round: newRound, unit: u, ability: 'Ambush', details: { x: u.x.toFixed(1), y: u.y.toFixed(1) } });
             }
