@@ -279,10 +279,20 @@ export default function Battle() {
       const pick = WEIGHTED[Math.floor(Math.random() * WEIGHTED.length)];
       const def = TERRAIN_TYPES[pick];
       if (!def) { attempts++; continue; }
+      // OPR sizing: scatter terrain 1–3", large terrain 4–8" (up to 12" for big features)
+      const isScatter = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid' || pick === 'vehicle_wreckage';
+      const isLarge = pick === 'solid_building' || pick === 'forest' || pick === 'hill';
+      const isMedium = pick === 'ruins' || pick === 'crater' || pick === 'pond';
+      const w = isScatter ? 1 + Math.random() * 2   // 1–3"
+              : isLarge   ? 6 + Math.random() * 6   // 6–12"
+              : isMedium  ? 4 + Math.random() * 4   // 4–8"
+              :             3 + Math.random() * 3;  // 3–6" fallback
+      const h = isScatter ? 1 + Math.random() * 2
+              : isLarge   ? 6 + Math.random() * 6
+              : isMedium  ? 4 + Math.random() * 4
+              :             3 + Math.random() * 3;
       const isLinear = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid';
       const isBuilding = pick === 'solid_building';
-      const w = isLinear ? 8 + Math.random() * 4 : isBuilding ? 4 + Math.random() * 5 : 5 + Math.random() * 6;
-      const h = isLinear ? 1.5 + Math.random() * 1.5 : isBuilding ? 4 + Math.random() * 4 : 4 + Math.random() * 5;
       // Random angle: walls/barricades get strong angles, other terrain mild rotation
       const isAngular = pick === 'barricade' || pick === 'wall_open' || pick === 'wall_solid';
       const angle = isAngular
