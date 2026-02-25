@@ -318,8 +318,8 @@ export default function Battle() {
         angle,
       };
       const overlaps = terrain.some(e =>
-        t.x < e.x + e.width + 1 && t.x + t.width > e.x - 1 &&
-        t.y < e.y + e.height + 1 && t.y + t.height > e.y - 1
+        t.x < e.x + e.width - 2 && t.x + t.width > e.x + 2 &&
+        t.y < e.y + e.height - 2 && t.y + t.height > e.y + 2
       );
       if (!overlaps) terrain.push(t);
       attempts++;
