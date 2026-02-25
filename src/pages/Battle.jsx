@@ -270,7 +270,7 @@ export default function Battle() {
     };
 
     const WEIGHTED = THEME_WEIGHTS[theme] || THEME_WEIGHTS.mixed;
-    const MAX_TERRAIN_PIECES = 15;
+    const MAX_TERRAIN_PIECES = 22;
     const MAX_ATTEMPTS = 150;
 
     let terrain = [];
