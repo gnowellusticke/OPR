@@ -775,8 +775,12 @@ export default function Battle() {
     const rules = rulesRef.current;
     const logger = loggerRef.current;
 
-    // Bug 2 fix: initialise firedThisActivation unconditionally for ALL unit types (infantry, vehicle, hero)
-    liveUnit._firedThisActivation = new Set();
+    // Bug 1 fix: create a brand-new Set every activation. Storing on the unit object caused
+    // the set to persist across rounds (never cleared), so by R4 a unit had accumulated all
+    // weapon keys from previous rounds and fired each weapon once per round it had been used.
+    // The Set must be local to this activation closure — do NOT store it on the unit.
+    const activationFiredSet = new Set();
+    liveUnit._firedThisActivation = activationFiredSet;
 
     // Bug 6 fix: Shaken recovery roll fires at START of unit's own activation, FIRST event
     let canAct = true;
