@@ -616,15 +616,10 @@ export class DMNEngine {
   // Generate 40 random candidates strictly within the deployment strip.
   const candidates = [];
   for (let i = 0; i < 40; i++) {
-    const bx = 6 + Math.random() * 58; // fully random x across the board
-    const by = yMin + 1 + Math.random() * (yMax - yMin - 2); // strictly inside strip
+    const bx = Math.max(5, Math.min(65, 6 + Math.random() * 58));
+    const by = Math.max(yMin + 0.5, Math.min(yMax - 0.5, yMin + 0.5 + Math.random() * (yMax - yMin - 1)));
     const col = bx < 24 ? 'left' : bx < 48 ? 'centre' : 'right';
-    candidates.push({
-      x: Math.max(5, Math.min(65, bx)),
-      y: Math.max(yMin + 1, Math.min(yMax - 1, by)),
-      col,
-      label: `${col} (${bx.toFixed(0)},${by.toFixed(0)})`
-    });
+    candidates.push({ x: bx, y: by, col, label: `${col} (${bx.toFixed(0)},${by.toFixed(0)})` });
   }
 
   let bestScore = -Infinity;
