@@ -167,7 +167,7 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
         style={{
           width: (BATTLEFIELD_WIDTH / GRID_SIZE) * CELL_SIZE,
           height: (BATTLEFIELD_HEIGHT / GRID_SIZE) * CELL_SIZE,
-          minWidth: (BATTLEFIELD_WIDTH / GRID_SIZE) * CELL_SIZE
+          minWidth: (BATTLEFIELD_WIDTH / GRID_SIZE) * CELL_SIZE,
         }}
       >
         {/* Deployment Zone Overlays — shown only during deployment */}
