@@ -262,10 +262,13 @@ export default function Battle() {
         'hill','wall_open',
       ],
       mixed: [
-        'ruins','ruins','crater','crater',
-        'forest','forest','barricade','barricade',
-        'hill','wall_open','pond','vehicle_wreckage',
-        'solid_building','wall_solid',
+        'ruins','ruins','ruins','ruins',
+        'solid_building','solid_building','solid_building',
+        'forest','forest','forest',
+        'hill','hill','hill',
+        'crater','crater',
+        'pond',
+        'barricade','barricade','wall_open','wall_solid','vehicle_wreckage',
       ],
     };
 
