@@ -4,6 +4,11 @@ import { Users, User } from "lucide-react";
 import UnitGroupDisplay from './UnitGroupDisplay';
 
 // Sprite assets for ruins and buildings — randomly assigned per terrain piece using a seeded index
+const FOREST_SPRITES = [
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/43bb12b83_Rocks11.png',
+  'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/a1b19589e_Rocks12.png',
+];
+
 const RUINS_SPRITES = [
   'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/7c2e0d007__Big_Buildings1.png',
   'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/5a74f3a50__Big_Buildings5.png',
