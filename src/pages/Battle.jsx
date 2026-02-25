@@ -1319,15 +1319,17 @@ export default function Battle() {
     logger?.logDestruction({ round, unit: attacker, cause: `melee with ${defender.name}`, actingUnit: defender.name, killedByWeapon: defWpnName });
   }
 
-    // Morale on loser — based on Fear-adjusted wound comparison
+    // Bug 5 fix: Morale for melee loser — fires even if loser is at 0 wounds (threshold crossed).
     const loser = result.winner === attacker ? defender : (result.winner === defender ? attacker : null);
-    if (loser && loser.current_models > 0 && loser.status === 'normal') {
+    if (loser && loser.status !== 'routed' && loser.status !== 'destroyed') {
       const loserWoundsTaken = loser === defender ? attackerWoundsToApply : defenderWoundsToApply;
       const loserStateBefore = { acting_unit: { wounds_remaining: loser.current_models, max_wounds: loser.total_models, status: loser.status } };
       const moraleResult = rules.checkMorale(loser, 'melee_loss');
       const outcome = rules.applyMoraleResult(loser, moraleResult.passed, 'melee_loss');
-      evs.push({ round, type: 'morale', message: `${loser.name} ${outcome} after melee loss (roll: ${moraleResult.roll})`, timestamp: new Date().toLocaleTimeString() });
-      logger?.logMorale({ round, unit: loser, outcome, roll: moraleResult.roll, qualityTarget: loser.quality || 4, specialRulesApplied: moraleResult.specialRulesApplied || [], woundsTaken: loserWoundsTaken, stateBefore: loserStateBefore });
+      if (outcome !== 'passed') {
+        evs.push({ round, type: 'morale', message: `${loser.name} ${outcome} after melee loss (roll: ${moraleResult.roll})`, timestamp: new Date().toLocaleTimeString() });
+        logger?.logMorale({ round, unit: loser, outcome, roll: moraleResult.roll, qualityTarget: loser.quality || 4, specialRulesApplied: moraleResult.specialRulesApplied || [], woundsTaken: loserWoundsTaken, stateBefore: loserStateBefore });
+      }
     }
 
     return defender.current_models <= 0; // returns true if target was killed (for Overrun)
