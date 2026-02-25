@@ -164,7 +164,6 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
           backgroundImage: 'url(https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/69893b802f4b06e77826bf31/52470e506_ClassicCloudyImage.jpg)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-        style={{
           width: (BATTLEFIELD_WIDTH / GRID_SIZE) * CELL_SIZE,
           height: (BATTLEFIELD_HEIGHT / GRID_SIZE) * CELL_SIZE,
           minWidth: (BATTLEFIELD_WIDTH / GRID_SIZE) * CELL_SIZE,
