@@ -125,33 +125,48 @@ function rand(seed) {
   return (hash(seed) % 100000) / 100000;
 }
 
-// Scatter models in a natural organic cluster.
-// Uses a sunflower/phyllotaxis-inspired layout with noise so they look like
-// soldiers standing in a loose group rather than a grid.
+// Scatter models in a natural organic cluster using a golden-angle spiral,
+// then run a repulsion pass to guarantee no two dots overlap.
 function computeScatterPositions(count, uid, dotSize) {
   if (count === 0) return [];
-  const spacing = dotSize + 3; // min gap between model centres
+  if (count === 1) return [{ x: 0, y: 0 }];
+
+  const minDist = dotSize + 2; // minimum centre-to-centre distance
+  const goldenAngle = 2.399963;
   const positions = [];
 
-  if (count === 1) {
-    return [{ x: 0, y: 0 }];
-  }
-
-  // Golden angle spiral — each model placed further out on a golden spiral
-  // then perturbed with stable noise to break any obvious pattern
-  const goldenAngle = 2.399963; // radians ≈ 137.5°
   for (let i = 0; i < count; i++) {
-    const r = spacing * 0.55 * Math.sqrt(i + 0.5);
+    const r = minDist * 0.6 * Math.sqrt(i + 0.5);
     const theta = i * goldenAngle;
-    const nx = (rand(`${uid}_${i}_nx`) - 0.5) * spacing * 0.55;
-    const ny = (rand(`${uid}_${i}_ny`) - 0.5) * spacing * 0.55;
-    positions.push({
-      x: r * Math.cos(theta) + nx,
-      y: r * Math.sin(theta) + ny,
-    });
+    const nx = (rand(`${uid}_${i}_nx`) - 0.5) * minDist * 0.4;
+    const ny = (rand(`${uid}_${i}_ny`) - 0.5) * minDist * 0.4;
+    positions.push({ x: r * Math.cos(theta) + nx, y: r * Math.sin(theta) + ny });
   }
 
-  // Normalise so the bounding box starts at (0,0)
+  // Repulsion passes — push overlapping dots apart until none overlap
+  for (let pass = 0; pass < 30; pass++) {
+    let moved = false;
+    for (let a = 0; a < positions.length; a++) {
+      for (let b = a + 1; b < positions.length; b++) {
+        const dx = positions[b].x - positions[a].x;
+        const dy = positions[b].y - positions[a].y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        if (dist < minDist) {
+          const push = (minDist - dist) / 2 + 0.5;
+          const nx = (dx / dist) * push;
+          const ny = (dy / dist) * push;
+          positions[a].x -= nx;
+          positions[a].y -= ny;
+          positions[b].x += nx;
+          positions[b].y += ny;
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+
+  // Normalise so bounding box starts at (0,0)
   const minX = Math.min(...positions.map(p => p.x));
   const minY = Math.min(...positions.map(p => p.y));
   return positions.map(p => ({ x: p.x - minX, y: p.y - minY }));
