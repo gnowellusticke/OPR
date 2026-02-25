@@ -592,8 +592,9 @@ export default function Battle() {
       const jx = decision.x + (Math.random() - 0.5) * 6;
       const jy = decision.y + (Math.random() - 0.5) * 3;
 
+      // Hard clamp — never allow a unit outside its deployment band
       const finalX = Math.max(5, Math.min(65, jx));
-      const finalY = Math.max(yMin, Math.min(yMax, jy));
+      const finalY = Math.max(yMin + 1, Math.min(yMax - 1, jy));
       const finalCol = finalX < 24 ? 'left' : finalX < 48 ? 'centre' : 'right';
       const finalZone = `${zoneRow}-${finalCol}`;
 
