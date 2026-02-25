@@ -700,9 +700,14 @@ export class DMNEngine {
   }).length;
   if (unitsInZone >= 2) score -= 100;
 
-  // Spread bonus: penalise piling into same column as too many friendlies
-  const sameColFriendlies = deployedFriendlies.filter(f => Math.abs(f.x - cx) < 12).length;
-  score -= sameColFriendlies * 8;
+  // Spread: penalise proximity to ANY already-deployed friendly (both x and y)
+  // This is the key to breaking up rows — units must spread in both axes
+  deployedFriendlies.forEach(f => {
+    const dx = Math.abs(f.x - cx);
+    const dy = Math.abs(f.y - cy);
+    const proximity = Math.max(0, 10 - Math.hypot(dx, dy));
+    score -= proximity * 5; // strong penalty for being close to any friendly
+  });
 
   // Reactive: avoid columns with concentrated dangerous enemies
   if (deployedEnemies.length > 0) {
