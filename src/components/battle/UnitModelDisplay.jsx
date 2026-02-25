@@ -113,20 +113,32 @@ export function buildModelList(unit) {
   });
 }
 
+// Generate stable per-unit jitter offsets using a seeded-style approach (based on unit id + model index)
+function seededJitter(seed, range) {
+  // Simple deterministic hash so jitter is stable across re-renders
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  }
+  return ((Math.abs(h) % 1000) / 1000 - 0.5) * range * 2;
+}
+
 export default function UnitModelDisplay({ unit, owner }) {
   const models = buildModelList(unit);
   const cols = Math.min(COLS, models.length);
 
-  // Grid step is based on the largest dot present so everything aligns neatly
+  // Grid step is based on the largest dot present
   const maxTough = models.reduce((max, m) => Math.max(max, m.toughValue || 1), 1);
   const { size: maxSize } = getModelStyle(maxTough);
   const step = maxSize + MODEL_GAP;
 
   const rows = Math.ceil(models.length / cols);
-  const width = cols * step - MODEL_GAP;
-  const height = rows * step - MODEL_GAP;
+  const jitterRange = maxSize * 0.6; // jitter up to 60% of dot size in any direction
+  const width = cols * step + jitterRange * 2;
+  const height = rows * step + jitterRange * 2;
 
   const baseColor = owner === 'agent_a' ? '#3b82f6' : '#ef4444';
+  const uid = unit.id || unit.name || 'u';
 
   return (
     <div className="relative" style={{ width, height }}>
@@ -150,8 +162,10 @@ export default function UnitModelDisplay({ unit, owner }) {
           boxShadow = '0 0 4px rgba(52,211,153,0.7)';
         }
 
-        // Centre smaller dots within the grid cell so they align neatly with larger ones
         const offset = Math.floor((maxSize - size) / 2);
+        // Stable random scatter — different for x and y using different seeds
+        const jx = seededJitter(`${uid}_${i}_x`, jitterRange);
+        const jy = seededJitter(`${uid}_${i}_y`, jitterRange);
 
         return (
           <div
@@ -159,8 +173,8 @@ export default function UnitModelDisplay({ unit, owner }) {
             title={model.type === 'character' ? 'Character' : model.type === 'special_weapon' ? 'Special Weapon' : undefined}
             style={{
               position: 'absolute',
-              left: col * step + offset,
-              top: row * step + offset,
+              left: col * step + offset + jitterRange + jx,
+              top: row * step + offset + jitterRange + jy,
               width: size,
               height: size,
               borderRadius: radius,
