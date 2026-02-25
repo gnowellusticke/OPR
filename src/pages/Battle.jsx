@@ -351,13 +351,26 @@ export default function Battle() {
     const makePiece = (pickType) => {
       const def = TERRAIN_TYPES[pickType];
       const isScatter = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid' || pickType === 'vehicle_wreckage';
-      const isLarge = pickType === 'solid_building' || pickType === 'forest' || pickType === 'hill';
+      const isBuilding = pickType === 'solid_building';
+      const isHill = pickType === 'hill';
+      const isForest = pickType === 'forest';
       const isMedium = pickType === 'ruins' || pickType === 'crater' || pickType === 'pond';
-      const w = isScatter ? 3 + Math.random() * 3 : isLarge ? 8 + Math.random() * 6 : isMedium ? 5 + Math.random() * 4 : 4 + Math.random() * 3;
-      const h = isScatter ? 2 + Math.random() * 2 : isLarge ? 8 + Math.random() * 6 : isMedium ? 5 + Math.random() * 4 : 4 + Math.random() * 3;
+      const w = isScatter ? 3 + Math.random() * 3 : isBuilding || isHill || isForest ? 10 + Math.random() * 8 : isMedium ? 5 + Math.random() * 4 : 4 + Math.random() * 3;
+      const h = isScatter ? 2 + Math.random() * 2 : isBuilding || isHill || isForest ? 10 + Math.random() * 8 : isMedium ? 5 + Math.random() * 4 : 4 + Math.random() * 3;
       const isAngular = pickType === 'barricade' || pickType === 'wall_open' || pickType === 'wall_solid';
-      const angle = isAngular ? (Math.random() - 0.5) * 90 : (Math.random() - 0.5) * 40;
-      return { ...def, type: pickType, x: Math.random() * 54 + 6, y: Math.random() * 42 + 4, width: w, height: h, angle };
+      const angle = isAngular ? (Math.random() - 0.5) * 90 : (Math.random() - 0.5) * 30;
+      let px, py;
+      if (isHill) {
+        const edge = Math.floor(Math.random() * 4);
+        if (edge === 0) { px = Math.random() * (72 - w); py = 0; }
+        else if (edge === 1) { px = Math.random() * (72 - w); py = 48 - h; }
+        else if (edge === 2) { px = 0; py = Math.random() * (48 - h); }
+        else { px = 72 - w; py = Math.random() * (48 - h); }
+      } else {
+        px = Math.random() * (72 - w - 4) + 2;
+        py = Math.random() * (48 - h - 4) + 2;
+      }
+      return { ...def, type: pickType, x: px, y: py, width: w, height: h, angle };
     };
 
     const countLOS = () => terrain.filter(t => t.blocksThroughLOS || t.blocking).length;
