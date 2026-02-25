@@ -283,11 +283,12 @@ export default function Battle() {
       const isBuilding = pick === 'solid_building';
       const w = isLinear ? 8 + Math.random() * 4 : isBuilding ? 4 + Math.random() * 5 : 5 + Math.random() * 6;
       const h = isLinear ? 1.5 + Math.random() * 1.5 : isBuilding ? 4 + Math.random() * 4 : 4 + Math.random() * 5;
+      // Terrain only in contested middle zone — never in deployment strips (y<16 or y>32)
       const t = {
         ...def,
         type: pick,
         x: Math.random() * 54 + 6,
-        y: Math.random() * 34 + 6,
+        y: 16 + Math.random() * 16, // y=16..32, safely between both deployment zones
         width: w,
         height: h,
       };
