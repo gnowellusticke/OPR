@@ -707,8 +707,9 @@ export class DMNEngine {
   if (score > bestScore) { bestScore = score; best = cand; }
   }
 
-  const finalX = Math.max(4, Math.min(68, best.x));
-  const finalY = Math.max(yMin + 1, Math.min(yMax - 1, best.y));
+  // Hard clamp — candidates already constrained but score selection can pick edge values
+  const finalX = Math.max(5, Math.min(65, best.x));
+  const finalY = Math.max(yMin, Math.min(yMax, best.y));
   const colLabel = best.col === 'left' ? 'left' : best.col === 'right' ? 'right' : 'centre';
   const rowLabel = isAgentA ? 'south' : 'north';
   const zone = `${rowLabel}-${colLabel}`;
