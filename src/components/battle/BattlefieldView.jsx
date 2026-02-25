@@ -180,6 +180,10 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
           const h = (t.height / GRID_SIZE) * CELL_SIZE;
           const cx = (t.x / GRID_SIZE) * CELL_SIZE + w / 2;
           const cy = (t.y / GRID_SIZE) * CELL_SIZE + h / 2;
+          // Pick a deterministic sprite from the pool using the terrain index
+          const spriteUrl = style.useSprite && style.sprites
+            ? style.sprites[idx % style.sprites.length]
+            : null;
           return (
             <div
               key={`terrain-${idx}`}
@@ -189,16 +193,25 @@ export default function BattlefieldView({ gameState, activeUnit, onUnitClick }) 
                 top: cy - h / 2,
                 width: w,
                 height: h,
-                backgroundColor: style.bg,
-                border: `2px solid ${style.border}`,
+                backgroundColor: spriteUrl ? 'transparent' : style.bg,
+                border: spriteUrl ? 'none' : `2px solid ${style.border}`,
                 borderRadius: style.round ? '50%' : '4px',
                 transform: `rotate(${angle}deg)`,
                 transformOrigin: 'center center',
               }}
             >
-              <span style={{ fontSize: 9, color: style.textColor || '#e2e8f0', padding: '1px 3px', lineHeight: 1.2, fontWeight: 600, textShadow: '0 0 3px #000' }}>
-                {style.icon} {t.label || t.type}
-              </span>
+              {spriteUrl ? (
+                <img
+                  src={spriteUrl}
+                  alt={t.label || t.type}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
+                  draggable={false}
+                />
+              ) : (
+                <span style={{ fontSize: 9, color: style.textColor || '#e2e8f0', padding: '1px 3px', lineHeight: 1.2, fontWeight: 600, textShadow: '0 0 3px #000' }}>
+                  {style.icon} {t.label || t.type}
+                </span>
+              )}
             </div>
           );
         })}
