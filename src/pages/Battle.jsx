@@ -596,15 +596,41 @@ export default function Battle() {
       const yMax = isAgentA ? 15 : 44;
       const zoneRow = isAgentA ? 'south' : 'north';
 
-      // Apply a small spread jitter so units in the same logical position don't stack
-      const jx = decision.x + (Math.random() - 0.5) * 6;
-      const jy = decision.y + (Math.random() - 0.5) * 3;
+      // Bug 7 fix: enforce max 2 units per zone; if zone full, pick the least-populated zone
+      const MAX_PER_ZONE = 2;
+      let finalX = Math.max(5, Math.min(65, decision.x));
+      let finalY = Math.max(yMin + 1, Math.min(yMax - 1, decision.y));
+      let finalCol = finalX < 24 ? 'left' : finalX < 48 ? 'centre' : 'right';
+      let finalZone = `${zoneRow}-${finalCol}`;
 
-      // Hard clamp — never allow a unit outside its deployment band
-      const finalX = Math.max(5, Math.min(65, jx));
-      const finalY = Math.max(yMin + 1, Math.min(yMax - 1, jy));
-      const finalCol = finalX < 24 ? 'left' : finalX < 48 ? 'centre' : 'right';
-      const finalZone = `${zoneRow}-${finalCol}`;
+      // If preferred zone is at capacity, find the least-populated zone and place there
+      const ZONE_COLS = ['left', 'centre', 'right'];
+      const zoneCounts = {};
+      ZONE_COLS.forEach(c => { zoneCounts[`${zoneRow}-${c}`] = 0; });
+      myDeployed.forEach(u => {
+        const c = u.x < 24 ? 'left' : u.x < 48 ? 'centre' : 'right';
+        const z = `${zoneRow}-${c}`;
+        zoneCounts[z] = (zoneCounts[z] || 0) + 1;
+      });
+
+      if ((zoneCounts[finalZone] || 0) >= MAX_PER_ZONE) {
+        // Find least-populated zone
+        const sorted = ZONE_COLS.map(c => ({ col: c, zone: `${zoneRow}-${c}`, count: zoneCounts[`${zoneRow}-${c}`] || 0 }))
+          .sort((a, b) => a.count - b.count);
+        const overflow = sorted[0];
+        finalCol = overflow.col;
+        finalZone = overflow.zone;
+        // Pick an x in that column
+        const colX = finalCol === 'left' ? 12 : finalCol === 'centre' ? 35 : 55;
+        finalX = Math.max(5, Math.min(65, colX + (Math.random() - 0.5) * 10));
+        finalY = Math.max(yMin + 1, Math.min(yMax - 1, decision.y));
+      }
+
+      // Small jitter within final position
+      const jx = finalX + (Math.random() - 0.5) * 4;
+      const jy = finalY + (Math.random() - 0.5) * 2;
+      finalX = Math.max(5, Math.min(65, jx));
+      finalY = Math.max(yMin + 1, Math.min(yMax - 1, jy));
 
       unit.x = finalX;
       unit.y = finalY;
