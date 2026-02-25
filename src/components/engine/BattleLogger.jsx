@@ -339,6 +339,11 @@ export class BattleLogger {
   }
 
   logAbility({ round, unit, ability, details }) {
+    // Bug 8 fix: Skip null/empty ability events — only log if we have meaningful payload.
+    // Caster marker events with no spell/token data are swallowed here.
+    const hasPayload = details && Object.keys(details).some(k => details[k] != null && details[k] !== '');
+    if (!hasPayload && (!ability || ability === 'Caster')) return;
+
     this.events.push({
       round,
       timestamp: this._timestamp(),
