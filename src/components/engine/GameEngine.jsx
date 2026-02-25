@@ -211,9 +211,17 @@ export class DMNEngine {
     const isFireSupport = unit.special_rules?.includes('Indirect') ||
       /artillery|gun|cannon|mortar|support/i.test(unit.name);
     const chargeRange = this.maxChargeDistance(unit);
+
+    // Bug 2 fix: Charge must be evaluated for ANY unit with melee weapons OR Impact rule,
+    // not just melee-primary units. Include units very close to an enemy (dist ≤ chargeRange).
+    const hasMeleeWeapons = (unit.weapons || []).some(w => w.range <= 2);
+    const hasImpact = typeof unit.special_rules === 'string'
+      ? unit.special_rules.includes('Impact')
+      : Array.isArray(unit.special_rules) && unit.special_rules.some(r => String(r).includes('Impact'));
     const canCharge = nearestEnemy &&
       this.getDistance(unit, nearestEnemy) <= chargeRange &&
-      !isTransport && !unit.just_charged && !isFireSupport;
+      !isTransport && !unit.just_charged && !isFireSupport &&
+      (hasMeleeWeapons || hasImpact);
 
     const p = this.personality;
     const riskBias = this._riskBias();
