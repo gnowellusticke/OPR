@@ -689,16 +689,7 @@ export class DMNEngine {
     score += Math.max(0, 20 - friendlyDist) * 0.4;
   }
 
-  // Hard penalty for already-occupied zone (max 2 per zone)
-  const candidateZoneCol = cand.col === 'left' ? 'left' : cand.col === 'right' ? 'right' : 'centre';
-  const candidateZoneRow = isAgentA ? 'south' : 'north';
-  const candidateZone = `${candidateZoneRow}-${candidateZoneCol}`;
-  const unitsInZone = deployedFriendlies.filter(f => {
-    const fZoneCol = f.x < 24 ? 'left' : f.x < 48 ? 'centre' : 'right';
-    const fZoneRow = isAgentA ? 'south' : 'north';
-    return `${fZoneRow}-${fZoneCol}` === candidateZone;
-  }).length;
-  if (unitsInZone >= 2) score -= 100;
+  // (zone cap removed — proximity penalty above handles spreading naturally)
 
   // Spread: penalise proximity to ANY already-deployed friendly (both x and y)
   // This is the key to breaking up rows — units must spread in both axes
