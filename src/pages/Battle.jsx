@@ -15,6 +15,8 @@ import { verifyRuleCompliance } from '../components/engine/RuleComplianceVerifie
 import { attachFactionSpells } from '../components/engine/spells/SpellRegistry';
 import { getPersonality, DEFAULT_PERSONALITY } from '../components/engine/personalities/PersonalityRegistry';
 import { processLogToActivations, NARRATIVE_SYSTEM_PROMPT, STYLE_SUFFIXES, parseNarrativeStream, BattleReplayController, getActivationDuration } from '../components/engine/NarrativeEngine.jsx';
+import { DMNAgent } from '../components/engine/agents/DMNAgent'; // DMNAgent is always needed.
+import { LLMAgent }  from '../components/engine/agents/LLMAgent'; // LLMAgent import only needed if you want to use LLM mode.
 import NarrativeCommentaryBox from '../components/battle/NarrativeCommentaryBox';
 
 export default function Battle() {
