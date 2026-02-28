@@ -11,6 +11,8 @@ const MODEL_GAP = 2;
 const COLS = 5;
 
 function getModelStyle(toughPerModel) {
+  if (toughPerModel >= 20) return { size: 32, radius: '4px', isSquare: true };
+  if (toughPerModel >= 15) return { size: 28, radius: '4px', isSquare: true };
   if (toughPerModel >= 10) return { size: 22, radius: '4px', isSquare: true };
   if (toughPerModel >= 6)  return { size: 18, radius: '50%', isSquare: false };
   if (toughPerModel >= 3)  return { size: 13, radius: '50%', isSquare: false };
