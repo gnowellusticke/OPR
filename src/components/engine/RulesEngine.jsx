@@ -1,27 +1,23 @@
 import { DiceRoller } from './GameEngine';
-import { RuleRegistry } from './RuleRegistry';
-import { OPR_RULES } from './rules/opr-rules';
 
 export class RulesEngine {
   /**
-   * @param {RuleRegistry} [registry] — inject a custom registry to support a different game.
-   *   Defaults to OPR rules. Swap this out and the engine supports any game system.
+   * Self-contained — no external rule registry required.
+   * All special-rule lookups use fast string matching on the normalised
+   * special_rules field, identical to the original engine's approach.
+   *
+   * The registry parameter is accepted but ignored, so code that passes
+   * one won't break. When you later add RuleRegistry.js and opr-rules.js
+   * you can re-enable the registry path without touching anything else.
    */
-  constructor(registry = null) {
+  constructor(_registry = null) {
     this.dice = new DiceRoller();
     this.limitedWeaponsUsed = new Map();
-    this.registry = registry ?? this._buildDefaultRegistry();
-  }
-
-  _buildDefaultRegistry() {
-    const reg = new RuleRegistry();
-    reg.registerAll(OPR_RULES);
-    return reg;
   }
 
   // ─── Internal helpers ─────────────────────────────────────────────────────
 
-  /** Normalise special_rules to a plain string. Kept for any call-sites not yet using the registry. */
+  /** Normalise special_rules to a plain string (handles arrays, objects, strings). */
   _rulesStr(special_rules) {
     if (!special_rules) return '';
     if (Array.isArray(special_rules)) {
@@ -30,14 +26,25 @@ export class RulesEngine {
     return typeof special_rules === 'string' ? special_rules : '';
   }
 
-  /** True if the unit/weapon has the named rule. */
+  /**
+   * True if special_rules contains the named rule.
+   * Accepts arrays, objects, or plain strings — same as _rulesStr.
+   */
   _has(special_rules, ruleName) {
-    return this.registry.has(special_rules, ruleName);
+    return this._rulesStr(special_rules).includes(ruleName);
   }
 
-  /** Numeric param from a rule, e.g. Tough(6) → 6. Returns null if absent. */
+  /**
+   * Returns the numeric parameter from a rule like Tough(6) → 6.
+   * Returns null if the rule is absent.
+   * Works for any Rule(N) pattern.
+   */
   _param(special_rules, ruleName) {
-    return this.registry.getParamValue(special_rules, ruleName);
+    const str = this._rulesStr(special_rules);
+    // Escape any regex special chars in the rule name, then match (digits)
+    const escaped = ruleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = str.match(new RegExp(`\\b${escaped}\\((\\d+)\\)`));
+    return match ? parseInt(match[1], 10) : null;
   }
 
   /** Parse AP value: weapon.ap field first, then AP(X) in special_rules. */
@@ -1028,5 +1035,120 @@ export class RulesEngine {
     if (dist <= 12) return 'close';
     if (dist <= 24) return 'mid';
     return 'long';
+  }
+
+  // ─── Legal Move Generation (required by LLMAgent) ─────────────────────────
+  //
+  // These two methods make implicit legality explicit so agents can reason
+  // about options without needing to know game rules internally.
+  // DMNAgent doesn't use them (it scores implicitly), but they don't hurt.
+
+  /**
+   * Returns the list of legal actions for a unit this activation.
+   * Used by LLMAgent to populate the prompt and validate responses.
+   *
+   * @param {object} unit
+   * @param {object} gameState
+   * @returns {Array<{action, moveDistance?, chargeDistance?, reachableTargets?, canShoot?}>}
+   */
+  getLegalActions(unit, gameState) {
+    const actions = [];
+    const sr = unit.special_rules;
+
+    // Immobile units can only Hold
+    if (this._has(sr, 'Immobile')) {
+      return [{ action: 'Hold', canShoot: true }];
+    }
+
+    // Aircraft can only Advance (their special move)
+    if (this._has(sr, 'Aircraft')) {
+      return [{ action: 'Advance', canShoot: true, moveDistance: 36 }];
+    }
+
+    // Hold — always legal
+    actions.push({ action: 'Hold', canShoot: true });
+
+    // Advance — always legal
+    const advanceDist = this.getMoveDistance(unit, 'Advance', gameState.terrain);
+    actions.push({ action: 'Advance', canShoot: true, moveDistance: advanceDist });
+
+    // Rush — always legal (but no shooting after)
+    const rushDist = this.getMoveDistance(unit, 'Rush', gameState.terrain);
+    actions.push({ action: 'Rush', canShoot: false, moveDistance: rushDist });
+
+    // Charge — only if a reachable enemy exists
+    // Cannot charge if already charged this activation, or if unit is a transport
+    const canAttemptCharge =
+      !unit.just_charged &&
+      !this._has(sr, 'Transport') &&
+      !this._has(sr, 'Indirect') &&
+      !(/artillery|gun|cannon|mortar|support/i.test(unit.name));
+
+    if (canAttemptCharge) {
+      const chargeDist = this.getMoveDistance(unit, 'Charge', gameState.terrain);
+      const enemies = (gameState.units || []).filter(u =>
+        u.owner !== unit.owner &&
+        u.current_models > 0 &&
+        u.status !== 'destroyed' &&
+        u.status !== 'routed'
+      );
+      const reachable = enemies.filter(e => this.checkEffectiveRange(unit, e, chargeDist));
+
+      // Need at least one melee weapon or Impact rule to charge meaningfully
+      const hasMelee = (unit.weapons || []).some(w => (w.range ?? 2) <= 2);
+      const hasImpact = this._has(sr, 'Impact') ||
+        (typeof sr === 'string' && sr.match(/Impact\(\d+\)/));
+
+      if (reachable.length > 0 && (hasMelee || hasImpact)) {
+        actions.push({
+          action: 'Charge',
+          canShoot: false,
+          chargeDistance: chargeDist,
+          reachableTargets: reachable.map(e => e.name),
+        });
+      }
+    }
+
+    return actions;
+  }
+
+  /**
+   * Returns all valid shooting target+weapon combinations for a unit.
+   * Filters by range AND line of sight. Used by LLMAgent for informed
+   * target selection; also useful for validation.
+   *
+   * @param {object} unit
+   * @param {object} gameState
+   * @returns {Array<{target, targetId, weapon, weaponName, range}>}
+   */
+  getShootingTargets(unit, gameState) {
+    const enemies = (gameState.units || []).filter(u =>
+      u.owner !== unit.owner &&
+      u.current_models > 0 &&
+      u.status !== 'destroyed' &&
+      u.status !== 'routed'
+    );
+
+    const results = [];
+    for (const enemy of enemies) {
+      for (const weapon of (unit.weapons || [])) {
+        if ((weapon.range ?? 2) <= 2) continue; // melee-only weapon
+        if (!this.checkEffectiveRange(unit, enemy, weapon.range)) continue;
+
+        const isIndirect = this._has(weapon.special_rules, 'Indirect');
+        if (!isIndirect && !this.checkEffectiveLOS(unit, enemy, gameState.terrain)) continue;
+
+        results.push({
+          target:     enemy,
+          targetId:   enemy.id,
+          targetName: enemy.name,
+          weapon,
+          weaponName: weapon.name,
+          range:      this.calculateDistance(unit, enemy),
+        });
+      }
+    }
+
+    return results;
   }
 }
