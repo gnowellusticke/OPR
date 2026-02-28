@@ -50,8 +50,8 @@ export default function Battle() {
 
   // Engines (stable refs, never recreated)
   // Personality is loaded after battle data arrives — two separate DMN engines, one per agent
-  const dmnARef = useRef(new DMNEngine());
-  const dmnBRef = useRef(new DMNEngine());
+  const dmnARef = useRef(new DMNAgent(new DMNEngine()));
+  const dmnBRef = useRef(new DMNAgent(new DMNEngine()));
   const dmnRef = useRef(null); // will be set dynamically per-activation
   const rulesRef = useRef(new RulesEngine());
   const loggerRef = useRef(null);
@@ -645,8 +645,13 @@ export default function Battle() {
         specialRulesApplied: []
       });
     } else {
-      const decision = dmn.decideDeployment(unit, isAgentA, enemyDeployed, myDeployed, objectives, terrain, myUsedZones);
-
+            const agentForDeployment = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
+                  const decision = await agentForDeployment.decideDeployment(
+                    unit,
+                    isAgentA,
+                    { enemyDeployed, myDeployed, objectives, terrain, myUsedZones },
+                    gsRef.current
+                  );
       // Use the DMN's chosen position directly — it already picks from a dense grid
       // within the deployment strip. Just clamp hard to the correct y-band.
       const yMin = isAgentA ? 4 : 33;
@@ -809,6 +814,7 @@ export default function Battle() {
     // Bug 2 fix: Guard against double-activation — all unit types (infantry, vehicle, hero)
     // Read from the latest ref, not the stale gs closure
     const alreadyActivated = new Set(gsRef.current.units_activated || []);
+    gs._rulesEngine = rules;
     if (alreadyActivated.has(unit.id)) {
       console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
       return;
@@ -873,20 +879,18 @@ export default function Battle() {
     }
 
     // ── DMN action selection ──────────────────────────────────────────────────
-    const options = dmn.evaluateActionOptions(liveUnit, gs, liveUnit.owner);
-    let selectedAction = options.find(o => o.selected)?.action || 'Hold';
-    // Bug 6 fix: shaken unit may only move (no Charge, no Hold+Shoot, no Advance+Shoot)
-    if (!canAct && (selectedAction === 'Charge' || selectedAction === 'Hold')) selectedAction = 'Advance';
+const agentDecision = await agent.decideAction(liveUnit, gs);
+let selectedAction  = agentDecision.action;
 
-    setCurrentDecision({
-      unit: liveUnit,
-      options,
-      dmn_phase: 'Action Selection',
-      reasoning: `(${liveUnit.x.toFixed(0)}, ${liveUnit.y.toFixed(0)}) → ${selectedAction}`
-    });
+setCurrentDecision({
+  unit: liveUnit,
+  options:    agentDecision.options || [],   // DMNAgent populates this; LLMAgent returns []
+  dmn_phase:  'Action Selection',
+  reasoning:  agentDecision.reasoning || `(${liveUnit.x.toFixed(0)}, ${liveUnit.y.toFixed(0)}) → ${selectedAction}`
+});
 
-    await new Promise(r => setTimeout(r, 300));
-    await executeAction(liveUnit, selectedAction, canAct, gs, evs);
+await new Promise(r => setTimeout(r, 300));
+await executeAction(liveUnit, selectedAction, canAct, gs, evs, agentDecision);
 
     // ── Overrun (Advance Rule) ────────────────────────────────────────────────
     // (handled inside executeAction after melee kill)
@@ -919,11 +923,17 @@ export default function Battle() {
     const logger = loggerRef.current;
     const tracking = actionTrackingRef.current;
     tracking[unit.owner][action] = (tracking[unit.owner][action] || 0) + 1;
-
-    const dmnOptions = dmn.evaluateActionOptions(unit, gs, unit.owner);
-    const topOption = dmnOptions.sort((a, b) => b.score - a.score)[0];
-    const topDetails = topOption?.details?.map(d => `${d.label} (${d.value > 0 ? '+' : ''}${typeof d.value === 'number' ? d.value.toFixed(2) : d.value})`).join('; ') || '';
-    const dmnReason = topOption ? `${topOption.action} scored ${topOption.score.toFixed(2)}${topDetails ? ': ' + topDetails : ''}` : action;
+    
+    const executeAction = async (unit, action, canAct, gs, evs, agentDecision = null) => {
+      // ...
+      // Use reasoning from the agent decision we already made; fall back to re-evaluating
+      // only if agentDecision was not passed (e.g. called from somewhere else).
+      const dmnReason = agentDecision?.reasoning
+        ?? (() => {
+            const opts = dmn.evaluateActionOptions(unit, gs, unit.owner);
+            const top  = opts.sort((a, b) => b.score - a.score)[0];
+            return top ? `${top.action} scored ${top.score.toFixed(2)}` : action;
+          })();
 
     if (canAct) await attemptSpellCasting(unit, gs, evs);
 
@@ -932,7 +942,12 @@ export default function Battle() {
       else evs.push({ round, type: 'movement', message: `${unit.name} holds (shaken — cannot shoot)`, timestamp: new Date().toLocaleTimeString() });
 
     } else if (action === 'Advance') {
-      const moveTarget = dmn.findNearestObjective(unit, gs.objectives) || dmn.findNearestEnemy(unit, gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0));
+      const moveTarget = await agent.decideMovement(
+        unit,
+        gs.objectives,
+        gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0),
+        gs
+      );
       if (moveTarget) {
         const result = rules.executeMovement(unit, action, moveTarget, gs.terrain);
         const zone = rules.getZone(unit.x, unit.y);
@@ -942,8 +957,12 @@ export default function Battle() {
       if (canAct) await attemptShooting(unit, gs, evs, dmnReason);
 
     } else if (action === 'Rush') {
-      const rushTarget = dmn.findNearestObjective(unit, gs.objectives) || dmn.findNearestEnemy(unit, gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0));
-      if (rushTarget) {
+        const rushTarget = await agent.decideMovement(
+          unit,
+          gs.objectives,
+          gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0),
+          gs
+        );
         const result = rules.executeMovement(unit, action, rushTarget, gs.terrain);
         const zone = rules.getZone(unit.x, unit.y);
         // Dangerous terrain check after moving
@@ -1055,7 +1074,7 @@ export default function Battle() {
     const enemies = gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed');
     if (enemies.length === 0) return;
 
-    const target = enemies.reduce((n, e) => rules.calculateDistance(unit, e) < rules.calculateDistance(unit, n) ? e : n);
+    const target = await agent.decideTarget(unit, liveEnemies, gs);
     const dist = rules.calculateDistance(unit, target);
     const LOS_RANGE = 18;
 
