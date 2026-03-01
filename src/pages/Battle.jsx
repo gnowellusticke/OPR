@@ -915,16 +915,16 @@ await executeAction(liveUnit, selectedAction, canAct, gs, evs, agentDecision);
 
   // ─── EXECUTE ACTION ───────────────────────────────────────────────────────────
 
-  const executeAction = async (unit, action, canAct, gs, evs) => {
+    const executeAction = async (unit, action, canAct, gs, evs, agentDecision = null) => {
+    
     const round = gs.current_round;
     const dmn = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
+    const agent = dmn;
     const rules = rulesRef.current;
     const logger = loggerRef.current;
     const tracking = actionTrackingRef.current;
     tracking[unit.owner][action] = (tracking[unit.owner][action] || 0) + 1;
     
-    const executeAction = async (unit, action, canAct, gs, evs, agentDecision = null) => {
-      // ...
       // Use reasoning from the agent decision we already made; fall back to re-evaluating
       // only if agentDecision was not passed (e.g. called from somewhere else).
       const dmnReason = agentDecision?.reasoning
