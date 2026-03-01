@@ -810,285 +810,101 @@ export default function Battle() {
 
   // ─── ACTIVATE ─────────────────────────────────────────────────────────────────
 
-const activateUnit = async (unit, gs) => {
-  // Bug 2 fix: Guard against double-activation
-  const alreadyActivated = new Set(gsRef.current.units_activated || []);
-  if (alreadyActivated.has(unit.id)) {
-    console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
-    return;
-  }
+  const activateUnit = async (unit, gs) => {
+    // Bug 2 fix: Guard against double-activation
+    const alreadyActivated = new Set(gsRef.current.units_activated || []);
+    if (alreadyActivated.has(unit.id)) {
+      console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
+      return;
+    }
 
-  // Always work on a fresh copy of the unit from gs
-  const dmn = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
-  const agent = dmn;
-  dmnRef.current = dmn;
-  const rules = rulesRef.current;
-  const logger = loggerRef.current;
-  gs._rulesEngine = rules;
+    // Always work on a fresh copy of the unit from gs
+    const liveUnit = gsRef.current.units.find(u => u.id === unit.id);
+    if (!liveUnit || liveUnit.current_models <= 0) {
+      const newGs = { ...gsRef.current, units_activated: [...(gsRef.current.units_activated || []), unit.id], active_agent: gsRef.current.active_agent === 'agent_a' ? 'agent_b' : 'agent_a' };
+      commitState(newGs);
+      return;
+    }
 
-  setActiveUnit(unit);
-  const evs = [...evRef.current];
-  const round = gs.current_round;
+    setActiveUnit(liveUnit);
+    const evs = [...evRef.current];
+    const round = gs.current_round;
 
-  // Bug 1 fix: create a brand-new Set every activation
-  const activationFiredSet = new Set();
-  unit._firedThisActivation = activationFiredSet;
+    // Select the correct agent for this unit's owner
+    const dmn = liveUnit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
+    const agent = dmn;
+    dmnRef.current = dmn;
+    const rules = rulesRef.current;
+    const logger = loggerRef.current;
+    gs._rulesEngine = rules;
 
-  // Bug 6 fix: Shaken units MUST spend activation idle
-  if (unit.status === 'shaken') {
-    unit.status = 'normal';
-    evs.push({
-      round, type: 'morale',
-      message: `${unit.name} is Shaken — spends activation idle, recovers Shaken status`,
-      timestamp: new Date().toLocaleTimeString()
-    });
-    logger?.logMorale({
-      round, unit, outcome: 'recovered', roll: null, qualityTarget: null,
-      dmnReason: 'Shaken — idle activation, shaken removed'
-    });
-    unit.just_charged = false;
-    // Use a different name to avoid conflict with the later nextAgent
-    const nextAgentShaken = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-    const activatedSetShaken = new Set(gsRef.current.units_activated || []);
-    activatedSetShaken.add(unit.id);
+    // Bug 1 fix: create a brand-new Set every activation
+    const activationFiredSet = new Set();
+    liveUnit._firedThisActivation = activationFiredSet;
+
+    // Bug 6 fix: Shaken units MUST spend activation idle (OPR rule)
+    if (liveUnit.status === 'shaken') {
+      liveUnit.status = 'normal';
+      evs.push({ round, type: 'morale', message: `${liveUnit.name} is Shaken — spends activation idle, recovers Shaken status`, timestamp: new Date().toLocaleTimeString() });
+      logger?.logMorale({ round, unit: liveUnit, outcome: 'recovered', roll: null, qualityTarget: null, dmnReason: 'Shaken — idle activation, shaken removed' });
+      liveUnit.just_charged = false;
+      const nextAgentShaken = liveUnit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
+      const activatedSetShaken = new Set(gsRef.current.units_activated || []);
+      activatedSetShaken.add(liveUnit.id);
+      evRef.current = evs;
+      commitState({ ...gsRef.current, units_activated: Array.from(activatedSetShaken), active_agent: nextAgentShaken }, evs);
+      setActiveUnit(null);
+      return;
+    }
+
+    const canAct = true;
+
     evRef.current = evs;
-    commitState({ ...gsRef.current, units_activated: Array.from(activatedSetShaken), active_agent: nextAgentShaken }, evs);
-    setActiveUnit(null);
-    return;
-  }
+    const tempGs = { ...gsRef.current };
+    commitState(tempGs, evs);
 
-  const canAct = true;
+    // ── Heroic Action (Advance Rule) ──────────────────────────────────────────
+    const advRules = gs.advance_rules || {};
+    const isHero = liveUnit.special_rules?.toLowerCase().includes('hero') || liveUnit.special_rules?.match(/Tough\(\d+\)/);
+    const useHeroic = advRules.heroicActions && isHero && !liveUnit.heroic_action_used && liveUnit.current_models <= liveUnit.total_models * 0.5;
+    if (useHeroic) {
+      liveUnit.heroic_action_used = true;
+      evs.push({ round, type: 'ability', message: `${liveUnit.name} uses a Heroic Action — all dice re-rolled this activation!`, timestamp: new Date().toLocaleTimeString() });
+      logger?.logAbility({ round, unit: liveUnit, ability: 'Heroic Action', details: { trigger: 'below half wounds' } });
+    }
 
-  // Commit state immediately after shaken check
-  evRef.current = evs;
-  const tempGs = { ...gsRef.current };
-  commitState(tempGs, evs);
+    // ── Agent action selection ────────────────────────────────────────────────
+    const agentDecision = await agent.decideAction(liveUnit, gs);
+    let selectedAction = agentDecision.action;
 
-  // Heroic Action (Advance Rule)
-  const advRules = gs.advance_rules || {};
-  const isHero = unit.special_rules?.toLowerCase().includes('hero') || unit.special_rules?.match(/Tough\(\d+\)/);
-  const useHeroic = advRules.heroicActions && isHero && !unit.heroic_action_used && unit.current_models <= unit.total_models * 0.5;
-  if (useHeroic) {
-    unit.heroic_action_used = true;
-    evs.push({
-      round, type: 'ability',
-      message: `${unit.name} uses a Heroic Action — all dice re-rolled this activation!`,
-      timestamp: new Date().toLocaleTimeString()
+    setCurrentDecision({
+      unit: liveUnit,
+      options: agentDecision.options || [],
+      dmn_phase: 'Action Selection',
+      reasoning: agentDecision.reasoning || `(${liveUnit.x.toFixed(0)}, ${liveUnit.y.toFixed(0)}) → ${selectedAction}`
     });
-    logger?.logAbility({ round, unit, ability: 'Heroic Action', details: { trigger: 'below half wounds' } });
-  }
 
-  // DMN action selection
-  const agentDecision = await agent.decideAction(unit, gs);
-  const selectedAction = agentDecision.action;
-
-  setCurrentDecision({
-    unit,
-    options: agentDecision.options || [],
-    dmn_phase: 'Action Selection',
-    reasoning: agentDecision.reasoning || `(${unit.x.toFixed(0)}, ${unit.y.toFixed(0)}) → ${selectedAction}`
-  });
-
-  await new Promise(r => setTimeout(r, 300));
-  await executeAction(unit, selectedAction, canAct, gs, evs, agentDecision);
-
-  // Overrun handled inside executeAction
-
-  // Mark activated, flip agent
-  unit.just_charged = false;
-  const nextAgent = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-  const latestGs = gsRef.current;
-  const activatedSetFinal = new Set(latestGs.units_activated || []);
-  activatedSetFinal.add(unit.id);
-  const updatedGs = {
-    ...latestGs,
-    units_activated: Array.from(activatedSetFinal),
-    active_agent: nextAgent,
-  };
-  commitState(updatedGs, evRef.current);
-  setActiveUnit(null);
-};
-
-  // ── DMN action selection ──────────────────────────────────────────────────
-  const agentDecision = await agent.decideAction(unit, gs);
-  let selectedAction = agentDecision.action;
-
-  setCurrentDecision({
-    unit,
-    options: agentDecision.options || [],
-    dmn_phase: 'Action Selection',
-    reasoning: agentDecision.reasoning || `(${unit.x.toFixed(0)}, ${unit.y.toFixed(0)}) → ${selectedAction}`
-  });
-
-  await new Promise(r => setTimeout(r, 300));
-  await executeAction(unit, selectedAction, canAct, gs, evs, agentDecision);
-
-  // ── Overrun (Advance Rule) ────────────────────────────────────────────────
-  // (handled inside executeAction after melee kill)
-
-  // ── Mark activated, flip agent ────────────────────────────────────────────
-  unit.just_charged = false;
-  const nextAgent = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-  const latestGs = gsRef.current;
-  const activatedSetFinal = new Set(latestGs.units_activated || []);
-  activatedSetFinal.add(unit.id);
-  const updatedGs = {
-    ...latestGs,
-    units_activated: Array.from(activatedSetFinal),
-    active_agent: nextAgent,
-  };
-  commitState(updatedGs, evRef.current);
-  setActiveUnit(null);
-};
-
-    // ── DMN action selection ──────────────────────────────────────────────────
-const agentDecision = await agent.decideAction(liveUnit, gs);
-let selectedAction  = agentDecision.action;
-
-setCurrentDecision({
-  unit: liveUnit,
-  options:    agentDecision.options || [],   // DMNAgent populates this; LLMAgent returns []
-  dmn_phase:  'Action Selection',
-  reasoning:  agentDecision.reasoning || `(${liveUnit.x.toFixed(0)}, ${liveUnit.y.toFixed(0)}) → ${selectedAction}`
-});
-
-await new Promise(r => setTimeout(r, 300));
-await executeAction(liveUnit, selectedAction, canAct, gs, evs, agentDecision);
-
-    // ── Overrun (Advance Rule) ────────────────────────────────────────────────
-    // (handled inside executeAction after melee kill)
+    await new Promise(r => setTimeout(r, 300));
+    await executeAction(liveUnit, selectedAction, canAct, gs, evs, agentDecision);
 
     // ── Mark activated, flip agent ────────────────────────────────────────────
     liveUnit.just_charged = false;
     const nextAgent = liveUnit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-    // Always read the very latest gs from ref to avoid losing activations written
-    // by concurrent state updates (e.g. melee targeting the same unit mid-turn).
     const latestGs = gsRef.current;
-const activateUnit = async (unit, gs) => {
-  // Bug 2 fix: Guard against double-activation
-  const alreadyActivated = new Set(gsRef.current.units_activated || []);
-  if (alreadyActivated.has(unit.id)) {
-    console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
-    return;
-  }
-
-  // Always work on a fresh copy of the unit from gs
-  const dmn = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
-  const agent = dmn;
-  dmnRef.current = dmn;
-  const rules = rulesRef.current;
-  const logger = loggerRef.current;
-  gs._rulesEngine = rules;
-
-  setActiveUnit(unit);
-  const evs = [...evRef.current];
-  const round = gs.current_round;
-
-  // Bug 1 fix: create a brand‑new Set every activation
-  const activationFiredSet = new Set();
-const activateUnit = async (unit, gs) => {
-  // Bug 2 fix: Guard against double-activation
-  const alreadyActivated = new Set(gsRef.current.units_activated || []);
-  if (alreadyActivated.has(unit.id)) {
-    console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
-    return;
-  }
-
-  // Always work on a fresh copy of the unit from gs
-  const dmn = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
-  const agent = dmn;
-  dmnRef.current = dmn;
-  const rules = rulesRef.current;
-  const logger = loggerRef.current;
-  gs._rulesEngine = rules;
-
-  setActiveUnit(unit);
-  const evs = [...evRef.current];
-  const round = gs.current_round;
-
-  // Bug 1 fix: create a brand‑new Set every activation
-  const activationFiredSet = new Set();
-  unit._firedThisActivation = activationFiredSet;
-
-  // Bug 6 fix: Shaken units MUST spend activation idle
-  if (unit.status === 'shaken') {
-    unit.status = 'normal';
-    evs.push({
-      round, type: 'morale',
-      message: `${unit.name} is Shaken — spends activation idle, recovers Shaken status`,
-      timestamp: new Date().toLocaleTimeString()
-    });
-    logger?.logMorale({
-      round, unit, outcome: 'recovered', roll: null, qualityTarget: null,
-      dmnReason: 'Shaken — idle activation, shaken removed'
-    });
-    unit.just_charged = false;
-    // Use a different name to avoid conflict with the later nextAgent
-    const nextAgentShaken = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-    const activatedSetShaken = new Set(gsRef.current.units_activated || []);
-    activatedSetShaken.add(unit.id);
-    evRef.current = evs;
-    commitState({ ...gsRef.current, units_activated: Array.from(activatedSetShaken), active_agent: nextAgentShaken }, evs);
+    const activatedSetFinal = new Set(latestGs.units_activated || []);
+    activatedSetFinal.add(liveUnit.id);
+    const updatedGs = {
+      ...latestGs,
+      units_activated: Array.from(activatedSetFinal),
+      active_agent: nextAgent,
+    };
+    commitState(updatedGs, evRef.current);
     setActiveUnit(null);
-    return;
-  }
-
-  const canAct = true;
-
-  // Commit state immediately after shaken check
-  evRef.current = evs;
-  const tempGs = { ...gsRef.current };
-  commitState(tempGs, evs);
-
-  // Heroic Action (Advance Rule)
-  const advRules = gs.advance_rules || {};
-  const isHero = unit.special_rules?.toLowerCase().includes('hero') || unit.special_rules?.match(/Tough\(\d+\)/);
-  const useHeroic = advRules.heroicActions && isHero && !unit.heroic_action_used && unit.current_models <= unit.total_models * 0.5;
-  if (useHeroic) {
-    unit.heroic_action_used = true;
-    evs.push({
-      round, type: 'ability',
-      message: `${unit.name} uses a Heroic Action — all dice re‑rolled this activation!`,
-      timestamp: new Date().toLocaleTimeString()
-    });
-    logger?.logAbility({ round, unit, ability: 'Heroic Action', details: { trigger: 'below half wounds' } });
-  }
-
-  // DMN action selection
-  const agentDecision = await agent.decideAction(unit, gs);
-  const selectedAction = agentDecision.action;
-
-  setCurrentDecision({
-    unit,
-    options: agentDecision.options || [],
-    dmn_phase: 'Action Selection',
-    reasoning: agentDecision.reasoning || `(${unit.x.toFixed(0)}, ${unit.y.toFixed(0)}) → ${selectedAction}`
-  });
-
-  await new Promise(r => setTimeout(r, 300));
-  await executeAction(unit, selectedAction, canAct, gs, evs, agentDecision);
-
-  // Overrun handled inside executeAction
-
-  // Mark activated, flip agent
-  unit.just_charged = false;
-  const nextAgent = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-  const latestGs = gsRef.current;
-  const activatedSetFinal = new Set(latestGs.units_activated || []);
-  activatedSetFinal.add(unit.id);
-  const updatedGs = {
-    ...latestGs,
-    units_activated: Array.from(activatedSetFinal),
-    active_agent: nextAgent,
   };
-  commitState(updatedGs, evRef.current);
-  setActiveUnit(null);
-}; // <-- This closing brace ends the activateUnit function
 
   // ─── EXECUTE ACTION ───────────────────────────────────────────────────────────
 
-    const executeAction = async (unit, action, canAct, gs, evs, agentDecision = null) => {
-    
+  const executeAction = async (unit, action, canAct, gs, evs, agentDecision = null) => {
     const round = gs.current_round;
     const dmn = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
     const agent = dmn;
@@ -1096,15 +912,13 @@ const activateUnit = async (unit, gs) => {
     const logger = loggerRef.current;
     const tracking = actionTrackingRef.current;
     tracking[unit.owner][action] = (tracking[unit.owner][action] || 0) + 1;
-    
-      // Use reasoning from the agent decision we already made; fall back to re-evaluating
-      // only if agentDecision was not passed (e.g. called from somewhere else).
-      const dmnReason = agentDecision?.reasoning
-        ?? (() => {
-            const opts = dmn.evaluateActionOptions(unit, gs, unit.owner);
-            const top  = opts.sort((a, b) => b.score - a.score)[0];
-            return top ? `${top.action} scored ${top.score.toFixed(2)}` : action;
-          })();
+
+    const dmnReason = agentDecision?.reasoning
+      ?? (() => {
+          const opts = dmn.evaluateActionOptions(unit, gs, unit.owner);
+          const top  = opts.sort((a, b) => b.score - a.score)[0];
+          return top ? `${top.action} scored ${top.score.toFixed(2)}` : action;
+        })();
 
     if (canAct) await attemptSpellCasting(unit, gs, evs);
 
@@ -1128,25 +942,25 @@ const activateUnit = async (unit, gs) => {
       if (canAct) await attemptShooting(unit, gs, evs, dmnReason);
 
     } else if (action === 'Rush') {
-        const rushTarget = await agent.decideMovement(
-          unit,
-          gs.objectives,
-          gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0),
-          gs
-        );
-        if (rushTarget) {
-          const result = rules.executeMovement(unit, action, rushTarget, gs.terrain);
-          const zone = rules.getZone(unit.x, unit.y);
-          const dangerWounds = rules.checkDangerousTerrain(unit, gs.terrain, 'Rush');
-          if (dangerWounds > 0) {
-            unit.current_models = Math.max(0, unit.current_models - dangerWounds);
-            evs.push({ round, type: 'combat', message: `⚠ ${unit.name} hit dangerous terrain during Rush! -${dangerWounds} wound(s)`, timestamp: new Date().toLocaleTimeString() });
-            if (unit.current_models <= 0) unit.status = 'destroyed';
-          }
-          evs.push({ round, type: 'movement', message: `${unit.name} rushed ${result.distance.toFixed(1)}"`, timestamp: new Date().toLocaleTimeString() });
-          logger?.logMove({ round, actingUnit: unit, action, distance: result.distance, zone, dmnReason });
+      const rushTarget = await agent.decideMovement(
+        unit,
+        gs.objectives,
+        gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0),
+        gs
+      );
+      if (rushTarget) {
+        const result = rules.executeMovement(unit, action, rushTarget, gs.terrain);
+        const zone = rules.getZone(unit.x, unit.y);
+        const dangerWounds = rules.checkDangerousTerrain(unit, gs.terrain, 'Rush');
+        if (dangerWounds > 0) {
+          unit.current_models = Math.max(0, unit.current_models - dangerWounds);
+          evs.push({ round, type: 'combat', message: `⚠ ${unit.name} hit dangerous terrain during Rush! -${dangerWounds} wound(s)`, timestamp: new Date().toLocaleTimeString() });
+          if (unit.current_models <= 0) unit.status = 'destroyed';
         }
-        unit.rounds_without_offense = (unit.rounds_without_offense || 0) + 1;
+        evs.push({ round, type: 'movement', message: `${unit.name} rushed ${result.distance.toFixed(1)}"`, timestamp: new Date().toLocaleTimeString() });
+        logger?.logMove({ round, actingUnit: unit, action, distance: result.distance, zone, dmnReason });
+      }
+      unit.rounds_without_offense = (unit.rounds_without_offense || 0) + 1;
 
     } else if (action === 'Charge') {
       const enemies = gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed');
@@ -1155,44 +969,38 @@ const activateUnit = async (unit, gs) => {
         unit.just_charged = true;
         rules.executeMovement(unit, action, target, gs.terrain);
         const zone = rules.getZone(unit.x, unit.y);
-        // Dangerous terrain check on charge move
         const chargeDangerWounds = rules.checkDangerousTerrain(unit, gs.terrain, 'Charge');
         if (chargeDangerWounds > 0) {
           unit.current_models = Math.max(0, unit.current_models - chargeDangerWounds);
           evs.push({ round, type: 'combat', message: `⚠ ${unit.name} hit dangerous terrain during Charge! -${chargeDangerWounds} wound(s)`, timestamp: new Date().toLocaleTimeString() });
           if (unit.current_models <= 0) { unit.status = 'destroyed'; }
         }
-        // Bug 3+4 fix: capture target state BEFORE melee; add special_rules_applied to charge event
         const chargeSpecialRules = [];
         if (unit.special_rules?.includes('Furious')) chargeSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack in melee on charge' });
         if (unit.special_rules?.includes('Rage')) chargeSpecialRules.push({ rule: 'Rage', value: null, effect: 'charge modifier' });
-        // Bug 3 fix: Impact resolves HERE at charge time, for the charging unit only.
-        // It must NOT be applied inside resolveMeleeStrikes (defender Impact is never triggered).
         const impactSpecialStr = Array.isArray(unit.special_rules) ? unit.special_rules.join(' ') : (unit.special_rules || '');
         const impactChargeMatch = impactSpecialStr.match(/Impact\((\d+)\)/);
+        const liveTarget = gs.units.find(u => u.id === target.id);
         if (impactChargeMatch && !unit.fatigued && liveTarget && liveTarget.current_models > 0) {
           const impactDice = parseInt(impactChargeMatch[1]);
           const impactHits = Array.from({ length: impactDice }, () => rules.dice.roll()).filter(r => r >= 2).length;
           if (impactHits > 0) {
-            const impactWounds = impactHits; // Impact hits have no AP, no Deadly — 1 wound per hit
+            const impactWounds = impactHits;
             liveTarget.current_models = Math.max(0, liveTarget.current_models - impactWounds);
             if (liveTarget.current_models <= 0) liveTarget.status = 'destroyed';
             chargeSpecialRules.push({ rule: 'Impact', value: impactDice, effect: `${impactHits} hits (2+) from ${impactDice} dice → ${impactWounds} wounds` });
             evs.push({ round, type: 'combat', message: `⚡ ${unit.name} Impact(${impactDice}): ${impactHits} hits → ${impactWounds} wounds on ${target.name}`, timestamp: new Date().toLocaleTimeString() });
           }
         }
-
         evs.push({ round, type: 'movement', message: `${unit.name} charges ${target.name}!`, timestamp: new Date().toLocaleTimeString() });
         logger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: null, zone, dmnReason, chargeTarget: target.name, chargeTargetState: { wounds_remaining: target.current_models, max_wounds: target.total_models, status: target.status || 'normal' }, chargeSpecialRules });
-        // Guard: no overwatch in OPR — charger should never be dead here, but be safe
         if (unit.current_models <= 0 || unit.status === 'destroyed') {
           evs.push({ round, type: 'warning', message: `${unit.name} destroyed before melee — skipping combat`, timestamp: new Date().toLocaleTimeString() });
         } else {
-          const liveTarget = gs.units.find(u => u.id === target.id);
-            if (!liveTarget || liveTarget.current_models <= 0) {
-              evs.push({ round, type: 'movement', message: `${unit.name} charge target ${target.name} already destroyed — no melee`, timestamp: new Date().toLocaleTimeString() });
-            } else {
-              const killedTarget = await resolveMelee(unit, liveTarget, gs, evs, dmnReason, unit.name);
+          if (!liveTarget || liveTarget.current_models <= 0) {
+            evs.push({ round, type: 'movement', message: `${unit.name} charge target ${target.name} already destroyed — no melee`, timestamp: new Date().toLocaleTimeString() });
+          } else {
+            const killedTarget = await resolveMelee(unit, liveTarget, gs, evs, dmnReason, unit.name);
             unit.rounds_without_offense = 0;
             if (killedTarget && gs.advance_rules?.overrun) {
               const dx = (Math.random() - 0.5) * 6;
@@ -1218,7 +1026,7 @@ const activateUnit = async (unit, gs) => {
     evRef.current = evs;
     rules.updateObjectives(gs);
   };
-
+  
   // ─── SPELL CASTING ────────────────────────────────────────────────────────────
   // Called before attacking for any unit with Caster(X) that has enough tokens.
   // AI strategy: cast any spell whose cost <= available tokens, targeting nearest enemy.
