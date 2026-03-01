@@ -1,18 +1,22 @@
 import { DiceRoller } from './GameEngine';
+import { RuleRegistry } from './RuleRegistry';
+import { OPR_RULES } from './rules/opr-rules';
 
 export class RulesEngine {
   /**
-   * Self-contained — no external rule registry required.
-   * All special-rule lookups use fast string matching on the normalised
-   * special_rules field, identical to the original engine's approach.
-   *
-   * The registry parameter is accepted but ignored, so code that passes
-   * one won't break. When you later add RuleRegistry.js and opr-rules.js
-   * you can re-enable the registry path without touching anything else.
+   * @param {RuleRegistry} [registry] — inject a custom registry to support a different game.
+   * Defaults to OPR rules. Swap this out and the engine supports any game system.
    */
-  constructor(_registry = null) {
+  constructor(registry = null) {
     this.dice = new DiceRoller();
     this.limitedWeaponsUsed = new Map();
+    this.registry = registry ?? this._buildDefaultRegistry();
+  }
+
+  _buildDefaultRegistry() {
+    const reg = new RuleRegistry();
+    reg.registerAll(OPR_RULES);
+    return reg;
   }
 
   // ─── Internal helpers ─────────────────────────────────────────────────────
@@ -26,25 +30,14 @@ export class RulesEngine {
     return typeof special_rules === 'string' ? special_rules : '';
   }
 
-  /**
-   * True if special_rules contains the named rule.
-   * Accepts arrays, objects, or plain strings — same as _rulesStr.
-   */
+  /** True if the unit/weapon has the named rule. */
   _has(special_rules, ruleName) {
-    return this._rulesStr(special_rules).includes(ruleName);
+    return this.registry.has(special_rules, ruleName);
   }
 
-  /**
-   * Returns the numeric parameter from a rule like Tough(6) → 6.
-   * Returns null if the rule is absent.
-   * Works for any Rule(N) pattern.
-   */
+  /** Numeric param from a rule, e.g. Tough(6) → 6. Returns null if absent. */
   _param(special_rules, ruleName) {
-    const str = this._rulesStr(special_rules);
-    // Escape any regex special chars in the rule name, then match (digits)
-    const escaped = ruleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const match = str.match(new RegExp(`\\b${escaped}\\((\\d+)\\)`));
-    return match ? parseInt(match[1], 10) : null;
+    return this.registry.getParamValue(special_rules, ruleName);
   }
 
   /** Parse AP value: weapon.ap field first, then AP(X) in special_rules. */
@@ -55,7 +48,6 @@ export class RulesEngine {
 
   /**
    * Parse Deadly(X): returns multiplier (1 = no Deadly).
-   * STRICT: only matches the exact word "Deadly" followed by "(X)".
    */
   _parseDeadly(weapon) {
     const value = this._param(weapon.special_rules, 'Deadly');
