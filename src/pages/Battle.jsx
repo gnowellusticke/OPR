@@ -986,6 +986,28 @@ const activateUnit = async (unit, gs) => {
 
   // Bug 1 fix: create a brand‑new Set every activation
   const activationFiredSet = new Set();
+const activateUnit = async (unit, gs) => {
+  // Bug 2 fix: Guard against double-activation
+  const alreadyActivated = new Set(gsRef.current.units_activated || []);
+  if (alreadyActivated.has(unit.id)) {
+    console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
+    return;
+  }
+
+  // Always work on a fresh copy of the unit from gs
+  const dmn = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
+  const agent = dmn;
+  dmnRef.current = dmn;
+  const rules = rulesRef.current;
+  const logger = loggerRef.current;
+  gs._rulesEngine = rules;
+
+  setActiveUnit(unit);
+  const evs = [...evRef.current];
+  const round = gs.current_round;
+
+  // Bug 1 fix: create a brand‑new Set every activation
+  const activationFiredSet = new Set();
   unit._firedThisActivation = activationFiredSet;
 
   // Bug 6 fix: Shaken units MUST spend activation idle
@@ -1001,18 +1023,22 @@ const activateUnit = async (unit, gs) => {
       dmnReason: 'Shaken — idle activation, shaken removed'
     });
     unit.just_charged = false;
-    const nextAgent = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
+    // Use a different name to avoid conflict with the later nextAgent
+    const nextAgentShaken = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
     const activatedSetShaken = new Set(gsRef.current.units_activated || []);
     activatedSetShaken.add(unit.id);
     evRef.current = evs;
-    commitState({ ...gsRef.current, units_activated: Array.from(activatedSetShaken), active_agent: nextAgent }, evs);
+    commitState({ ...gsRef.current, units_activated: Array.from(activatedSetShaken), active_agent: nextAgentShaken }, evs);
     setActiveUnit(null);
     return;
   }
 
+  const canAct = true;
+
   // Commit state immediately after shaken check
   evRef.current = evs;
-  commitState({ ...gsRef.current }, evs);
+  const tempGs = { ...gsRef.current };
+  commitState(tempGs, evs);
 
   // Heroic Action (Advance Rule)
   const advRules = gs.advance_rules || {};
@@ -1030,7 +1056,7 @@ const activateUnit = async (unit, gs) => {
 
   // DMN action selection
   const agentDecision = await agent.decideAction(unit, gs);
-  let selectedAction = agentDecision.action;
+  const selectedAction = agentDecision.action;
 
   setCurrentDecision({
     unit,
@@ -1040,9 +1066,9 @@ const activateUnit = async (unit, gs) => {
   });
 
   await new Promise(r => setTimeout(r, 300));
-  await executeAction(unit, selectedAction, true, gs, evs, agentDecision);
+  await executeAction(unit, selectedAction, canAct, gs, evs, agentDecision);
 
-  // Overrun (handled inside executeAction)
+  // Overrun handled inside executeAction
 
   // Mark activated, flip agent
   unit.just_charged = false;
@@ -1057,7 +1083,7 @@ const activateUnit = async (unit, gs) => {
   };
   commitState(updatedGs, evRef.current);
   setActiveUnit(null);
-};
+}; // <-- This closing brace ends the activateUnit function
 
   // ─── EXECUTE ACTION ───────────────────────────────────────────────────────────
 
