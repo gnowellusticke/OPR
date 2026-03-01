@@ -591,6 +591,10 @@ export class RulesEngine {
   // ─── Melee ────────────────────────────────────────────────────────────────
 
   resolveMelee(attacker, defender, gameState) {
+    // In resolveMelee(), before any strike resolution:
+    if (this._has(attacker.special_rules, 'Unpredictable Fighter')) {
+      attacker._unpredictableRoll = this.dice.roll();
+    }
     // Attacker always strikes
     const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
 
