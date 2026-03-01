@@ -1053,7 +1053,7 @@ export default function Battle() {
     const enemies = gs.units.filter(u => u.owner !== unit.owner && u.current_models > 0 && u.status !== 'destroyed');
     if (enemies.length === 0) return;
 
-    const target = await agent.decideTarget(unit, liveEnemies, gs);
+    const target = enemies.reduce((n, e) => rules.calculateDistance(unit, e) < rules.calculateDistance(unit, n) ? e : n);
     const dist = rules.calculateDistance(unit, target);
     const LOS_RANGE = 18;
 
