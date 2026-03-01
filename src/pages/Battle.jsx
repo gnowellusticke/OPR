@@ -821,13 +821,12 @@ export default function Battle() {
     }
 
     // Always work on a fresh copy of the unit from gs
-    const liveUnit = gsRef.current.units.find(u => u.id === unit.id);
-    if (!liveUnit || liveUnit.current_models <= 0) {
-      // Unit died before activation — just mark it and move on
-      const newGs = { ...gsRef.current, units_activated: [...(gsRef.current.units_activated || []), unit.id], active_agent: gsRef.current.active_agent === 'agent_a' ? 'agent_b' : 'agent_a' };
-      commitState(newGs);
-      return;
-    }
+    const dmn = liveUnit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
+const agent = dmn;              // ← add this
+dmnRef.current = dmn;
+const rules = rulesRef.current;
+const logger = loggerRef.current;
+gs._rulesEngine = rules;        // ← move it to here, after rules is declared
 
     setActiveUnit(liveUnit);
     const evs = [...evRef.current];
