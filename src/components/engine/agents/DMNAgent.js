@@ -44,6 +44,14 @@ export class DMNAgent extends Agent {
       ? `${selected.action} scored ${selected.score.toFixed(2)}${topDetails ? ': ' + topDetails : ''}`
       : 'Hold (fallback)';
 
+        // At the end of decideAction(), before the return:
+      if ((unit.special_rules || '').includes('Versatile Attack')) {
+        const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
+        const nearestEnemy = this.dmn.findNearestEnemy(unit, enemies);
+        const enemyDefense = nearestEnemy?.defense ?? 4;
+        unit._versatileMode = enemyDefense <= 3 ? 'ap' : 'quality';
+      }
+    
     return {
       action:    selected?.action || 'Hold',
       reasoning,
