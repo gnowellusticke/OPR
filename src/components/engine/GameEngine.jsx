@@ -292,7 +292,7 @@ export class DMNEngine {
     return {
       isWinning, isLosing, myStrength, enemyStrength, strengthRatio,
       myObjectives, enemyObjectives,
-      roundsRemaining: Math.max(0, 5 - round),
+      roundsRemaining: Math.max(0, 4 - round),
       round
     };
   }
