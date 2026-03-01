@@ -811,54 +811,7 @@ export default function Battle() {
   // ─── ACTIVATE ─────────────────────────────────────────────────────────────────
 
 const activateUnit = async (unit, gs) => {
-  // Bug 2 fix: Guard against double-activation — all unit types (infantry, vehicle, hero)
-  // Read from the latest ref, not the stale gs closure
-  const alreadyActivated = new Set(gsRef.current.units_activated || []);
-  if (alreadyActivated.has(unit.id)) {
-    console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
-    return;
-  }
-
-  // Always work on a fresh copy of the unit from gs
-  const dmn = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
-  const agent = dmn;
-  dmnRef.current = dmn;
-  const rules = rulesRef.current;
-  const logger = loggerRef.current;
-  gs._rulesEngine = rules;
-
-  setActiveUnit(unit);
-  const evs = [...evRef.current];
-  const round = gs.current_round;
-
-  // Bug 1 fix: create a brand-new Set every activation. Storing on the unit object caused
-  // the set to persist across rounds (never cleared), so by R4 a unit had accumulated all
-  // weapon keys from previous rounds and fired each weapon once per round it had been used.
-  // The Set must be local to this activation closure — do NOT store it on the unit.
-  const activationFiredSet = new Set();
-  unit._firedThisActivation = activationFiredSet;
-
-  // Bug 6 fix: Shaken units MUST spend activation idle (OPR rule).
-  // The unit spends its activation doing nothing — shaken is removed at end of idle turn.
-  // No DMN scoring, no shooting, no charging allowed while shaken.
-  if (unit.status === 'shaken') {
-    unit.status = 'normal'; // shaken removed by spending activation idle
-    evs.push({ round, type: 'morale', message: `${unit.name} is Shaken — spends activation idle, recovers Shaken status`, timestamp: new Date().toLocaleTimeString() });
-    logger?.logMorale({ round, unit, outcome: 'recovered', roll: null, qualityTarget: null, dmnReason: 'Shaken — idle activation, shaken removed' });
-    unit.just_charged = false;
-    const nextAgent = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-    const activatedSetShaken = new Set(gsRef.current.units_activated || []);
-    activatedSetShaken.add(unit.id);
-    evRef.current = evs;
-    commitState({ ...gsRef.current, units_activated: Array.from(activatedSetShaken), active_agent: nextAgent }, evs);
-    setActiveUnit(null);
-    return;
-  }
-  const canAct = true;
-
-const activateUnit = async (unit, gs) => {
-  // Bug 2 fix: Guard against double-activation — all unit types (infantry, vehicle, hero)
-  // Read from the latest ref, not the stale gs closure
+  // Bug 2 fix: Guard against double-activation
   const alreadyActivated = new Set(gsRef.current.units_activated || []);
   if (alreadyActivated.has(unit.id)) {
     console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
@@ -884,66 +837,26 @@ const activateUnit = async (unit, gs) => {
   // Bug 6 fix: Shaken units MUST spend activation idle
   if (unit.status === 'shaken') {
     unit.status = 'normal';
-    evs.push({ 
-      round, type: 'morale', 
-      message: `${unit.name} is Shaken — spends activation idle, recovers Shaken status`, 
-      timestamp: new Date().toLocaleTimeString() 
+    evs.push({
+      round, type: 'morale',
+      message: `${unit.name} is Shaken — spends activation idle, recovers Shaken status`,
+      timestamp: new Date().toLocaleTimeString()
     });
-    logger?.logMorale({ 
-      round, unit, outcome: 'recovered', roll: null, qualityTarget: null, 
-      dmnReason: 'Shaken — idle activation, shaken removed' 
+    logger?.logMorale({
+      round, unit, outcome: 'recovered', roll: null, qualityTarget: null,
+      dmnReason: 'Shaken — idle activation, shaken removed'
     });
     unit.just_charged = false;
-    const nextAgent = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
+    // Use a different name to avoid conflict with the later nextAgent
+    const nextAgentShaken = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
     const activatedSetShaken = new Set(gsRef.current.units_activated || []);
     activatedSetShaken.add(unit.id);
     evRef.current = evs;
-const activateUnit = async (unit, gs) => {
-  // Bug 2 fix: Guard against double-activation — all unit types (infantry, vehicle, hero)
-  // Read from the latest ref, not the stale gs closure
-  const alreadyActivated = new Set(gsRef.current.units_activated || []);
-  if (alreadyActivated.has(unit.id)) {
-    console.warn(`[DOUBLE-ACTIVATION GUARD] ${unit.name} (${unit.id}) already activated this round — skipping`);
-    return;
-  }
-
-  // Always work on a fresh copy of the unit from gs
-  const dmn = unit.owner === 'agent_a' ? dmnARef.current : dmnBRef.current;
-  const agent = dmn;
-  dmnRef.current = dmn;
-  const rules = rulesRef.current;
-  const logger = loggerRef.current;
-  gs._rulesEngine = rules;
-
-  setActiveUnit(unit);
-  const evs = [...evRef.current];
-  const round = gs.current_round;
-
-  // Bug 1 fix: create a brand-new Set every activation
-  const activationFiredSet = new Set();
-  unit._firedThisActivation = activationFiredSet;
-
-  // Bug 6 fix: Shaken units MUST spend activation idle
-  if (unit.status === 'shaken') {
-    unit.status = 'normal';
-    evs.push({ 
-      round, type: 'morale', 
-      message: `${unit.name} is Shaken — spends activation idle, recovers Shaken status`, 
-      timestamp: new Date().toLocaleTimeString() 
-    });
-    logger?.logMorale({ 
-      round, unit, outcome: 'recovered', roll: null, qualityTarget: null, 
-      dmnReason: 'Shaken — idle activation, shaken removed' 
-    });
-    unit.just_charged = false;
-    const nextAgent = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
-    const activatedSetShaken = new Set(gsRef.current.units_activated || []);
-    activatedSetShaken.add(unit.id);
-    evRef.current = evs;
-    commitState({ ...gsRef.current, units_activated: Array.from(activatedSetShaken), active_agent: nextAgent }, evs);
+    commitState({ ...gsRef.current, units_activated: Array.from(activatedSetShaken), active_agent: nextAgentShaken }, evs);
     setActiveUnit(null);
     return;
   }
+
   const canAct = true;
 
   // Commit state immediately after shaken check
@@ -951,19 +864,50 @@ const activateUnit = async (unit, gs) => {
   const tempGs = { ...gsRef.current };
   commitState(tempGs, evs);
 
-  // ── Heroic Action (Advance Rule) ──────────────────────────────────────────
+  // Heroic Action (Advance Rule)
   const advRules = gs.advance_rules || {};
   const isHero = unit.special_rules?.toLowerCase().includes('hero') || unit.special_rules?.match(/Tough\(\d+\)/);
   const useHeroic = advRules.heroicActions && isHero && !unit.heroic_action_used && unit.current_models <= unit.total_models * 0.5;
   if (useHeroic) {
     unit.heroic_action_used = true;
-    evs.push({ 
-      round, type: 'ability', 
-      message: `${unit.name} uses a Heroic Action — all dice re-rolled this activation!`, 
-      timestamp: new Date().toLocaleTimeString() 
+    evs.push({
+      round, type: 'ability',
+      message: `${unit.name} uses a Heroic Action — all dice re-rolled this activation!`,
+      timestamp: new Date().toLocaleTimeString()
     });
     logger?.logAbility({ round, unit, ability: 'Heroic Action', details: { trigger: 'below half wounds' } });
   }
+
+  // DMN action selection
+  const agentDecision = await agent.decideAction(unit, gs);
+  const selectedAction = agentDecision.action;
+
+  setCurrentDecision({
+    unit,
+    options: agentDecision.options || [],
+    dmn_phase: 'Action Selection',
+    reasoning: agentDecision.reasoning || `(${unit.x.toFixed(0)}, ${unit.y.toFixed(0)}) → ${selectedAction}`
+  });
+
+  await new Promise(r => setTimeout(r, 300));
+  await executeAction(unit, selectedAction, canAct, gs, evs, agentDecision);
+
+  // Overrun handled inside executeAction
+
+  // Mark activated, flip agent
+  unit.just_charged = false;
+  const nextAgent = unit.owner === 'agent_a' ? 'agent_b' : 'agent_a';
+  const latestGs = gsRef.current;
+  const activatedSetFinal = new Set(latestGs.units_activated || []);
+  activatedSetFinal.add(unit.id);
+  const updatedGs = {
+    ...latestGs,
+    units_activated: Array.from(activatedSetFinal),
+    active_agent: nextAgent,
+  };
+  commitState(updatedGs, evRef.current);
+  setActiveUnit(null);
+};
 
   // ── DMN action selection ──────────────────────────────────────────────────
   const agentDecision = await agent.decideAction(unit, gs);
