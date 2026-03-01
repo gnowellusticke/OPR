@@ -18,12 +18,14 @@ export class DMNAgent extends Agent {
     this.dmn = dmnEngine;
   }
 
-  // ── Passthrough helpers so Battle.jsx can still call these directly ─────────
+// ── Passthrough helpers so Battle.jsx can still call these directly ─────────
   // (used in deployment phase and a few other places that bypass decideAction)
   get learningData() { return this.dmn.learningData; }
   findNearestEnemy(unit, enemies) { return this.dmn.findNearestEnemy(unit, enemies); }
   findNearestObjective(unit, objectives) { return this.dmn.findNearestObjective(unit, objectives); }
   evaluateActionOptions(unit, gs, owner) { return this.dmn.evaluateActionOptions(unit, gs, owner); }
+  selectTarget(unit, enemies) { return this.dmn.selectTarget(unit, enemies); }
+  scoreTarget(unit, enemy, all) { return this.dmn.scoreTarget(unit, enemy, all); }
   async loadLearningData(armyId) { return this.dmn.loadLearningData(armyId); }
   setPersonality(p) { return this.dmn.setPersonality(p); }
 
