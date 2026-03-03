@@ -32,7 +32,14 @@ export const DAO_UNION_RULES = {
 
   'Targeting Visor Boost Aura': {
     description: 'This model and its unit get Targeting Visor Boost.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Targeting Visor Boost Aura')) {
+          return { additionalRules: ['Targeting Visor Boost'] };
+        }
+        return {};
+      },
+    },
   },
 
   // ── Good Shot ─────────────────────────────────────────────────────────────
@@ -74,7 +81,14 @@ export const DAO_UNION_RULES = {
 
   'Fortified Aura': {
     description: 'This model and its unit get Fortified.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Fortified Aura')) {
+          return { additionalRules: ['Fortified'] };
+        }
+        return {};
+      },
+    },
   },
 
   // ── Decimate ──────────────────────────────────────────────────────────────
@@ -131,47 +145,101 @@ export const DAO_UNION_RULES = {
 
   'Ranged Slayer Aura': {
     description: 'This model and its unit get Ranged Slayer.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Ranged Slayer Aura')) {
+          return { additionalRules: ['Ranged Slayer'] };
+        }
+        return {};
+      },
+    },
   },
 
   // ── Counter-Attack ────────────────────────────────────────────────────────
   'Counter-Attack': {
     description: 'Strikes first when charged.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_STRIKE_ORDER]: ({ defender, specialRulesApplied }) => {
+        if (defender.rules.includes('Counter-Attack')) {
+          specialRulesApplied.push({ rule: 'Counter-Attack', effect: 'defender strikes first' });
+          return { attackerFirst: false };
+        }
+        return {};
+      },
+    },
   },
 
   'Counter-Attack Aura': {
     description: 'This model and its unit get Counter-Attack.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Counter-Attack Aura')) {
+          return { additionalRules: ['Counter-Attack'] };
+        }
+        return {};
+      },
+    },
   },
 
   // ── Melee Shrouding ───────────────────────────────────────────────────────
   'Melee Shrouding': {
     description: 'Enemies get -3" movement when trying to charge this unit.',
-    hooks: {},
+    hooks: {
+      // Applied by the engine when calculating charge distance.
+      // We can use a hook that modifies charge range.
+      // For now, we'll note that the engine should check for this rule and reduce charger's speed by 3.
+    },
   },
 
   'Melee Shrouding Aura': {
     description: 'This model and its unit get Melee Shrouding.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Melee Shrouding Aura')) {
+          return { additionalRules: ['Melee Shrouding'] };
+        }
+        return {};
+      },
+    },
   },
 
   // ── Strafing ──────────────────────────────────────────────────────────────
   Strafing: {
     description: 'Once per activation, when this model moves through enemy units, attack one with this weapon as if shooting.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_MOVE_THROUGH_ENEMY]: ({ unit, enemyUnit, weapon, specialRulesApplied }) => {
+        if (unit._strafingUsed) return {};
+        unit._strafingUsed = true;
+        specialRulesApplied.push({ rule: 'Strafing', effect: `attacking ${enemyUnit.name}` });
+        return { strafingAttack: { target: enemyUnit, weapon } };
+      },
+    },
   },
 
   // ── Precision Spotter ─────────────────────────────────────────────────────
   'Precision Spotter': {
     description: 'Once per activation, pick one enemy within 36" LOS and roll one die — on 4+ place a marker. Friendlies remove markers before rolling to hit for +X to hit.',
     hooks: {
+      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
+        if (unit._precisionSpotterUsed) return {};
+        // In a real game, the player/AI would pick a target. For simplicity, pick the nearest enemy.
+        const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
+        if (enemies.length === 0) return {};
+        const target = enemies.reduce((a, b) => this.calculateDistance?.(unit, a) < this.calculateDistance?.(unit, b) ? a : b);
+        const roll = dice.roll();
+        if (roll >= 4) {
+          target.precision_markers = (target.precision_markers || 0) + 1;
+          unit._precisionSpotterUsed = true;
+          specialRulesApplied.push({ rule: 'Precision Spotter', effect: `placed marker on ${target.name}` });
+        }
+        return {};
+      },
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, target, quality, specialRulesApplied }) => {
-        if (!target || !unit._precisionTarget) return {};
-        const markers = target.precision_markers ?? 0;
-        if (markers <= 0 || unit._precisionTarget !== target.id) return {};
+        if (!target || !target.precision_markers) return {};
+        // Consume one marker (simplified: remove all)
+        const markers = target.precision_markers;
         target.precision_markers = 0;
-        specialRulesApplied.push({ rule: 'Precision Spotter', value: markers, effect: `removed ${markers} marker(s) → quality -${markers}` });
+        specialRulesApplied.push({ rule: 'Precision Spotter', value: markers, effect: `removed markers, +${markers} to hit` });
         return { quality: Math.max(2, quality - markers) };
       },
     },
@@ -181,13 +249,21 @@ export const DAO_UNION_RULES = {
   'Piercing Shooting Mark': {
     description: 'Once per activation, pick one enemy within 18" — friendlies get AP(+1) when shooting against it.',
     hooks: {
+      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
+        if (unit._piercingShootingMarkUsed) return {};
+        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        if (target) {
+          target.piercing_shooting_mark = true;
+          unit._piercingShootingMarkUsed = true;
+          specialRulesApplied.push({ rule: 'Piercing Shooting Mark', effect: `marked ${target.name}` });
+        }
+        return {};
+      },
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ target, ap, isMelee, specialRulesApplied }) => {
-        if (isMelee || !target) return {};
-        const bonus = target?.piercing_shooting_ap_bonus ?? 0;
-        if (bonus <= 0) return {};
-        const newAp = (ap ?? 0) + bonus;
-        specialRulesApplied.push({ rule: 'Piercing Shooting Mark', value: bonus, effect: `+AP(${bonus}) from mark (shooting) → AP(${newAp})` });
-        return { ap: newAp };
+        if (isMelee || !target?.piercing_shooting_mark) return {};
+        delete target.piercing_shooting_mark; // consume
+        specialRulesApplied.push({ rule: 'Piercing Shooting Mark', effect: 'AP+1 from mark' });
+        return { ap: (ap ?? 0) + 1 };
       },
     },
   },
@@ -195,7 +271,21 @@ export const DAO_UNION_RULES = {
   // ── Ambush Beacon ─────────────────────────────────────────────────────────
   'Ambush Beacon': {
     description: 'Friendly units using Ambush may ignore distance restrictions from enemies if deployed within 6" of this model.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_RESERVE_ENTRY]: ({ unit, gameState }) => {
+        // Called when a unit is being deployed from reserve.
+        // Check if there is a friendly Ambush Beacon within 6" of the intended deployment point.
+        // The intended point is not passed in this context; we need to modify the deployment logic in the engine.
+        // As a workaround, we'll add a flag to the unit that indicates it can deploy closer.
+        // The engine should check for this rule when enforcing the 9" distance.
+        // We'll return a flag.
+        const beacons = gameState.units.filter(u => u.owner === unit.owner && u.rules.includes('Ambush Beacon') && u.distanceTo(unit) <= 6);
+        if (beacons.length > 0) {
+          return { ignoreDistanceRestriction: true };
+        }
+        return {};
+      },
+    },
   },
 
   // ── Increased Shooting Range ──────────────────────────────────────────────
@@ -211,6 +301,13 @@ export const DAO_UNION_RULES = {
 
   'Increased Shooting Range Aura': {
     description: 'This model and its unit get +6" range when shooting.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Increased Shooting Range Aura')) {
+          return { additionalRules: ['Increased Shooting Range'] };
+        }
+        return {};
+      },
+    },
   },
 };
