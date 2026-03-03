@@ -979,17 +979,14 @@ export default function Battle() {
         if (unit.special_rules?.includes('Furious')) chargeSpecialRules.push({ rule: 'Furious', value: null, effect: 'extra attack in melee on charge' });
         if (unit.special_rules?.includes('Rage')) chargeSpecialRules.push({ rule: 'Rage', value: null, effect: 'charge modifier' });
         const impactSpecialStr = Array.isArray(unit.special_rules) ? unit.special_rules.join(' ') : (unit.special_rules || '');
-        const impactChargeMatch = impactSpecialStr.match(/Impact\((\d+)\)/);
         const liveTarget = gs.units.find(u => u.id === target.id);
-        if (impactChargeMatch && !unit.fatigued && liveTarget && liveTarget.current_models > 0) {
-          const impactDice = parseInt(impactChargeMatch[1]);
-          const impactHits = Array.from({ length: impactDice }, () => rules.dice.roll()).filter(r => r >= 2).length;
-          if (impactHits > 0) {
-            const impactWounds = impactHits;
-            liveTarget.current_models = Math.max(0, liveTarget.current_models - impactWounds);
+        if (liveTarget && liveTarget.current_models > 0) {
+          const impact = rules.resolveImpact(unit, liveTarget);
+          if (impact.wounds > 0) {
+            liveTarget.current_models = Math.max(0, liveTarget.current_models - impact.wounds);
             if (liveTarget.current_models <= 0) liveTarget.status = 'destroyed';
-            chargeSpecialRules.push({ rule: 'Impact', value: impactDice, effect: `${impactHits} hits (2+) from ${impactDice} dice → ${impactWounds} wounds` });
-            evs.push({ round, type: 'combat', message: `⚡ ${unit.name} Impact(${impactDice}): ${impactHits} hits → ${impactWounds} wounds on ${target.name}`, timestamp: new Date().toLocaleTimeString() });
+            chargeSpecialRules.push(...impact.specialRulesApplied);
+            evs.push({ round, type: 'combat', message: `⚡ ${unit.name} Impact: ${impact.hits} hits → ${impact.wounds} wounds on ${target.name}`, timestamp: new Date().toLocaleTimeString() });
           }
         }
         evs.push({ round, type: 'movement', message: `${unit.name} charges ${target.name}!`, timestamp: new Date().toLocaleTimeString() });
@@ -1418,14 +1415,14 @@ export default function Battle() {
           loggerRef.current?.logAbility({ round: gs.current_round, unit: u, ability: 'scheduling_warning', details: { reason: 'no_activation_this_round' } });
           // Bug 3 fix: Shaken unit skipped by scheduler must still get a recovery roll at round end
           if (u.status === 'shaken') {
-            const quality = u.quality || 4;
-            const roll = rules.dice.roll();
-            const recovered = roll >= quality;
-            if (recovered) u.status = 'normal';
-            const outcome = recovered ? 'recovered' : 'still_shaken';
-            evs.push({ round: gs.current_round, type: 'morale', message: `${u.name} end-of-round Shaken recovery (not activated): rolled ${roll} vs ${quality}+ — ${recovered ? 'recovered' : 'still shaken'}`, timestamp: new Date().toLocaleTimeString() });
-            loggerRef.current?.logMorale({ round: gs.current_round, unit: u, outcome, roll, qualityTarget: quality, dmnReason: 'end-of-round shaken recovery (unit skipped by scheduler)' });
-          }
+          // Temporarily clear shaken so checkMorale doesn't auto-fail
+          u.status = 'normal';
+          const moraleResult = rules.checkMorale(u, 'recovery');
+          if (!moraleResult.passed) u.status = 'shaken';
+          const outcome = moraleResult.passed ? 'recovered' : 'still_shaken';
+          evs.push({ round: gs.current_round, type: 'morale', message: `${u.name} end-of-round Shaken recovery: rolled ${moraleResult.roll} — ${moraleResult.passed ? 'recovered' : 'still shaken'}`, timestamp: new Date().toLocaleTimeString() });
+          loggerRef.current?.logMorale({ round: gs.current_round, unit: u, outcome, roll: moraleResult.roll, qualityTarget: u.quality || 4, specialRulesApplied: moraleResult.specialRulesApplied || [], dmnReason: 'end-of-round shaken recovery (unit skipped by scheduler)' });
+        }
         });
 
         // Deploy Ambush/reserve units at the start of each new round.
