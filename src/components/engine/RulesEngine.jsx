@@ -1,5 +1,5 @@
 import { DiceRoller } from './GameEngine';
-import { RuleRegistry } from './RuleRegistry';
+import { RuleRegistry, HOOKS } from './RuleRegistry';
 import { OPR_RULES } from './rules/opr-rules';
 
 export class RulesEngine {
@@ -371,223 +371,196 @@ export class RulesEngine {
   }
 
   rollToHit(unit, weapon, target, gameState) {
-    let quality = unit.quality || 4;
-    const specialRulesApplied = [];
-    const rulesStr = this._rulesStr(weapon.special_rules);
+  let quality = unit.quality || 4;
+  const specialRulesApplied = [];
 
-    // ── FIX (Spec Bug #3): Fatigue — only unmodified 6s hit ──────────────────
-    // Applies to: units that have already fought in melee this round (charged or
-    // struck back). Shaken units striking back also count as fatigued (spec sb_r2).
-    if (unit.fatigued) {
-      // Force quality to 7 so rollQualityTest succeeds only on natural 6s
-      quality = 7;
-      specialRulesApplied.push({ rule: 'Fatigued', value: null, effect: 'only unmodified 6s hit' });
-      const attacks = weapon.attacks || 1;
-      const rolls = this.dice.rollQualityTest(quality, attacks);
-      // Natural 6s still succeed even though quality > 6
-      rolls.forEach(r => { r.success = r.value === 6; });
-      const successes = rolls.filter(r => r.success).length;
-      return { rolls, successes, specialRulesApplied, blast: false };
-    }
-
-    // ── Quality modifiers ─────────────────────────────────────────────────────
-
-    // Shaken: quality +1 when shooting during own activation.
-    // Per spec, shaken units should be idle — but as a safety net for edge cases:
-    if (unit.status === 'shaken') {
-      quality = Math.min(6, quality + 1);
-      specialRulesApplied.push({ rule: 'Shaken', value: null, effect: 'quality +1 (harder to hit)' });
-    }
-
-    if (this._has(target?.special_rules, 'Machine-Fog')) {
-      quality = Math.min(6, quality + 1);
-      specialRulesApplied.push({ rule: 'Machine-Fog', value: null, effect: 'quality +1 vs target' });
-    }
-
-    if (target && this.hasStealth(target, gameState) && weapon.range > 2) {
-      quality = Math.min(6, quality + 1);
-      specialRulesApplied.push({ rule: 'Stealth', value: null, effect: 'quality +1 vs stealthed target' });
-    }
-
-    if (unit.just_charged && rulesStr.includes('Thrust')) {
-      quality = Math.max(2, quality - 1);
-      specialRulesApplied.push({ rule: 'Thrust', value: null, effect: 'quality -1 (easier) on charge' });
-    }
-
-    if (rulesStr.includes('Indirect')) {
-      quality = Math.min(6, quality + 1);
-      specialRulesApplied.push({ rule: 'Indirect', value: null, effect: 'quality +1 (indirect fire penalty)' });
-    }
-
-    if (rulesStr.includes('Artillery') && target && this.calculateDistance(unit, target) > 9) {
-      quality = Math.max(2, quality - 1);
-      specialRulesApplied.push({ rule: 'Artillery', value: null, effect: 'quality -1 at 9"+ range' });
-    }
-
-    if (rulesStr.includes('Reliable')) {
-      quality = 2;
-      specialRulesApplied.push({ rule: 'Reliable', value: null, effect: 'attacks at Quality 2+' });
-    }
-
-    // ── Blast(X): X automatic hits, no quality roll ───────────────────────────
-    const blastMatch = rulesStr.match(/\bBlast\((\d+)\)/)
-      || (weapon.blast === true && weapon.blast_x ? ['', weapon.blast_x] : null)
-      || (weapon.name || '').match(/Blast[\s-]?(\d+)/i);
-    if (blastMatch) {
-      const blastCount = parseInt(blastMatch[1]);
-      const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
-      specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
-      return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
-    }
-
-    // ── Roll to hit ───────────────────────────────────────────────────────────
+  // ── Fatigue: status check, stays inline ─────────────────────────────────
+  if (unit.fatigued) {
+    quality = 7;
+    specialRulesApplied.push({ rule: 'Fatigued', value: null, effect: 'only unmodified 6s hit' });
     const attacks = weapon.attacks || 1;
     const rolls = this.dice.rollQualityTest(quality, attacks);
-    let successes = rolls.filter(r => r.success).length;
-
-    // ── Furious (unit rule): +1 hit per unmodified 6 ─────────────────────────
-    // Guard: skip if the weapon itself already has Furious (prevents double-counting)
-    if (unit.special_rules?.includes('Furious') && !rulesStr.includes('Furious')) {
-      const naturalSixes = rolls.filter(r => r.value === 6 && r.success).length;
-      if (naturalSixes > 0) {
-        successes += naturalSixes;
-        specialRulesApplied.push({ rule: 'Furious', value: null, effect: `${naturalSixes} natural 6s → ${naturalSixes} extra hits` });
-      }
-    }
-
-    // ── Relentless: extra hit from 6s at 9"+ range (extras don't count as 6s) ─
-    if (rulesStr.includes('Relentless') && target && this.calculateDistance(unit, target) > 9) {
-      const naturalSixes = rolls.filter(r => r.value === 6 && r.success).length;
-      if (naturalSixes > 0) {
-        for (let i = 0; i < naturalSixes; i++) rolls.push({ value: 1, success: true, relentless: true });
-        successes += naturalSixes;
-        specialRulesApplied.push({ rule: 'Relentless', value: null, effect: `${naturalSixes} extra hits from natural 6s at 9"+ (extras don't count as 6s)` });
-      }
-    }
-
-    // ── Surge: extra hit per natural 6 ────────────────────────────────────────
-    if (rulesStr.includes('Surge')) {
-      const naturalSixes = rolls.filter(r => r.value === 6 && r.success).length;
-      if (naturalSixes > 0) {
-        successes += naturalSixes;
-        specialRulesApplied.push({ rule: 'Surge', value: null, effect: `${naturalSixes} extra hits from natural 6s` });
-      }
-    }
-
-    // ── Crack: natural 6s count as 2 hits ────────────────────────────────────
-    if (rulesStr.includes('Crack')) {
-      const naturalSixes = rolls.filter(r => r.value === 6 && r.success && !r.relentless).length;
-      if (naturalSixes > 0) {
-        successes += naturalSixes;
-        specialRulesApplied.push({ rule: 'Crack', value: null, effect: `${naturalSixes} natural 6s each count as 2 hits (+${naturalSixes} extra)` });
-      }
-    }
-
+    rolls.forEach(r => { r.success = r.value === 6; });
+    const successes = rolls.filter(r => r.success).length;
     return { rolls, successes, specialRulesApplied, blast: false };
   }
 
-  rollDefense(unit, hitCount, weapon, terrain, hitRolls) {
-    const specialRulesApplied = [];
-    if (hitCount <= 0) return { rolls: [], saves: 0, wounds: 0, wounds_dealt: 0, baneProcs: 0, specialRulesApplied };
-
-    let defense = unit.defense || 5;
-    const ap = this._parseAP(weapon);
-    const deadlyMultiplier = this._parseDeadly(weapon);
-    const rulesStr = this._rulesStr(weapon.special_rules);
-    const hasBane    = rulesStr.includes('Bane');
-    const hasBlast   = rulesStr.includes('Blast') || weapon.blast === true;
-    const hasRending = rulesStr.includes('Rending');
-    const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
-
-    // ── Cover (Blast ignores it) ──────────────────────────────────────────────
-    if (!hasBlast && terrain) {
-      const coverBonus = this.getCoverBonus(unit, terrain);
-      if (coverBonus > 0) {
-        defense -= coverBonus;
-        specialRulesApplied.push({ rule: 'Cover', value: coverBonus, effect: `save improved by ${coverBonus} from terrain` });
-      }
-    } else if (hasBlast && terrain && this.getCoverBonus(unit, terrain) > 0) {
-      specialRulesApplied.push({ rule: 'Blast', value: null, effect: 'Blast ignores cover bonus' });
-    }
-
-    // ── AP (Unstoppable ignores negative AP) ──────────────────────────────────
-    let effectiveAp = ap;
-    if (rulesStr.includes('Unstoppable') && ap < 0) {
-      effectiveAp = 0;
-      specialRulesApplied.push({ rule: 'Unstoppable', value: null, effect: 'ignores negative AP modifiers' });
-    }
-    if (effectiveAp > 0) {
-      specialRulesApplied.push({ rule: 'AP', value: effectiveAp, effect: `defense reduced by ${effectiveAp}` });
-    }
-
-    // ── Per-hit processing ────────────────────────────────────────────────────
-    const rolls = [];
-    let saves = 0;
-    let wounds = 0;
-    let rendingCount = 0;
-
-    for (let i = 0; i < hitCount; i++) {
-      const hitRoll = hitRolls?.[i];
-
-      // Rending: natural 6 to hit → AP(+4) for this specific hit
-      const isRendingHit = hasRending && hitRoll && hitRoll.value === 6 && hitRoll.success && !hitRoll.auto;
-      const hitAp = isRendingHit ? effectiveAp + 4 : effectiveAp;
-      const modifiedDefense = Math.min(6, Math.max(2, defense - hitAp));
-      if (isRendingHit) rendingCount++;
-
-      let defRoll = this.dice.roll();
-      let finalRoll = defRoll;
-
-      // Bane: defender must re-roll unmodified 6s
-      if (hasBane && defRoll === 6) {
-        const reroll = this.dice.roll();
-        rolls.push({ value: defRoll, success: reroll >= modifiedDefense, baneReroll: reroll, finalValue: reroll });
-        finalRoll = reroll;
-      } else {
-        rolls.push({ value: defRoll, success: defRoll >= modifiedDefense });
-      }
-
-      if (finalRoll >= modifiedDefense) {
-        saves++;
-      } else {
-        // Deadly(X): min(X, toughPerModel) wounds per unsaved hit. No Deadly: exactly 1.
-        wounds += deadlyMultiplier > 1 ? Math.min(deadlyMultiplier, toughPerModel) : 1;
-      }
-    }
-
-    if (hasBane && hitCount > 0)
-      specialRulesApplied.push({ rule: 'Bane', value: null, effect: 'defender must re-roll unmodified defense 6s' });
-    if (hasRending && rendingCount > 0)
-      specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingCount} natural 6s to hit gained AP(+4)` });
-    if (deadlyMultiplier > 1)
-      specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `each unsaved hit deals ${Math.min(deadlyMultiplier, toughPerModel)} wounds (no carry-over)` });
-
-    console.log(`[DMG] weapon="${weapon.name}" hits=${hitCount} saves=${saves} wounds=${wounds}`);
-    return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs: 0, deadlyMultiplier, hasBane, specialRulesApplied };
+  // ── Shaken: status check, stays inline ──────────────────────────────────
+  if (unit.status === 'shaken') {
+    quality = Math.min(6, quality + 1);
+    specialRulesApplied.push({ rule: 'Shaken', value: null, effect: 'quality +1 (harder to hit)' });
   }
 
-  // ─── Regeneration ─────────────────────────────────────────────────────────
+  // ── BEFORE_HIT_QUALITY hooks ─────────────────────────────────────────────
+  // Covers: Reliable, Indirect, Artillery, Thrust, Stealth, Machine-Fog,
+  //         Evasive, Targeting Visor, Good Shot, Versatile Attack, etc.
+  const qualityCtx = {
+    unit, weapon, target, gameState,
+    quality, specialRulesApplied,
+    calculateDistance: this.calculateDistance.bind(this),
+  };
+  // Attacker unit rules (Versatile Attack, Unpredictable Fighter, Targeting Visor)
+  this.registry.runHookOn(HOOKS.BEFORE_HIT_QUALITY, qualityCtx, unit.special_rules);
+  // Weapon rules (Indirect, Artillery, Thrust, Reliable)
+  this.registry.runHookOn(HOOKS.BEFORE_HIT_QUALITY, qualityCtx, weapon.special_rules);
+  // Target rules (Stealth, Machine-Fog, Evasive, Melee Evasion)
+  if (target) {
+    this.registry.runHookOn(HOOKS.BEFORE_HIT_QUALITY, qualityCtx, target.special_rules);
+  }
+  quality = qualityCtx.quality;
 
-  /**
-   * Rolls one die per incoming wound; each 5+ ignores that wound.
-   * Bane suppresses Regeneration entirely.
-   */
-  applyRegeneration(unit, incomingWounds = 1, suppressedByBane = false) {
-    const REGEN_RULES = ['Regeneration', 'Self-Repair', 'Repair'];
-    const hasRule = REGEN_RULES.some(r => this._has(unit.special_rules, r));
-    if (!hasRule) return { finalWounds: incomingWounds, ignored: 0, rolls: [] };
-    if (suppressedByBane) return { finalWounds: incomingWounds, ignored: 0, rolls: [], suppressedByBane: true };
-
-    const rolls = [];
-    let ignored = 0;
-    for (let i = 0; i < incomingWounds; i++) {
-      const roll = this.dice.roll();
-      rolls.push(roll);
-      if (roll >= 5) ignored++;
-    }
-    return { finalWounds: Math.max(0, incomingWounds - ignored), ignored, rolls };
+  // ── Blast(X): automatic hits, no quality roll ────────────────────────────
+  // Blast is also in AFTER_HIT_ROLLS in opr-rules.js but Blast short-circuits
+  // the roll entirely so we handle it here first.
+  const rulesStr = this._rulesStr(weapon.special_rules);
+  const blastMatch = rulesStr.match(/\bBlast\((\d+)\)/)
+    || (weapon.blast === true && weapon.blast_x ? ['', weapon.blast_x] : null)
+    || (weapon.name || '').match(/Blast[\s-]?(\d+)/i);
+  if (blastMatch) {
+    const blastCount = parseInt(blastMatch[1]);
+    const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
+    specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
+    return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
   }
 
+  // ── Roll to hit ──────────────────────────────────────────────────────────
+  const attacks = weapon.attacks || 1;
+  const rolls = this.dice.rollQualityTest(quality, attacks);
+  let successes = rolls.filter(r => r.success).length;
+
+  // ── AFTER_HIT_ROLLS hooks ────────────────────────────────────────────────
+  // Covers: Furious, Surge, Crack, Relentless, Devout, Point-Blank Surge, etc.
+  const afterHitCtx = {
+    unit, weapon, target, gameState,
+    rolls, successes, specialRulesApplied,
+    calculateDistance: this.calculateDistance.bind(this),
+    hitRolls: rolls.map(r => r.value),  // some hooks expect raw values array
+  };
+  // Unit rules (Furious)
+  this.registry.runHookOn(HOOKS.AFTER_HIT_ROLLS, afterHitCtx, unit.special_rules);
+  // Weapon rules (Crack, Surge, Relentless, Blast)
+  this.registry.runHookOn(HOOKS.AFTER_HIT_ROLLS, afterHitCtx, weapon.special_rules);
+  successes = afterHitCtx.successes;
+
+  return { rolls: afterHitCtx.rolls, successes, specialRulesApplied, blast: false };
+}
+
+
+  rollDefense(unit, hitCount, weapon, terrain, hitRolls, meleeCtx = {}) {
+  const specialRulesApplied = [];
+  if (hitCount <= 0) return { rolls: [], saves: 0, wounds: 0, wounds_dealt: 0, baneProcs: 0, specialRulesApplied };
+
+  let defense = unit.defense || 5;
+  const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
+  const rulesStr = this._rulesStr(weapon.special_rules);
+  const hasBlast = rulesStr.includes('Blast') || weapon.blast === true;
+  const hasRending = this.registry.has(weapon.special_rules, 'Rending');
+
+  // ── Cover (Blast ignores it) — terrain check stays inline ───────────────
+  if (!hasBlast && terrain) {
+    const coverBonus = this.getCoverBonus(unit, terrain);
+    if (coverBonus > 0) {
+      defense -= coverBonus;
+      specialRulesApplied.push({ rule: 'Cover', value: coverBonus, effect: `save improved by ${coverBonus} from terrain` });
+    }
+  } else if (hasBlast && terrain && this.getCoverBonus(unit, terrain) > 0) {
+    specialRulesApplied.push({ rule: 'Blast', value: null, effect: 'Blast ignores cover bonus' });
+  }
+
+  const baseAp = this._parseAP(weapon);
+  const rolls = [];
+  let saves = 0;
+  let wounds = 0;
+  let rendingCount = 0;
+
+  for (let i = 0; i < hitCount; i++) {
+    const hitRoll = hitRolls?.[i];
+
+    // ── Rending: inline pre-save (needs to affect AP before defense roll) ──
+    // Note: Rending hook in opr-rules.js returns apBonus but fires at wrong
+    // phase for engine use. Kept inline here; hook fires harmlessly post-save.
+    const isRendingHit = hasRending && hitRoll?.value === 6 && hitRoll?.success && !hitRoll?.auto;
+    const rendingBonus = isRendingHit ? 4 : 0;
+    if (isRendingHit) rendingCount++;
+
+    // ── BEFORE_SAVE_DEFENSE hooks ────────────────────────────────────────
+    // Covers: AP, Unstoppable, Guardian, Shielded, Tear, Slayer, Fortified,
+    //         Decimate, Sturdy, Guarded, Piercing Hunter, Devastating Frenzy, etc.
+    const saveCtx = {
+      defender: unit, target: unit, weapon, hitRoll,
+      ap: baseAp + rendingBonus,
+      defense,
+      specialRulesApplied,
+      calculateDistance: this.calculateDistance.bind(this),
+    };
+    // Weapon rules (AP, Unstoppable, Tear, Decimate)
+    this.registry.runHookOn(HOOKS.BEFORE_SAVE_DEFENSE, saveCtx, weapon.special_rules);
+    // Defender unit rules (Guardian, Shielded, Sturdy, Fortified, Piercing Growth)
+    this.registry.runHookOn(HOOKS.BEFORE_SAVE_DEFENSE, saveCtx, unit.special_rules);
+
+    const modifiedDefense = Math.min(6, Math.max(2, defense - saveCtx.ap));
+    const defRoll = this.dice.roll();
+    let finalRoll = defRoll;
+
+    // ── ON_PER_HIT hooks (post-save) ─────────────────────────────────────
+    // Covers: Bane (reroll 6s), Shred (extra wound on 1), Lacerate, Quake
+    // Rending also fires here (returns apBonus) but engine ignores apBonus in this phase.
+    const perHitCtx = {
+      unit, weapon, hitRoll,
+      saveRoll: defRoll,
+      modifiedDefense,
+      specialRulesApplied,
+      dice: this.dice,
+      rerollResult: undefined,
+      extraWounds: 0,
+    };
+    this.registry.runHookOn(HOOKS.ON_PER_HIT, perHitCtx, weapon.special_rules);
+
+    if (perHitCtx.rerollResult !== undefined) {
+      finalRoll = perHitCtx.rerollResult;
+      rolls.push({ value: defRoll, success: finalRoll >= modifiedDefense, baneReroll: finalRoll, finalValue: finalRoll });
+    } else {
+      rolls.push({ value: defRoll, success: defRoll >= modifiedDefense });
+    }
+
+    if (finalRoll >= modifiedDefense) {
+      saves++;
+    } else {
+      // ── ON_WOUND_CALC hooks ─────────────────────────────────────────
+      // Covers: Deadly
+      const woundCtx = {
+        weapon, hitRoll, unsavedRoll: defRoll,
+        toughPerModel, wounds: 1,
+        specialRulesApplied,
+      };
+      this.registry.runHookOn(HOOKS.ON_WOUND_CALC, woundCtx, weapon.special_rules);
+      wounds += woundCtx.wounds;
+
+      // Extra wounds from ON_PER_HIT (Shred, Quake, Lacerate)
+      if ((perHitCtx.extraWounds ?? 0) > 0) {
+        wounds += perHitCtx.extraWounds;
+      }
+    }
+  }
+
+  if (hasRending && rendingCount > 0) {
+    specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingCount} natural 6s to hit gained AP(+4)` });
+  }
+
+  // ── ON_INCOMING_WOUNDS hooks ─────────────────────────────────────────────
+  // Covers: Regeneration, Self-Repair, Repair, Retaliate, Resistance
+  const incomingCtx = {
+    unit, weapon, wounds,
+    suppressedByBane: rulesStr.includes('Bane'),
+    dice: this.dice, specialRulesApplied,
+  };
+  this.registry.runHookOn(HOOKS.ON_INCOMING_WOUNDS, incomingCtx, unit.special_rules);
+  wounds = incomingCtx.wounds;
+
+  console.log(`[DMG] weapon="${weapon.name}" hits=${hitCount} saves=${saves} wounds=${wounds}`);
+  return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs: 0, specialRulesApplied };
+}
+ 
   // ─── Melee ────────────────────────────────────────────────────────────────
 
   resolveMelee(attacker, defender, gameState) {
@@ -702,7 +675,7 @@ export class RulesEngine {
       // rollToHit reads attacker.fatigued — set before this call if needed
       const hitResult = this.rollToHit(attacker, scaledWeapon, defender, gameState);
       const actualHits = hitResult.successes;
-      const defResult  = this._resolveMeleeDefense(defender, actualHits, scaledWeapon, hitResult.rolls);
+      const defResult = this.rollDefense(defender, actualHits, scaledWeapon, null, hitResult.rolls, { isMelee: true, isCharging: attacker.just_charged });
       const wounds     = defResult.wounds;
 
       console.log(`[MELEE] ${attacker.name} → ${defender.name} | weapon=${scaledWeapon.name} attacks=${scaledAttacks} hits=${actualHits} saves=${defResult.saves} wounds=${wounds}`);
@@ -745,89 +718,35 @@ export class RulesEngine {
     return { results, total_wounds: totalWounds, specialRulesApplied: allSpecialRules };
   }
 
-  /**
-   * Dedicated melee defense resolver.
-   * Each unsaved hit = 1 wound (or Deadly(X) wounds). No other multipliers.
-   * Rending: natural 6s to hit give AP(+4) for that hit. Still requires a save.
-   */
-  _resolveMeleeDefense(defender, hitCount, weapon, hitRolls) {
-    if (hitCount <= 0) return { rolls: [], saves: 0, wounds: 0, specialRulesApplied: [] };
-
-    const specialRulesApplied = [];
-    const ap = this._parseAP(weapon);
-    const deadlyMultiplier = this._parseDeadly(weapon);
-    const rulesStr = this._rulesStr(weapon.special_rules);
-    const hasBane    = rulesStr.includes('Bane');
-    const hasRending = rulesStr.includes('Rending');
-    const toughPerModel = Math.max(defender.tough_per_model || 1, 1);
-    const defense = defender.defense || 5;
-
-    if (ap > 0) specialRulesApplied.push({ rule: 'AP', value: ap, effect: `defense reduced by ${ap}` });
-
-    const rolls = [];
-    let saves = 0;
-    let wounds = 0;
-    let rendingCount = 0;
-
-    for (let i = 0; i < hitCount; i++) {
-      const hitRoll = hitRolls?.[i];
-      const isRendingHit = hasRending && hitRoll && hitRoll.value === 6 && hitRoll.success && !hitRoll.auto;
-      const hitAp = isRendingHit ? ap + 4 : ap;
-      const modifiedDefense = Math.min(6, Math.max(2, defense - hitAp));
-      if (isRendingHit) rendingCount++;
-
-      let defRoll = this.dice.roll();
-      let finalRoll = defRoll;
-
-      if (hasBane && defRoll === 6) {
-        const reroll = this.dice.roll();
-        rolls.push({ value: defRoll, success: reroll >= modifiedDefense, baneReroll: reroll, finalValue: reroll });
-        finalRoll = reroll;
-      } else {
-        rolls.push({ value: defRoll, success: defRoll >= modifiedDefense });
-      }
-
-      if (finalRoll >= modifiedDefense) {
-        saves++;
-      } else {
-        wounds += deadlyMultiplier > 1 ? Math.min(deadlyMultiplier, toughPerModel) : 1;
-      }
-    }
-
-    if (hasBane && hitCount > 0)
-      specialRulesApplied.push({ rule: 'Bane', value: null, effect: 'defender must re-roll unmodified defense 6s' });
-    if (hasRending && rendingCount > 0)
-      specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingCount} natural 6s to hit gained AP(+4)` });
-    if (deadlyMultiplier > 1)
-      specialRulesApplied.push({ rule: 'Deadly', value: deadlyMultiplier, effect: `each unsaved hit deals ${Math.min(deadlyMultiplier, toughPerModel)} wounds (no carry-over)` });
-
-    const unsavedHits = hitCount - saves;
-    console.log(`[MELEE-DEF] weapon=${weapon.name} ap=${ap} def=${defense} hits=${hitCount} saves=${saves} unsaved=${unsavedHits} deadly=${deadlyMultiplier} rending=${rendingCount} wounds=${wounds}`);
-    return { rolls, saves, wounds, specialRulesApplied };
-  }
-
+ 
   // ─── Morale ───────────────────────────────────────────────────────────────
 
-  checkMorale(unit, reason = 'wounds') {
-    const quality = unit.quality || 4;
-    const specialRulesApplied = [];
+checkMorale(unit, reason = 'wounds') {
+  const quality = unit.quality || 4;
+  const specialRulesApplied = [];
 
-    // Shaken units always fail morale (spec sb_r3)
-    if (unit.status === 'shaken') {
-      return { passed: false, roll: null, reason: 'Already Shaken', specialRulesApplied };
-    }
+  // Shaken units always fail — spec sb_r3, not a rule, stays inline
+  if (unit.status === 'shaken') {
+    return { passed: false, roll: null, reason: 'Already Shaken', specialRulesApplied };
+  }
 
-    const roll = this.dice.roll();
-    const initialPassed = roll >= quality;
+  const roll = this.dice.roll();
+  let passed = roll >= quality;
 
-    // Fearless: re-roll failed morale tests on a 4+
-    if (!initialPassed && this._has(unit.special_rules, 'Fearless')) {
-      const reroll = this.dice.roll();
-      specialRulesApplied.push({ rule: 'Fearless', value: null, effect: `re-rolled on 4+ (re-roll: ${reroll})` });
-      if (reroll >= 4) {
-        return { passed: true, roll, reroll, reason: 'Fearless reroll', specialRulesApplied };
-      }
-    }
+  // ── ON_MORALE_TEST hooks ──────────────────────────────────────────────────
+  // Covers: Fearless (reroll), Hive Bond (+1 to roll), Courage Aura (+1),
+  //         No Retreat (override to passed + self wounds), Steadfast (separate hook)
+  const moraleCtx = {
+    unit, roll, quality,
+    passed, reason,
+    specialRulesApplied,
+    dice: this.dice,
+  };
+  this.registry.runHookOn(HOOKS.ON_MORALE_TEST, moraleCtx, unit.special_rules);
+  passed = moraleCtx.passed;
+
+  return { passed, roll, reason, specialRulesApplied };
+}
 
     return { passed: initialPassed, roll, reason, specialRulesApplied };
   }
