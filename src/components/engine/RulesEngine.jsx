@@ -1,1069 +1,488 @@
-import { DiceRoller } from './GameEngine';
-import { RuleRegistry, HOOKS } from './RuleRegistry';
-import { OPR_RULES } from './rules/opr-rules';
+// RulesEngine.js
+import { HOOKS } from './RuleRegistry.js';
+import { Dice } from './Dice.js';
 
+/**
+ * RulesEngine – core game mechanics, using hooks for all special rules.
+ * No if‑statements for specific rule names; all rule logic lives in hook handlers.
+ */
 export class RulesEngine {
-  /**
-   * @param {RuleRegistry} [registry] — inject a custom registry to support a different game.
-   * Defaults to OPR rules. Swap this out and the engine supports any game system.
-   */
-  constructor(registry = null) {
-    this.dice = new DiceRoller();
-    this.limitedWeaponsUsed = new Map();
-    this.registry = registry ?? this._buildDefaultRegistry();
+  constructor(registry) {
+    this.registry = registry;
   }
 
-  _buildDefaultRegistry() {
-    const reg = new RuleRegistry();
-    reg.registerAll(OPR_RULES);
-    return reg;
-  }
-
-  // ─── Internal helpers ─────────────────────────────────────────────────────
-
-  /** Normalise special_rules to a plain string (handles arrays, objects, strings). */
-  _rulesStr(special_rules) {
-    if (!special_rules) return '';
-    if (Array.isArray(special_rules)) {
-      return special_rules.map(r => (typeof r === 'string' ? r : (r?.rule || ''))).join(' ');
-    }
-    return typeof special_rules === 'string' ? special_rules : '';
-  }
-
-  /** True if the unit/weapon has the named rule. */
-  _has(special_rules, ruleName) {
-    return this.registry.has(special_rules, ruleName);
-  }
-
-  /** Numeric param from a rule, e.g. Tough(6) → 6. Returns null if absent. */
-  _param(special_rules, ruleName) {
-    return this.registry.getParamValue(special_rules, ruleName);
-  }
-
-  /** Parse AP value: weapon.ap field first, then AP(X) in special_rules. */
-  _parseAP(weapon) {
-    if (weapon.ap && weapon.ap > 0) return weapon.ap;
-    return this._param(weapon.special_rules, 'AP') ?? 0;
-  }
+  // =========================================================================
+  // MOVEMENT
+  // =========================================================================
 
   /**
-   * Parse Deadly(X): returns multiplier (1 = no Deadly).
+   * Executes a movement action.
+   * @param {Unit} unit – the moving unit
+   * @param {string} action – 'Advance' | 'Rush' | 'Charge'
+   * @param {Object} target – optional target position {x, y} or enemy unit for charge
+   * @param {Array} terrain – list of terrain objects
+   * @returns {Object} { distance, specialRulesApplied, ... }
    */
-  _parseDeadly(weapon) {
-    const value = this._param(weapon.special_rules, 'Deadly');
-    if (value == null) return 1;
-    console.log(`[DEADLY] Weapon "${weapon.name}" has Deadly(${value}).`);
-    return value;
+  executeMovement(unit, action, target, terrain) {
+    const ctx = { unit, action, target, gameState: this._getGameState(), terrain, dice: Dice };
+    const specialRulesApplied = [];
+
+    // Base speed
+    let speed = (action === 'Advance') ? 6 : (action === 'Rush' || action === 'Charge') ? 12 : 0;
+
+    // GET_BASE_SPEED hooks (e.g., Immobile, Aircraft)
+    const baseResults = this.registry.applyHook(HOOKS.GET_BASE_SPEED, { ...ctx, specialRulesApplied });
+    baseResults.forEach(r => { if (r.overrideSpeed) speed = r.speed; });
+
+    // MODIFY_SPEED hooks (e.g., Fast, Slow, Agile)
+    const modifyCtx = { ...ctx, speed, specialRulesApplied };
+    const modifyResults = this.registry.applyHook(HOOKS.MODIFY_SPEED, modifyCtx);
+    modifyResults.forEach(r => { if (r.speedDelta) speed += r.speedDelta; });
+
+    // ON_MOVE_PATH hooks (e.g., Flying, ignore units/terrain)
+    const movePathResults = this.registry.applyHook(HOOKS.ON_MOVE_PATH, { ...ctx, fromX: unit.x, fromY: unit.y, toX: target.x, toY: target.y, specialRulesApplied });
+    const ignoreUnits = movePathResults.some(r => r.ignoreUnits);
+    const ignoreTerrain = movePathResults.some(r => r.ignoreTerrain);
+
+    // Terrain movement hooks (ON_TERRAIN_MOVE)
+    const terrainResults = this.registry.applyHook(HOOKS.ON_TERRAIN_MOVE, { ...ctx, terrain, specialRulesApplied });
+    const ignoreDifficult = terrainResults.some(r => r.ignoreDifficult);
+    const ignoreAllTerrain = terrainResults.some(r => r.ignoreTerrain);
+
+    // (Simplified) actual movement distance calculation would go here,
+    // including terrain penalties if not ignored.
+    // For this example, we just apply the distance.
+    const distance = speed; // placeholder
+
+    unit.x = target.x;
+    unit.y = target.y;
+
+    // Dangerous terrain check (ON_DANGEROUS_TERRAIN hook)
+    const dangerCtx = { unit, terrain, action, dice: Dice, specialRulesApplied };
+    const dangerResults = this.registry.applyHook(HOOKS.ON_DANGEROUS_TERRAIN, dangerCtx);
+    const dangerWounds = dangerResults.reduce((sum, r) => sum + (r.wounds || 0), 0);
+    if (dangerWounds > 0) {
+      this._applyWounds(unit, dangerWounds, null);
+    }
+
+    // ON_MOVE_THROUGH_ENEMY for strafing etc. would be checked during path
+
+    return { distance, specialRulesApplied };
   }
 
-  _dedup(rules) {
-    const seen = new Set();
-    return rules.filter(r => {
-      if (seen.has(r.rule)) return false;
-      seen.add(r.rule);
-      return true;
+  // =========================================================================
+  // SHOOTING
+  // =========================================================================
+
+  /**
+   * Resolves a shooting attack from one unit against another.
+   * @param {Unit} attacker
+   * @param {Unit} defender
+   * @param {Weapon} weapon
+   * @param {Object} gameState – includes terrain, objectives, etc.
+   * @returns {Object} { hits, saves, wounds, hit_rolls, defense_rolls, specialRulesApplied }
+   */
+  resolveShooting(attacker, defender, weapon, gameState) {
+    const specialRulesApplied = [];
+    const ctx = { unit: attacker, weapon, target: defender, gameState, dice: Dice, specialRulesApplied };
+
+    // BEFORE_ATTACK (Limited weapons, etc.)
+    const beforeAttackResults = this.registry.applyHook(HOOKS.BEFORE_ATTACK, ctx);
+    if (beforeAttackResults.some(r => r.preventAttack)) {
+      return { hits: 0, saves: 0, wounds: 0, hit_rolls: [], defense_rolls: [], specialRulesApplied };
+    }
+
+    // Determine number of attacks (may be modified by hooks later)
+    let attacks = attacker.current_models * (weapon.attacks || 1);
+    const hitRolls = [];
+    let hits = 0;
+
+    for (let i = 0; i < attacks; i++) {
+      let quality = attacker.quality;
+
+      // BEFORE_HIT_QUALITY hooks
+      const hitCtx = { ...ctx, quality, hitIndex: i };
+      const hitResults = this.registry.applyHook(HOOKS.BEFORE_HIT_QUALITY, hitCtx);
+      hitResults.forEach(r => { if (r.quality !== undefined) quality = r.quality; });
+
+      const roll = Dice.roll();
+      const success = roll >= quality;
+      hitRolls.push({ value: roll, success, auto: false, relentless: false });
+      if (success) hits++;
+    }
+
+    // AFTER_HIT_ROLLS hooks (Blast, Furious, etc.)
+    const afterHitCtx = { ...ctx, rolls: hitRolls, successes: hits, _ruleParamValue: weapon.getParam('Blast') };
+    const afterHitResults = this.registry.applyHook(HOOKS.AFTER_HIT_ROLLS, afterHitCtx);
+    afterHitResults.forEach(r => {
+      if (r.successes !== undefined) hits = r.successes;
+      if (r.rolls) hitRolls.push(...r.rolls);
     });
-  }
 
-  _noAttackResult(weapon, effect, rule) {
-    return {
-      weapon: weapon.name, hit_rolls: [], hits: 0,
-      defense_rolls: [], saves: 0, wounds: 0,
-      blast: false, baneProcs: 0,
-      specialRulesApplied: [{ rule, value: null, effect }],
-    };
-  }
-
-  // ─── Limited Weapon Tracking ──────────────────────────────────────────────
-
-  trackLimitedWeapon(weapon, unitId) {
-    if (!this._has(weapon.special_rules, 'Limited')) return false;
-    const key = `${unitId}_${weapon.name}`;
-    const used = this.limitedWeaponsUsed.get(key) || 0;
-    if (used > 0) return true;
-    this.limitedWeaponsUsed.set(key, 1);
-    return false;
-  }
-
-  // ─── Transport Management ─────────────────────────────────────────────────
-
-  getTransportCapacity(transport) {
-    return this._param(transport.special_rules, 'Transport') ?? 0;
-  }
-
-  getUnitTransportSize(unit) {
-    const toughValue = this._param(unit.special_rules, 'Tough') ?? 0;
-    const isHero = this._has(unit.special_rules, 'Hero');
-
-    if (isHero) {
-      // Heroes with Tough(7+) are large — treat as size 3
-      return toughValue <= 6 ? 1 : 3;
+    if (hits === 0) {
+      return { hits: 0, saves: 0, wounds: 0, hit_rolls, defense_rolls: [], specialRulesApplied };
     }
-    // Multi-model units: small squads = 1, large/tough squads = 3
-    return toughValue <= 3 ? 1 : 3;
-  }
 
-  canEmbark(unit, transport, gameState) {
-    if (!this._has(transport.special_rules, 'Transport')) return false;
-    if (unit.embarked_in) return false;
-    if (this.calculateDistance(unit, transport) > 1) return false;
-    const capacity = this.getTransportCapacity(transport);
-    const currentLoad = this.getTransportCurrentLoad(transport, gameState);
-    const unitSize = this.getUnitTransportSize(unit);
-    return currentLoad + unitSize <= capacity;
-  }
+    let unsavedHits = 0;
+    const defenseRolls = [];
 
-  getTransportCurrentLoad(transport, gameState) {
-    const embarked = gameState.units.filter(u => u.embarked_in === transport.id);
-    return embarked.reduce((sum, u) => sum + this.getUnitTransportSize(u), 0);
-  }
+    for (let i = 0; i < hits; i++) {
+      const hitRoll = hitRolls[i] || { value: 0, success: true };
 
-  embark(unit, transport, gameState) {
-    if (!this.canEmbark(unit, transport, gameState)) return false;
-    unit.embarked_in = transport.id;
-    unit.x = transport.x;
-    unit.y = transport.y;
-    return true;
-  }
+      // ON_PER_HIT pre-save (Rending, etc.)
+      let ap = weapon.ap;
+      const preSaveCtx = { ...ctx, hitRoll, hitIndex: i, ap, defense: defender.defense };
+      const preSaveResults = this.registry.applyHook(HOOKS.ON_PER_HIT, preSaveCtx);
+      preSaveResults.forEach(r => { if (r.apBonus) ap += r.apBonus; });
 
-  disembark(unit, transport, gameState) {
-    if (unit.embarked_in !== transport.id) return false;
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 3 + Math.random() * 3; // always 3–6" away, never 0
-    unit.x = transport.x + Math.cos(angle) * distance;
-    unit.y = transport.y + Math.sin(angle) * distance;
-    unit.embarked_in = null;
-    return true;
-  }
+      let defense = defender.defense;
+      // Cover check (engine's own logic, not a hook)
+      const inCover = this._isInCover(defender, attacker, gameState.terrain);
+      if (inCover) defense += 1;
 
-  handleTransportDestruction(transport, gameState, events) {
-    const embarked = gameState.units.filter(u => u.embarked_in === transport.id);
-    embarked.forEach(unit => {
-      const roll = this.dice.roll();
-      if (roll <= 1) {
-        unit.current_models = Math.max(0, unit.current_models - 1);
-        events.push({
-          round: gameState.current_round, type: 'transport',
-          message: `${unit.name} lost 1 model from transport destruction`,
-          timestamp: new Date().toLocaleTimeString(),
-        });
-      }
-      unit.status = 'shaken';
-      // FIX: use 3–6" scatter so units never land exactly on the transport
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 3 + Math.random() * 3;
-      unit.x = transport.x + Math.cos(angle) * dist;
-      unit.y = transport.y + Math.sin(angle) * dist;
-      unit.embarked_in = null;
-      events.push({
-        round: gameState.current_round, type: 'transport',
-        message: `${unit.name} disembarked from destroyed transport and is Shaken`,
-        timestamp: new Date().toLocaleTimeString(),
-      });
-    });
-  }
+      // BEFORE_SAVE_DEFENSE hooks (AP, Fortified, etc.)
+      const saveCtx = { ...ctx, defender, weapon, terrain: null, defense, ap, _ruleParamValue: weapon.getParam('AP') };
+      const saveResults = this.registry.applyHook(HOOKS.BEFORE_SAVE_DEFENSE, saveCtx);
+      saveResults.forEach(r => { if (r.ap !== undefined) ap = r.ap; });
+      saveResults.forEach(r => { if (r.defense !== undefined) defense = r.defense; });
+      const ignoresCover = saveResults.some(r => r.ignoresCover);
 
-  // ─── Movement ─────────────────────────────────────────────────────────────
+      const modifiedDefense = Math.min(6, defense - ap);
+      let saveRoll = Dice.roll();
+      let saveSuccess = saveRoll >= modifiedDefense;
 
-  executeMovement(unit, action, targetPosition, terrain) {
-    const moveDistance = this.getMoveDistance(unit, action, terrain);
-    const distance = this.calculateDistance(unit, targetPosition);
-    if (distance <= moveDistance) {
-      unit.x = targetPosition.x;
-      unit.y = targetPosition.y;
-      return { success: true, distance };
-    }
-    const ratio = moveDistance / distance;
-    unit.x = unit.x + (targetPosition.x - unit.x) * ratio;
-    unit.y = unit.y + (targetPosition.y - unit.y) * ratio;
-    return { success: true, distance: moveDistance };
-  }
-
-  isAmbushUnit(unit) {
-    return this._has(unit.special_rules, 'Ambush');
-  }
-
-  deployAmbush(unit, gameState) {
-    // Valid board area: x in [5,55], y in [12,48] — excludes deployment strips and table edges.
-    const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
-    let attempts = 0;
-    while (attempts < 100) {
-      const x = Math.random() * 50 + 5;
-      const y = Math.random() * 36 + 12;
-      const tooClose = enemies.some(e => Math.hypot(e.x - x, e.y - y) < 9);
-      if (!tooClose) {
-        unit.x = x;
-        unit.y = y;
-        unit.is_in_reserve = false;
-        return true;
-      }
-      attempts++;
-    }
-    // Fallback: centre of board
-    unit.x = 30 + (Math.random() - 0.5) * 10;
-    unit.y = 30 + (Math.random() - 0.5) * 10;
-    unit.is_in_reserve = false;
-    return true;
-  }
-
-  executeTeleport(unit, gameState) {
-    const enemies = gameState.units.filter(u => u.owner !== unit.owner && u.current_models > 0);
-    let attempts = 0;
-    while (attempts < 50) {
-      const x = Math.random() * 66 + 3;
-      const y = Math.random() * 42 + 3;
-      const tooClose = enemies.some(e => Math.hypot(e.x - x, e.y - y) < 9);
-      if (!tooClose) {
-        unit.x = x;
-        unit.y = y;
-        return true;
-      }
-      attempts++;
-    }
-    return false;
-  }
-
-  getMoveDistance(unit, action, terrain) {
-    const sr = unit.special_rules;
-
-    // ── Speed overrides (Immobile, Aircraft) ─────────────────────────────────
-    if (this._has(sr, 'Immobile') && action !== 'Hold') return 0;
-    if (this._has(sr, 'Aircraft')) return action === 'Advance' ? 36 : 0;
-
-    // ── Base speed by action ─────────────────────────────────────────────────
-    const baseSpeeds = { Hold: 0, Advance: 6, Rush: 12, Charge: 12 };
-    let base = baseSpeeds[action] ?? 0;
-
-    // ── Terrain penalties (ignored by Strider/Flying) ────────────────────────
-    const ignoresTerrain = this._has(sr, 'Strider') || this._has(sr, 'Flying');
-    if (!ignoresTerrain && terrain) {
-      const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
-      if (unitTerrain) {
-        if (unitTerrain.difficult) base = Math.max(0, base - 2);
-        if (unitTerrain.movePenalty > 0) base = Math.max(0, base - unitTerrain.movePenalty);
-        // Impassable (rooftops): blocked unless Flying
-        if (unitTerrain.impassable && !this._has(sr, 'Flying')) base = 0;
-        // Tank Traps: -2" only for vehicles (Tough(6+))
-        if (unitTerrain.vehicleOnly) {
-          const toughVal = this._param(sr, 'Tough') ?? 0;
-          if (toughVal >= 6) base = Math.max(0, base - 2);
+      // ON_PER_HIT post-save (Bane, Shred, etc.)
+      const postSaveCtx = { ...ctx, hitRoll, hitIndex: i, ap, defense: defender.defense, saveRoll, modifiedDefense };
+      const postSaveResults = this.registry.applyHook(HOOKS.ON_PER_HIT, postSaveCtx);
+      postSaveResults.forEach(r => {
+        if (r.rerollResult !== undefined) {
+          saveRoll = r.rerollResult;
+          saveSuccess = saveRoll >= modifiedDefense;
         }
-      }
+        if (r.extraWounds) {
+          // handled later in wound calc
+        }
+      });
+
+      defenseRolls.push({ value: saveRoll, success: saveSuccess });
+      if (!saveSuccess) unsavedHits++;
     }
 
-    // ── Speed modifiers (Fast, Slow) ─────────────────────────────────────────
-    if (this._has(sr, 'Fast'))  base += action === 'Advance' ? 2 : 4;
-    if (this._has(sr, 'Slow'))  base -= action === 'Advance' ? 2 : 4;
+    let totalWounds = 0;
+    for (let i = 0; i < unsavedHits; i++) {
+      let wounds = 1;
+      const woundCtx = { ...ctx, weapon, unsavedHit: hitRolls[i], toughPerModel: defender.tough, _ruleParamValue: weapon.getParam('Deadly') };
+      const woundResults = this.registry.applyHook(HOOKS.ON_WOUND_CALC, woundCtx);
+      woundResults.forEach(r => { if (r.wounds !== undefined) wounds = r.wounds; });
+      totalWounds += wounds;
+    }
 
-    return Math.max(0, base);
+    // ON_INCOMING_WOUNDS (Regeneration, etc.)
+    const incomingCtx = { unit: defender, wounds: totalWounds, suppressedByBane: false, dice: Dice, specialRulesApplied };
+    const incomingResults = this.registry.applyHook(HOOKS.ON_INCOMING_WOUNDS, incomingCtx);
+    incomingResults.forEach(r => { if (r.wounds !== undefined) totalWounds = r.wounds; });
+    const suppressed = incomingResults.some(r => r.suppressRegeneration); // maybe for later
+
+    if (totalWounds > 0) {
+      this._applyWounds(defender, totalWounds, attacker);
+    }
+
+    return {
+      hits,
+      saves: hits - unsavedHits,
+      wounds: totalWounds,
+      hit_rolls: hitRolls,
+      defense_rolls: defenseRolls,
+      specialRulesApplied,
+    };
   }
 
-  // ─── Terrain ──────────────────────────────────────────────────────────────
+  // =========================================================================
+  // MELEE
+  // =========================================================================
 
   /**
-   * Returns wounds from dangerous terrain (0 if safe).
-   * Call during Rush/Charge resolution.
+   * Resolves melee combat between two units.
+   * @param {Unit} attacker
+   * @param {Unit} defender
+   * @param {Object} gameState
+   * @returns {Object} { attacker_wounds, defender_wounds, rollResults, specialRulesApplied }
    */
-  checkDangerousTerrain(unit, terrain, action) {
-    const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
-    if (!unitTerrain) return 0;
-    // Minefields/Ponds: always dangerous on entry
-    if (unitTerrain.dangerous && !unitTerrain.rushChargeDangerous) {
-      return this.dice.roll() === 1 ? 1 : 0;
-    }
-    // Vehicle Wreckage: only dangerous on Rush or Charge
-    if (unitTerrain.rushChargeDangerous && (action === 'Rush' || action === 'Charge')) {
-      return this.dice.roll() === 1 ? 1 : 0;
-    }
-    return 0;
-  }
-
-  /** Units on a hill can ignore one terrain feature for LOS. */
-  isOnHill(unit, terrain) {
-    const t = this.getTerrainAtPosition(unit.x, unit.y, terrain);
-    return t?.type === 'hill';
-  }
-
-  /** LOS check with hill elevation rule. */
-  checkLineOfSightTerrain(from, to, terrain) {
-    if (!terrain || terrain.length === 0) return true;
-    const attackerOnHill = this.isOnHill(from, terrain);
-    let hillIgnoreUsed = false;
-    for (const t of terrain) {
-      if (!t.blocking && !t.blocksThroughLOS) continue;
-      if (this._lineIntersectsRect(from.x, from.y, to.x, to.y, t.x, t.y, t.x + t.width, t.y + t.height)) {
-        if (attackerOnHill && !hillIgnoreUsed) { hillIgnoreUsed = true; continue; }
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /** Liang-Barsky line/rect intersection. */
-  _lineIntersectsRect(x1, y1, x2, y2, rx1, ry1, rx2, ry2) {
-    const dx = x2 - x1; const dy = y2 - y1;
-    const p = [-dx, dx, -dy, dy];
-    const q = [x1 - rx1, rx2 - x1, y1 - ry1, ry2 - y1];
-    let tMin = 0; let tMax = 1;
-    for (let i = 0; i < 4; i++) {
-      if (p[i] === 0) { if (q[i] < 0) return false; }
-      else {
-        const t = q[i] / p[i];
-        if (p[i] < 0) tMin = Math.max(tMin, t);
-        else tMax = Math.min(tMax, t);
-      }
-    }
-    return tMin < tMax;
-  }
-
-  hasStealth(unit, gameState) {
-    if (this._has(unit.special_rules, 'Stealth')) return true;
-    if (!gameState) return false;
-    return gameState.units.some(u =>
-      u.owner === unit.owner &&
-      u.id !== unit.id &&
-      u.current_models > 0 &&
-      this._has(u.special_rules, 'Stealth Aura') &&
-      this.calculateDistance(unit, u) <= 6
-    );
-  }
-
-  // ─── Shooting ─────────────────────────────────────────────────────────────
-
-  resolveShooting(attacker, defender, weapon, terrain, gameState) {
-    // Indirect weapons ignore LOS entirely; all others need effective LOS
-    if (!this._has(weapon.special_rules, 'Indirect') && terrain) {
-      if (!this.checkEffectiveLOS(attacker, defender, terrain)) {
-        return this._noAttackResult(weapon, 'no line of sight from unit footprint to target', 'LOS');
-      }
-    }
-    if (this.trackLimitedWeapon(weapon, attacker.id)) {
-      return this._noAttackResult(weapon, 'weapon already used once this game', 'Limited');
-    }
-
-    const hits = this.rollToHit(attacker, weapon, defender, gameState);
-
-    // Blast: cap automatic hits at model count
-    let finalHits = hits.successes;
-    if (hits.blast) {
-      const blastX = this._param(weapon.special_rules, 'Blast') ?? finalHits;
-      const modelCount = defender.model_count ||
-        Math.ceil((defender.current_models || 1) / Math.max(defender.tough_per_model || 1, 1));
-      finalHits = Math.min(blastX, modelCount);
-      hits.specialRulesApplied.push({
-        rule: 'Blast', value: finalHits,
-        effect: `${blastX} automatic hits capped at ${modelCount} model(s) in target`,
-      });
-    }
-
-    const saves = this.rollDefense(defender, finalHits, weapon, terrain, hits.rolls);
-    return {
-      weapon: weapon.name,
-      hit_rolls: hits.rolls,
-      hits: finalHits,
-      defense_rolls: saves.rolls,
-      saves: saves.saves,
-      wounds: saves.wounds,
-      blast: hits.blast || false,
-      baneProcs: saves.baneProcs || 0,
-      specialRulesApplied: this._dedup([...(hits.specialRulesApplied || []), ...(saves.specialRulesApplied || [])]),
-    };
-  }
-
-  rollToHit(unit, weapon, target, gameState) {
-  let quality = unit.quality || 4;
-  const specialRulesApplied = [];
-
-  // ── Fatigue: status check, stays inline ─────────────────────────────────
-  if (unit.fatigued) {
-    quality = 7;
-    specialRulesApplied.push({ rule: 'Fatigued', value: null, effect: 'only unmodified 6s hit' });
-    const attacks = weapon.attacks || 1;
-    const rolls = this.dice.rollQualityTest(quality, attacks);
-    rolls.forEach(r => { r.success = r.value === 6; });
-    const successes = rolls.filter(r => r.success).length;
-    return { rolls, successes, specialRulesApplied, blast: false };
-  }
-
-  // ── Shaken: status check, stays inline ──────────────────────────────────
-  if (unit.status === 'shaken') {
-    quality = Math.min(6, quality + 1);
-    specialRulesApplied.push({ rule: 'Shaken', value: null, effect: 'quality +1 (harder to hit)' });
-  }
-
-  // ── BEFORE_HIT_QUALITY hooks ─────────────────────────────────────────────
-  // Covers: Reliable, Indirect, Artillery, Thrust, Stealth, Machine-Fog,
-  //         Evasive, Targeting Visor, Good Shot, Versatile Attack, etc.
-  const qualityCtx = {
-    unit, weapon, target, gameState,
-    quality, specialRulesApplied,
-    calculateDistance: this.calculateDistance.bind(this),
-  };
-  // Attacker unit rules (Versatile Attack, Unpredictable Fighter, Targeting Visor)
-  this.registry.runHookOn(HOOKS.BEFORE_HIT_QUALITY, qualityCtx, unit.special_rules);
-  // Weapon rules (Indirect, Artillery, Thrust, Reliable)
-  this.registry.runHookOn(HOOKS.BEFORE_HIT_QUALITY, qualityCtx, weapon.special_rules);
-  // Target rules (Stealth, Machine-Fog, Evasive, Melee Evasion)
-  if (target) {
-    this.registry.runHookOn(HOOKS.BEFORE_HIT_QUALITY, qualityCtx, target.special_rules);
-  }
-  quality = qualityCtx.quality;
-
-  // ── Blast(X): automatic hits, no quality roll ────────────────────────────
-  // Blast is also in AFTER_HIT_ROLLS in opr-rules.js but Blast short-circuits
-  // the roll entirely so we handle it here first.
-  const rulesStr = this._rulesStr(weapon.special_rules);
-  const blastMatch = rulesStr.match(/\bBlast\((\d+)\)/)
-    || (weapon.blast === true && weapon.blast_x ? ['', weapon.blast_x] : null)
-    || (weapon.name || '').match(/Blast[\s-]?(\d+)/i);
-  if (blastMatch) {
-    const blastCount = parseInt(blastMatch[1]);
-    const autoHitRolls = Array.from({ length: blastCount }, () => ({ value: 6, success: true, auto: true }));
-    specialRulesApplied.push({ rule: 'Blast', value: blastCount, effect: `${blastCount} automatic hits, no quality roll` });
-    return { rolls: autoHitRolls, successes: blastCount, specialRulesApplied, blast: true };
-  }
-
-  // ── Roll to hit ──────────────────────────────────────────────────────────
-  const attacks = weapon.attacks || 1;
-  const rolls = this.dice.rollQualityTest(quality, attacks);
-  let successes = rolls.filter(r => r.success).length;
-
-  // ── AFTER_HIT_ROLLS hooks ────────────────────────────────────────────────
-  // Covers: Furious, Surge, Crack, Relentless, Devout, Point-Blank Surge, etc.
-  const afterHitCtx = {
-    unit, weapon, target, gameState,
-    rolls, successes, specialRulesApplied,
-    calculateDistance: this.calculateDistance.bind(this),
-    hitRolls: rolls.map(r => r.value),  // some hooks expect raw values array
-  };
-  // Unit rules (Furious)
-  this.registry.runHookOn(HOOKS.AFTER_HIT_ROLLS, afterHitCtx, unit.special_rules);
-  // Weapon rules (Crack, Surge, Relentless, Blast)
-  this.registry.runHookOn(HOOKS.AFTER_HIT_ROLLS, afterHitCtx, weapon.special_rules);
-  successes = afterHitCtx.successes;
-
-  return { rolls: afterHitCtx.rolls, successes, specialRulesApplied, blast: false };
-}
-
-
-  rollDefense(unit, hitCount, weapon, terrain, hitRolls, meleeCtx = {}) {
-  const specialRulesApplied = [];
-  if (hitCount <= 0) return { rolls: [], saves: 0, wounds: 0, wounds_dealt: 0, baneProcs: 0, specialRulesApplied };
-
-  let defense = unit.defense || 5;
-  const toughPerModel = Math.max(unit.tough_per_model || 1, 1);
-  const rulesStr = this._rulesStr(weapon.special_rules);
-  const hasBlast = rulesStr.includes('Blast') || weapon.blast === true;
-  const hasRending = this.registry.has(weapon.special_rules, 'Rending');
-
-  // ── Cover (Blast ignores it) — terrain check stays inline ───────────────
-  if (!hasBlast && terrain) {
-    const coverBonus = this.getCoverBonus(unit, terrain);
-    if (coverBonus > 0) {
-      defense -= coverBonus;
-      specialRulesApplied.push({ rule: 'Cover', value: coverBonus, effect: `save improved by ${coverBonus} from terrain` });
-    }
-  } else if (hasBlast && terrain && this.getCoverBonus(unit, terrain) > 0) {
-    specialRulesApplied.push({ rule: 'Blast', value: null, effect: 'Blast ignores cover bonus' });
-  }
-
-  const baseAp = this._parseAP(weapon);
-  const rolls = [];
-  let saves = 0;
-  let wounds = 0;
-  let rendingCount = 0;
-
-  for (let i = 0; i < hitCount; i++) {
-    const hitRoll = hitRolls?.[i];
-
-    // ── Rending: inline pre-save (needs to affect AP before defense roll) ──
-    // Note: Rending hook in opr-rules.js returns apBonus but fires at wrong
-    // phase for engine use. Kept inline here; hook fires harmlessly post-save.
-    const isRendingHit = hasRending && hitRoll?.value === 6 && hitRoll?.success && !hitRoll?.auto;
-    const rendingBonus = isRendingHit ? 4 : 0;
-    if (isRendingHit) rendingCount++;
-
-    // ── BEFORE_SAVE_DEFENSE hooks ────────────────────────────────────────
-    // Covers: AP, Unstoppable, Guardian, Shielded, Tear, Slayer, Fortified,
-    //         Decimate, Sturdy, Guarded, Piercing Hunter, Devastating Frenzy, etc.
-    const saveCtx = {
-      defender: unit, target: unit, weapon, hitRoll,
-      ap: baseAp + rendingBonus,
-      defense,
-      specialRulesApplied,
-      calculateDistance: this.calculateDistance.bind(this),
-    };
-    // Weapon rules (AP, Unstoppable, Tear, Decimate)
-    this.registry.runHookOn(HOOKS.BEFORE_SAVE_DEFENSE, saveCtx, weapon.special_rules);
-    // Defender unit rules (Guardian, Shielded, Sturdy, Fortified, Piercing Growth)
-    this.registry.runHookOn(HOOKS.BEFORE_SAVE_DEFENSE, saveCtx, unit.special_rules);
-
-    const modifiedDefense = Math.min(6, Math.max(2, defense - saveCtx.ap));
-    const defRoll = this.dice.roll();
-    let finalRoll = defRoll;
-
-    // ── ON_PER_HIT hooks (post-save) ─────────────────────────────────────
-    // Covers: Bane (reroll 6s), Shred (extra wound on 1), Lacerate, Quake
-    // Rending also fires here (returns apBonus) but engine ignores apBonus in this phase.
-    const perHitCtx = {
-      unit, weapon, hitRoll,
-      saveRoll: defRoll,
-      modifiedDefense,
-      specialRulesApplied,
-      dice: this.dice,
-      rerollResult: undefined,
-      extraWounds: 0,
-    };
-    this.registry.runHookOn(HOOKS.ON_PER_HIT, perHitCtx, weapon.special_rules);
-
-    if (perHitCtx.rerollResult !== undefined) {
-      finalRoll = perHitCtx.rerollResult;
-      rolls.push({ value: defRoll, success: finalRoll >= modifiedDefense, baneReroll: finalRoll, finalValue: finalRoll });
-    } else {
-      rolls.push({ value: defRoll, success: defRoll >= modifiedDefense });
-    }
-
-    if (finalRoll >= modifiedDefense) {
-      saves++;
-    } else {
-      // ── ON_WOUND_CALC hooks ─────────────────────────────────────────
-      // Covers: Deadly
-      const woundCtx = {
-        weapon, hitRoll, unsavedRoll: defRoll,
-        toughPerModel, wounds: 1,
-        specialRulesApplied,
-      };
-      this.registry.runHookOn(HOOKS.ON_WOUND_CALC, woundCtx, weapon.special_rules);
-      wounds += woundCtx.wounds;
-
-      // Extra wounds from ON_PER_HIT (Shred, Quake, Lacerate)
-      if ((perHitCtx.extraWounds ?? 0) > 0) {
-        wounds += perHitCtx.extraWounds;
-      }
-    }
-  }
-
-  if (hasRending && rendingCount > 0) {
-    specialRulesApplied.push({ rule: 'Rending', value: null, effect: `${rendingCount} natural 6s to hit gained AP(+4)` });
-  }
-
-  // ── ON_INCOMING_WOUNDS hooks ─────────────────────────────────────────────
-  // Covers: Regeneration, Self-Repair, Repair, Retaliate, Resistance
-  const incomingCtx = {
-    unit, weapon, wounds,
-    suppressedByBane: rulesStr.includes('Bane'),
-    dice: this.dice, specialRulesApplied,
-  };
-  this.registry.runHookOn(HOOKS.ON_INCOMING_WOUNDS, incomingCtx, unit.special_rules);
-  wounds = incomingCtx.wounds;
-
-  console.log(`[DMG] weapon="${weapon.name}" hits=${hitCount} saves=${saves} wounds=${wounds}`);
-  return { rolls, saves, wounds, wounds_dealt: wounds, baneProcs: 0, specialRulesApplied };
-}
- 
-  // ─── Melee ────────────────────────────────────────────────────────────────
-
   resolveMelee(attacker, defender, gameState) {
-    // In resolveMelee(), before any strike resolution:
-    if (this._has(attacker.special_rules, 'Unpredictable Fighter')) {
-      attacker._unpredictableRoll = this.dice.roll();
-    }
-    // Attacker always strikes
-    const attackerResults = this.resolveMeleeStrikes(attacker, defender, false, gameState);
+    const specialRulesApplied = [];
+    const ctx = { unit: attacker, target: defender, gameState, dice: Dice, specialRulesApplied, isMelee: true };
 
-    // ── FIX (Spec Bug #2): Shaken defenders CAN strike back, but count as Fatigued ──
-    // Per spec shakenBehaviour sb_r2: "May strike back counting as Fatigued (only 6s hit)"
-    // Previously hard-blocked shaken defenders. Now we let them through with fatigued flag set.
-    let defenderResults = null;
-    if (defender.current_models > 0) {
-      const defenderIsShaken = defender.status === 'shaken';
-      if (defenderIsShaken) {
-        // Temporarily mark as fatigued so rollToHit applies the 6-only rule
-        const wasAlreadyFatigued = defender.fatigued;
-        defender.fatigued = true;
-        defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
-        // Restore fatigued flag (don't permanently change state here)
-        defender.fatigued = wasAlreadyFatigued;
-      } else {
-        defenderResults = this.resolveMeleeStrikes(defender, attacker, true, gameState);
-      }
-    }
-
-    let attackerRealWounds = attackerResults.total_wounds;
-    let defenderRealWounds = defenderResults?.total_wounds || 0;
-
-    // Fear(X): adds X to wound total for melee resolution comparison only
-    const attackerFearBonus = this._param(attacker.special_rules, 'Fear') ?? 0;
-    const defenderFearBonus = this._param(defender.special_rules, 'Fear') ?? 0;
-
-    const attackerWoundsForComparison = attackerRealWounds + attackerFearBonus;
-    const defenderWoundsForComparison = defenderRealWounds + defenderFearBonus;
-
-    const winner = attackerWoundsForComparison > defenderWoundsForComparison ? attacker
-                 : defenderWoundsForComparison > attackerWoundsForComparison ? defender
-                 : null;
-
-    const atkTotalAttacks = (attackerResults.results || []).reduce((s, r) => s + (r.attacks || 0), 0);
-    const atkTotalHits    = (attackerResults.results || []).reduce((s, r) => s + (r.hits ?? 0), 0);
-    const atkTotalSaves   = (attackerResults.results || []).reduce((s, r) => s + (r.saves ?? 0), 0);
-    const defTotalAttacks = (defenderResults?.results || []).reduce((s, r) => s + (r.attacks || 0), 0);
-    const defTotalHits    = (defenderResults?.results || []).reduce((s, r) => s + (r.hits ?? 0), 0);
-    const defTotalSaves   = (defenderResults?.results || []).reduce((s, r) => s + (r.saves ?? 0), 0);
-
-    const specialRulesApplied = this._dedup([
-      ...(attackerResults.specialRulesApplied || []),
-      ...(defenderResults?.specialRulesApplied || []),
-    ]);
-
-    const rollResults = {
-      attacker_attacks:       atkTotalAttacks,
-      attacker_hits:          atkTotalHits,
-      attacker_saves_forced:  atkTotalHits,
-      defender_saves_made:    atkTotalSaves,
-      wounds_dealt:           attackerRealWounds,
-      defender_attacks:       defTotalAttacks,
-      defender_hits:          defTotalHits,
-      defender_saves_forced:  defTotalHits,
-      attacker_saves_made:    defTotalSaves,
-      wounds_taken:           defenderRealWounds,
-      melee_resolution: {
-        attacker_wounds_for_comparison: attackerWoundsForComparison,
-        fear_bonus_attacker:            attackerFearBonus,
-        defender_wounds_for_comparison: defenderWoundsForComparison,
-        fear_bonus_defender:            defenderFearBonus,
-        winner:                         winner?.name || 'tie',
-      },
-      special_rules_applied: specialRulesApplied,
-    };
-
-    return { attacker_results: attackerResults, defender_results: defenderResults, winner, attacker_wounds: attackerRealWounds, defender_wounds: defenderRealWounds, rollResults };
-  }
-
-  resolveMeleeStrikes(attacker, defender, isStrikeBack = false, gameState = null) {
-    const results = [];
-    let totalWounds = 0;
-    const allSpecialRules = [];
-
-    const meleeWeapons = (attacker.weapons || []).filter(w => (w.range ?? 2) <= 2);
-    const weaponsToUse = meleeWeapons.length > 0
-      ? meleeWeapons
-      : [{ name: 'Fists', range: 1, attacks: 1, ap: 0 }];
-
-    // Model count = floor(current wounds / wounds-per-model). Always at least 1.
-    const effectiveToughPerModel = Math.max(attacker.tough_per_model || 1, 1);
-    const currentModelCount = Math.max(1, Math.floor(attacker.current_models / effectiveToughPerModel));
-
-    weaponsToUse.forEach(weapon => {
-      const normWeaponSr = Array.isArray(weapon.special_rules)
-        ? weapon.special_rules.join(' ')
-        : (weapon.special_rules || '');
-      let modifiedWeapon = { ...weapon, special_rules: normWeaponSr };
-      const weaponSpecialRules = [];
-      const rulesStr = normWeaponSr;
-
-      // Thrust: +AP(1) and quality bonus on charge (quality handled in rollToHit)
-      if (attacker.just_charged && rulesStr.includes('Thrust')) {
-        modifiedWeapon.ap = (weapon.ap || 0) + 1;
-        weaponSpecialRules.push({ rule: 'Thrust', value: null, effect: '+1 to hit and AP(+1) on charge' });
-      }
-
-      // Impact is resolved at CHARGE time in Battle.js — not here.
-
-      const scaledAttacks = (modifiedWeapon.attacks || 1) * Math.max(currentModelCount, 1);
-      const scaledWeapon = { ...modifiedWeapon, attacks: scaledAttacks };
-
-      // rollToHit reads attacker.fatigued — set before this call if needed
-      const hitResult = this.rollToHit(attacker, scaledWeapon, defender, gameState);
-      const actualHits = hitResult.successes;
-      const defResult = this.rollDefense(defender, actualHits, scaledWeapon, null, hitResult.rolls, { isMelee: true, isCharging: attacker.just_charged });
-      const wounds     = defResult.wounds;
-
-      console.log(`[MELEE] ${attacker.name} → ${defender.name} | weapon=${scaledWeapon.name} attacks=${scaledAttacks} hits=${actualHits} saves=${defResult.saves} wounds=${wounds}`);
-
-      const result = {
-        weapon: scaledWeapon.name,
-        hit_rolls: hitResult.rolls,
-        hits: actualHits,
-        defense_rolls: defResult.rolls,
-        saves: defResult.saves,
-        wounds,
-        attacks: scaledAttacks,
-        specialRulesApplied: [...(hitResult.specialRulesApplied || []), ...(defResult.specialRulesApplied || [])],
-      };
-
-      // Fear bonus recorded per result for UI; actual comparison in resolveMelee
-      if (this._has(attacker.special_rules, 'Fear')) {
-        const fearBonus = this._param(attacker.special_rules, 'Fear') ?? 1;
-        result.fearBonus = fearBonus;
-        weaponSpecialRules.push({ rule: 'Fear', value: fearBonus, effect: `+${fearBonus} wounds for melee victory check` });
-      }
-
-      // Filter ranged-only rules from melee results
-      const rangedOnlyRules = ['Blast', 'Relentless', 'Indirect', 'Artillery'];
-      result.specialRulesApplied = this._dedup([
-        ...weaponSpecialRules,
-        ...result.specialRulesApplied.filter(r => !rangedOnlyRules.includes(r.rule)),
-      ]);
-
-      allSpecialRules.push(...result.specialRulesApplied);
-      results.push(result);
-      totalWounds += Math.max(0, wounds);
+    // BEFORE_MELEE_ATTACK hooks (Ravage, Regenerative Strength, etc.)
+    const beforeResults = this.registry.applyHook(HOOKS.BEFORE_MELEE_ATTACK, ctx);
+    let extraAttackerWounds = 0;
+    let extraAttacks = 0;
+    beforeResults.forEach(r => {
+      if (r.extraWounds) extraAttackerWounds += r.extraWounds;
+      if (r.extraAttacks) extraAttacks += r.extraAttacks;
     });
 
-    // Mark attacker as fatigued after striking (spec: fatigue applies after first melee action)
-    if (isStrikeBack || attacker.just_charged) {
-      attacker.fatigued = true;
+    // Determine who strikes first (engine logic, but hooks could modify)
+    let attackerFirst = true;
+    // TODO: check for Counter-Attack, Unwieldy, etc. via hooks? Could be a hook ON_STRIKE_ORDER.
+    // For now, assume attacker first unless defender has a rule.
+
+    // Resolve attacker's melee attacks (simplified: treat as shooting with melee weapon)
+    let attackerWounds = 0;
+    for (const weapon of attacker.weapons.filter(w => w.range <= 2)) {
+      const shootingResult = this.resolveShooting(attacker, defender, weapon, gameState);
+      attackerWounds += shootingResult.wounds;
+    }
+    // Add extra attacks from hooks
+    // (we'd need to generate extra attacks with the weapon, but for simplicity we add wounds directly)
+    attackerWounds += extraAttackerWounds;
+
+    // Defender may strike back if alive
+    let defenderWounds = 0;
+    if (defender.current_models > 0) {
+      for (const weapon of defender.weapons.filter(w => w.range <= 2)) {
+        const shootingResult = this.resolveShooting(defender, attacker, weapon, gameState);
+        defenderWounds += shootingResult.wounds;
+      }
     }
 
-    return { results, total_wounds: totalWounds, specialRulesApplied: allSpecialRules };
+    // ON_MELEE_RESOLUTION hooks (Fear)
+    const meleeResCtx = { attacker, defender, attackerWounds, defenderWounds, gameState, specialRulesApplied };
+    const meleeResResults = this.registry.applyHook(HOOKS.ON_MELEE_RESOLUTION, meleeResCtx);
+    meleeResResults.forEach(r => {
+      if (r.attackerWounds !== undefined) attackerWounds = r.attackerWounds;
+      if (r.defenderWounds !== undefined) defenderWounds = r.defenderWounds;
+    });
+
+    // Apply wounds (with ON_WOUND_ALLOCATION and ON_MODEL_KILLED)
+    if (attackerWounds > 0) this._applyWounds(defender, attackerWounds, attacker);
+    if (defenderWounds > 0) this._applyWounds(attacker, defenderWounds, defender);
+
+    return {
+      attacker_wounds: attackerWounds,
+      defender_wounds: defenderWounds,
+      rollResults: {}, // could include detailed logs
+      specialRulesApplied,
+    };
   }
 
- 
-  // ─── Morale ───────────────────────────────────────────────────────────────
+  // =========================================================================
+  // SPELL CASTING
+  // =========================================================================
 
-checkMorale(unit, reason = 'wounds') {
-  const quality = unit.quality || 4;
-  const specialRulesApplied = [];
+  /**
+   * Attempts to cast a spell.
+   * @param {Unit} caster
+   * @param {Object} spell – { name, cost, range, effect, ... }
+   * @param {Unit} target
+   * @param {Object} gameState
+   * @returns {Object} { success, roll, modifiedRoll, tokensAfter, specialRulesApplied }
+   */
+  castSpell(caster, spell, target, gameState) {
+    const specialRulesApplied = [];
+    const ctx = { caster, spell, target, gameState, dice: Dice, specialRulesApplied };
 
-  // Shaken units always fail — spec sb_r3, not a rule, stays inline
-  if (unit.status === 'shaken') {
-    return { passed: false, roll: null, reason: 'Already Shaken', specialRulesApplied };
+    // ON_SPELL_CAST hook (Caster, Spell Conduit, etc.)
+    const results = this.registry.applyHook(HOOKS.ON_SPELL_CAST, ctx);
+    let success = false;
+    let finalRoll = 0;
+    results.forEach(r => {
+      if (r.success !== undefined) success = r.success;
+      if (r.roll !== undefined) finalRoll = r.roll;
+    });
+
+    return { success, roll: finalRoll, modifiedRoll: finalRoll, tokensAfter: caster.spell_tokens, specialRulesApplied };
   }
 
-  const roll = this.dice.roll();
-  let passed = roll >= quality;
+  // =========================================================================
+  // MORALE
+  // =========================================================================
 
-  // ── ON_MORALE_TEST hooks ──────────────────────────────────────────────────
-  // Covers: Fearless (reroll), Hive Bond (+1 to roll), Courage Aura (+1),
-  //         No Retreat (override to passed + self wounds), Steadfast (separate hook)
-  const moraleCtx = {
-    unit, roll, quality,
-    passed, reason,
-    specialRulesApplied,
-    dice: this.dice,
-  };
-  this.registry.runHookOn(HOOKS.ON_MORALE_TEST, moraleCtx, unit.special_rules);
-  passed = moraleCtx.passed;
+  /**
+   * Performs a morale test.
+   * @param {Unit} unit
+   * @param {string} reason – 'wounds' | 'melee_loss'
+   * @returns {Object} { passed, roll, quality, specialRulesApplied }
+   */
+  checkMorale(unit, reason) {
+    const roll = Dice.roll();
+    let quality = unit.quality;
+    const specialRulesApplied = [];
+    const ctx = { unit, roll, quality, passed: roll >= quality, reason, dice: Dice, specialRulesApplied };
 
-  return { passed, roll, reason, specialRulesApplied };
-}
+    // ON_MORALE_TEST hooks (Fearless, Hive Bond, etc.)
+    const results = this.registry.applyHook(HOOKS.ON_MORALE_TEST, ctx);
+    let passed = roll >= quality;
+    results.forEach(r => {
+      if (r.passed !== undefined) passed = r.passed;
+      if (r.quality !== undefined) quality = r.quality;
+      if (r.roll !== undefined) roll = r.roll; // some hooks modify roll
+    });
 
-    return { passed: initialPassed, roll, reason, specialRulesApplied };
+    return { passed, roll, quality, specialRulesApplied };
   }
 
   /**
-   * Apply the result of a morale test to a unit.
-   *
-   * FIX (Spec Bug #4): Routing can ONLY happen as a result of losing melee
-   * (reason === 'melee_loss'). General morale tests from shooting casualties
-   * can only result in Shaken, never Rout. This matches spec decisions 13/14.
+   * Applies the result of a morale test (Shaken/Rout).
+   * @param {Unit} unit
+   * @param {boolean} passed
+   * @param {string} reason
    */
   applyMoraleResult(unit, passed, reason) {
-    if (!passed) {
-      const isSingleModel = (unit.model_count || 1) === 1;
-      const belowHalf = isSingleModel
-        ? unit.current_models <= unit.total_models / 2
-        : Math.ceil(unit.current_models / Math.max(unit.tough_per_model || 1, 1)) <= Math.floor((unit.model_count || 1) / 2);
-
-      // Only melee losses can cause routing (spec Decision 13 vs Decision 14)
-      if (reason === 'melee_loss' && belowHalf) {
-        unit.current_models = 0;
-        unit.status = 'routed';
-        return 'routed';
-      }
-
-      // All other failed morale tests (including general morale from shooting) = Shaken only
+    if (passed) {
+      return 'passed';
+    }
+    // Unit fails: if <= half starting models, rout; else shaken.
+    const halfThreshold = Math.floor((unit.total_models || 1) / 2);
+    if (unit.current_models <= halfThreshold) {
+      unit.status = 'routed';
+      unit.current_models = 0; // rout = remove
+      return 'routed';
+    } else {
       unit.status = 'shaken';
       return 'shaken';
     }
-    return 'passed';
   }
 
-  applyCounterToCharger(charger, defender) {
-    if (this._has(defender.special_rules, 'Counter')) {
-      return defender.current_models || 0;
-    }
-    return 0;
-  }
-
-  // ─── Caster / Spell System ────────────────────────────────────────────────
-
-  /** Returns how many tokens Caster(X) grants per round (0 if not a caster). */
-  getCasterTokens(unit) {
-    return this._param(unit.special_rules, 'Caster') ?? 0;
-  }
-
-  /** Replenish spell tokens at the start of a round. Tokens cap at 6. */
-  replenishSpellTokens(unit) {
-    const gain = this.getCasterTokens(unit);
-    if (gain === 0) return 0;
-    const current = unit.spell_tokens || 0;
-    const after = Math.min(6, current + gain);
-    unit.spell_tokens = after;
-    return after - current;
-  }
+  // =========================================================================
+  // REGENERATION (applied separately)
+  // =========================================================================
 
   /**
-   * Cast one spell.
-   *   spellCost     — token cost
-   *   friendlyBonus — allied tokens spent to boost roll (+1 each)
-   *   hostileBonus  — enemy tokens spent to counter roll (-1 each)
-   * Returns { success, roll, modifiedRoll, tokensBefore, tokensAfter, helpBonus, specialRulesApplied }
+   * Applies Regeneration to incoming wounds.
+   * @param {Unit} unit
+   * @param {number} wounds
+   * @param {boolean} suppressed – if Regeneration is suppressed by Bane etc.
+   * @returns {Object} { finalWounds, ignored, rolls }
    */
-  castSpell(caster, target, spellCost, friendlyBonus = 0, hostileBonus = 0) {
-    const specialRulesApplied = [];
-    const tokensBefore = caster.spell_tokens || 0;
-
-    if (tokensBefore < spellCost) {
-      return { success: false, roll: null, modifiedRoll: null, tokensBefore, tokensAfter: tokensBefore, helpBonus: 0, reason: 'not enough tokens', specialRulesApplied };
+  applyRegeneration(unit, wounds, suppressed = false) {
+    if (suppressed || wounds <= 0) return { finalWounds: wounds, ignored: 0, rolls: [] };
+    const rolls = [];
+    let ignored = 0;
+    for (let i = 0; i < wounds; i++) {
+      const roll = Dice.roll();
+      rolls.push(roll);
+      if (roll >= 5) ignored++;
     }
-
-    caster.spell_tokens = tokensBefore - spellCost;
-
-    const roll = this.dice.roll();
-    const helpBonus = friendlyBonus - hostileBonus;
-    const modifiedRoll = roll + helpBonus;
-    const success = modifiedRoll >= 4;
-
-    specialRulesApplied.push({
-      rule: 'Caster', value: spellCost,
-      effect: `spent ${spellCost} token(s), rolled ${roll}${helpBonus !== 0 ? ` ${helpBonus >= 0 ? '+' : ''}${helpBonus} (helpers)` : ''} = ${modifiedRoll} → ${success ? 'SUCCESS' : 'FAIL'}`,
-    });
-    if (friendlyBonus > 0) specialRulesApplied.push({ rule: 'Caster helper', value: friendlyBonus, effect: `${friendlyBonus} allied token(s) spent for +${friendlyBonus} to cast roll` });
-    if (hostileBonus > 0) specialRulesApplied.push({ rule: 'Caster counter', value: hostileBonus, effect: `${hostileBonus} enemy token(s) spent for -${hostileBonus} to cast roll` });
-
-    return { success, roll, modifiedRoll, tokensBefore, tokensAfter: caster.spell_tokens, helpBonus, specialRulesApplied };
+    return { finalWounds: wounds - ignored, ignored, rolls };
   }
 
-  canCast(unit, spellValue, currentTokens) {
-    return (currentTokens ?? unit.spell_tokens ?? 0) >= spellValue;
-  }
-
-  canUseTakedown(unit, weapon) {
-    return this._has(weapon.special_rules, 'Takedown');
-  }
-
-  // ─── Objectives ───────────────────────────────────────────────────────────
+  // =========================================================================
+  // OBJECTIVES
+  // =========================================================================
 
   updateObjectives(gameState) {
-    gameState.objectives?.forEach(obj => {
-      if (obj.controlled_by === 'n/a') return;
-      const unitsNear = gameState.units.filter(u =>
-        this.calculateDistance(u, obj) <= 3 && u.current_models > 0 && !u.embarked_in
+    // Simple: unit within 3" of objective and not shaken controls it
+    for (const obj of gameState.objectives) {
+      const controllingUnit = gameState.units.find(u =>
+        u.current_models > 0 &&
+        u.status !== 'shaken' &&
+        u.status !== 'routed' &&
+        this._distance(u, obj) <= 3
       );
-      // Shaken units cannot seize or contest (spec sb_r4)
-      const agentANear = unitsNear.some(u => u.owner === 'agent_a' && u.status !== 'shaken');
-      const agentBNear = unitsNear.some(u => u.owner === 'agent_b' && u.status !== 'shaken');
-      if      (agentANear && !agentBNear) obj.controlled_by = 'agent_a';
-      else if (agentBNear && !agentANear) obj.controlled_by = 'agent_b';
-      else if (agentANear && agentBNear)  obj.controlled_by = 'contested';
-    });
+      obj.controlled_by = controllingUnit ? controllingUnit.owner : null;
+    }
   }
 
-  // ─── Geometry ─────────────────────────────────────────────────────────────
+  // =========================================================================
+  // DEPLOYMENT (Ambush, etc.)
+  // =========================================================================
+
+  /**
+   * Attempts to deploy a unit from reserve.
+   * @param {Unit} unit
+   * @param {Object} gameState
+   * @returns {boolean} true if deployed
+   */
+  deployAmbush(unit, gameState) {
+    const ctx = { unit, gameState, dice: Dice };
+    const results = this.registry.applyHook(HOOKS.ON_RESERVE_ENTRY, ctx);
+    if (results.length > 0) {
+      // Use first result's coordinates
+      const r = results[0];
+      if (r.x !== undefined && r.y !== undefined) {
+        unit.x = r.x;
+        unit.y = r.y;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // =========================================================================
+  // SPELL TOKENS
+  // =========================================================================
+
+  replenishSpellTokens(unit) {
+    const tokensBefore = unit.spell_tokens || 0;
+    const ctx = { unit, currentTokens: tokensBefore };
+    const results = this.registry.applyHook(HOOKS.ON_TOKEN_GAIN, ctx);
+    let tokensAfter = tokensBefore;
+    results.forEach(r => { if (r.tokens !== undefined) tokensAfter = r.tokens; });
+    unit.spell_tokens = tokensAfter;
+    return tokensAfter - tokensBefore;
+  }
+
+  getCasterTokens(unit) {
+    return unit.spell_tokens || 0;
+  }
+
+  // =========================================================================
+  // DANGEROUS TERRAIN
+  // =========================================================================
+
+  checkDangerousTerrain(unit, terrain, action) {
+    // Simplified: for each terrain piece intersected, roll die, on 1 take wound.
+    // This is just an example; actual check should use movement path.
+    const dangerCtx = { unit, terrain, action, dice: Dice };
+    const results = this.registry.applyHook(HOOKS.ON_DANGEROUS_TERRAIN, dangerCtx);
+    return results.reduce((sum, r) => sum + (r.wounds || 0), 0);
+  }
+
+  // =========================================================================
+  // UTILITIES
+  // =========================================================================
 
   calculateDistance(a, b) {
-    return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
-  }
-
-  /**
-   * Estimates the physical radius (in inches) of a unit's model spread on the board.
-   * Based on model count and size (tough_per_model determines model base size).
-   */
-  getUnitFootprintRadius(unit) {
-    const modelCount = unit.model_count || Math.ceil((unit.total_models || 1) / Math.max(unit.tough_per_model || 1, 1));
-    const tpm = unit.tough_per_model || 1;
-    const modelSpacing = tpm >= 6 ? 1.5 : tpm >= 3 ? 1.0 : 0.6;
-    const cols = Math.min(5, modelCount);
-    const rows = Math.ceil(modelCount / cols);
-    const w = cols * modelSpacing;
-    const h = rows * modelSpacing;
-    return Math.sqrt(w * w + h * h) / 2;
-  }
-
-  /** Returns the position of the furthest model in the direction of the target. */
-  getFurthestModelPosition(unit, target) {
-    const dx = target.x - unit.x;
-    const dy = target.y - unit.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist === 0) return { x: unit.x, y: unit.y };
-    const radius = this.getUnitFootprintRadius(unit);
-    return { x: unit.x + (dx / dist) * radius, y: unit.y + (dy / dist) * radius };
-  }
-
-  /** True if at least one model in the unit's footprint is within weapon range. */
-  checkEffectiveRange(attacker, target, weaponRange) {
-    const furthest = this.getFurthestModelPosition(attacker, target);
-    const dist = Math.sqrt((target.x - furthest.x) ** 2 + (target.y - furthest.y) ** 2);
-    return dist <= weaponRange;
-  }
-
-  /** True if any sightline from the attacker's footprint to the target is clear. */
-  checkEffectiveLOS(attacker, target, terrain) {
-    const furthest = this.getFurthestModelPosition(attacker, target);
-    if (this.checkLineOfSightTerrain(furthest, target, terrain)) return true;
-    return this.checkLineOfSightTerrain(attacker, target, terrain);
-  }
-
-  /**
-   * Estimates how many models in the unit can contribute attacks to a target.
-   * Returns at least 1 if any LOS/range exists at all.
-   */
-  getModelsInRange(unit, target, weaponRange) {
-    const totalModels = unit.model_count || Math.ceil((unit.total_models || 1) / Math.max(unit.tough_per_model || 1, 1));
-    const currentModels = Math.min(totalModels, Math.max(1, Math.ceil((unit.current_models || 1) / Math.max(unit.tough_per_model || 1, 1))));
-
-    const distToCenter = this.calculateDistance(unit, target);
-    const radius = this.getUnitFootprintRadius(unit);
-    const distFurthest = Math.max(0, distToCenter - radius);
-    if (distFurthest > weaponRange) return 0;
-
-    const distNearest = distToCenter + radius;
-    const footprintDiameter = radius * 2;
-    if (footprintDiameter <= 0) return currentModels;
-
-    const rangeOverlap = Math.min(distNearest, weaponRange) - distFurthest;
-    const fraction = Math.min(1, Math.max(0, rangeOverlap / footprintDiameter));
-    return Math.max(1, Math.round(currentModels * fraction));
-  }
-
-  // Alias kept for backward compatibility
-  checkLineOfSight(from, to, terrain) { return this.checkLineOfSightTerrain(from, to, terrain); }
-
-  getTerrainAtPosition(x, y, terrain) {
-    if (!terrain) return null;
-    return terrain.find(t => x >= t.x && x <= t.x + t.width && y >= t.y && y <= t.y + t.height) ?? null;
-  }
-
-  getCoverBonus(unit, terrain) {
-    const unitTerrain = this.getTerrainAtPosition(unit.x, unit.y, terrain);
-    return (unitTerrain && (unitTerrain.cover || unitTerrain.type === 'cover')) ? 1 : 0;
+    return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
   getZone(x, y) {
-    const col = x < 24 ? 'left' : x < 48 ? 'centre' : 'right';
-    const row = y < 16 ? 'north' : y < 32 ? 'centre' : 'south';
-    return row === 'centre' && col === 'centre' ? 'centre' : `${row}-${col}`;
+    // Returns deployment zone name (simplified)
+    if (y < 18) return 'south';
+    if (y > 30) return 'north';
+    return 'centre';
   }
 
-  getRangeBracket(dist) {
-    if (dist <= 12) return 'close';
-    if (dist <= 24) return 'mid';
-    return 'long';
+  _getGameState() {
+    // In a real implementation, the gameState should be passed to methods.
+    // This is a stub; we assume methods receive gameState as argument.
+    return null;
   }
 
-  // ─── Legal Move Generation (required by LLMAgent) ─────────────────────────
-  //
-  // These two methods make implicit legality explicit so agents can reason
-  // about options without needing to know game rules internally.
-  // DMNAgent doesn't use them (it scores implicitly), but they don't hurt.
-
-  /**
-   * Returns the list of legal actions for a unit this activation.
-   * Used by LLMAgent to populate the prompt and validate responses.
-   *
-   * @param {object} unit
-   * @param {object} gameState
-   * @returns {Array<{action, moveDistance?, chargeDistance?, reachableTargets?, canShoot?}>}
-   */
-  getLegalActions(unit, gameState) {
-    const actions = [];
-    const sr = unit.special_rules;
-
-    // Immobile units can only Hold
-    if (this._has(sr, 'Immobile')) {
-      return [{ action: 'Hold', canShoot: true }];
-    }
-
-    // Aircraft can only Advance (their special move)
-    if (this._has(sr, 'Aircraft')) {
-      return [{ action: 'Advance', canShoot: true, moveDistance: 36 }];
-    }
-
-    // Hold — always legal
-    actions.push({ action: 'Hold', canShoot: true });
-
-    // Advance — always legal
-    const advanceDist = this.getMoveDistance(unit, 'Advance', gameState.terrain);
-    actions.push({ action: 'Advance', canShoot: true, moveDistance: advanceDist });
-
-    // Rush — always legal (but no shooting after)
-    const rushDist = this.getMoveDistance(unit, 'Rush', gameState.terrain);
-    actions.push({ action: 'Rush', canShoot: false, moveDistance: rushDist });
-
-    // Charge — only if a reachable enemy exists
-    // Cannot charge if already charged this activation, or if unit is a transport
-    const canAttemptCharge =
-      !unit.just_charged &&
-      !this._has(sr, 'Transport') &&
-      !this._has(sr, 'Indirect') &&
-      !(/artillery|gun|cannon|mortar|support/i.test(unit.name));
-
-    if (canAttemptCharge) {
-      const chargeDist = this.getMoveDistance(unit, 'Charge', gameState.terrain);
-      const enemies = (gameState.units || []).filter(u =>
-        u.owner !== unit.owner &&
-        u.current_models > 0 &&
-        u.status !== 'destroyed' &&
-        u.status !== 'routed'
-      );
-      const reachable = enemies.filter(e => this.checkEffectiveRange(unit, e, chargeDist));
-
-      // Need at least one melee weapon or Impact rule to charge meaningfully
-      const hasMelee = (unit.weapons || []).some(w => (w.range ?? 2) <= 2);
-      const hasImpact = this._has(sr, 'Impact') ||
-        (typeof sr === 'string' && sr.match(/Impact\(\d+\)/));
-
-      if (reachable.length > 0 && (hasMelee || hasImpact)) {
-        actions.push({
-          action: 'Charge',
-          canShoot: false,
-          chargeDistance: chargeDist,
-          reachableTargets: reachable.map(e => e.name),
-        });
-      }
-    }
-
-    return actions;
+  _isInCover(defender, attacker, terrain) {
+    // Simplified: if defender is inside any cover terrain, return true.
+    return terrain.some(t => t.cover && this._distance(defender, t) <= t.radius);
   }
 
-  /**
-   * Returns all valid shooting target+weapon combinations for a unit.
-   * Filters by range AND line of sight. Used by LLMAgent for informed
-   * target selection; also useful for validation.
-   *
-   * @param {object} unit
-   * @param {object} gameState
-   * @returns {Array<{target, targetId, weapon, weaponName, range}>}
-   */
-  getShootingTargets(unit, gameState) {
-    const enemies = (gameState.units || []).filter(u =>
-      u.owner !== unit.owner &&
-      u.current_models > 0 &&
-      u.status !== 'destroyed' &&
-      u.status !== 'routed'
-    );
+  _distance(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
 
-    const results = [];
-    for (const enemy of enemies) {
-      for (const weapon of (unit.weapons || [])) {
-        if ((weapon.range ?? 2) <= 2) continue; // melee-only weapon
-        if (!this.checkEffectiveRange(unit, enemy, weapon.range)) continue;
+  _applyWounds(target, wounds, sourceUnit) {
+    const ctx = { unit: target, wounds, sourceUnit };
+    const results = this.registry.applyHook(HOOKS.ON_WOUND_ALLOCATION, ctx);
+    let woundsToApply = wounds;
+    results.forEach(r => { if (r.wounds !== undefined) woundsToApply = r.wounds; });
 
-        const isIndirect = this._has(weapon.special_rules, 'Indirect');
-        if (!isIndirect && !this.checkEffectiveLOS(unit, enemy, gameState.terrain)) continue;
+    const oldModels = target.current_models;
+    target.current_models = Math.max(0, target.current_models - woundsToApply);
+    if (target.current_models <= 0) target.status = 'destroyed';
 
-        results.push({
-          target:     enemy,
-          targetId:   enemy.id,
-          targetName: enemy.name,
-          weapon,
-          weaponName: weapon.name,
-          range:      this.calculateDistance(unit, enemy),
-        });
-      }
+    // If models were lost, trigger ON_MODEL_KILLED
+    const modelsLost = oldModels - target.current_models;
+    for (let i = 0; i < modelsLost; i++) {
+      const killCtx = { unit: target, modelIndex: i, killer: sourceUnit };
+      this.registry.applyHook(HOOKS.ON_MODEL_KILLED, killCtx);
     }
-
-    return results;
   }
 }
