@@ -5,78 +5,102 @@
 import { HOOKS } from '../RuleRegistry.js';
 
 export const BLESSED_SISTERS_RULES = {
-  // ── Army-Wide: Devout ─────────────────────────────────────────────────────
+  // Army-wide
   Devout: {
-    description: 'When attacking, unmodified 6 to hit deals 1 extra hit (original only counts as a 6 for special rules).',
+    description: 'Unmodified 6 to hit deals 1 extra hit (no chain).',
     hooks: {
       [HOOKS.AFTER_HIT_ROLLS]: ({ hitRolls, unit, specialRulesApplied }) => {
         const threshold = unit.hasRule?.('Devout Boost') ? 5 : 6;
         const extraHits = (hitRolls ?? []).filter(r => r >= threshold).length;
         if (extraHits === 0) return {};
-        specialRulesApplied.push({ rule: 'Devout', value: extraHits, effect: `${extraHits} extra hit(s) from unmodified ${threshold}+` });
+        specialRulesApplied.push({ rule: 'Devout', value: extraHits, effect: `${extraHits} extra hits` });
         return { extraHits, extraHitsCountAsSix: false };
       },
     },
   },
 
   'Devout Boost': {
-    description: 'If this model has Devout, extra hits trigger on 5-6 instead of only 6.',
-    hooks: {},
+    description: 'Devout triggers on 5-6 instead of only 6.',
+    hooks: {
+      // This is just a marker; Devout hook checks for it.
+    },
   },
 
   'Devout Boost Aura': {
     description: 'This model and its unit get Devout Boost.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Devout Boost Aura')) {
+          return { additionalRules: ['Devout Boost'] };
+        }
+        return {};
+      },
+    },
   },
 
-  // ── Guarded ───────────────────────────────────────────────────────────────
   Guarded: {
-    description: 'When shot or charged from over 9" away, get +1 to defense rolls.',
+    description: 'When shot or charged from >9", +1 defense.',
     hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ attackDistance, isMelee, defense, specialRulesApplied }) => {
+      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ attackDistance, defense, specialRulesApplied }) => {
         if ((attackDistance ?? 0) <= 9) return {};
-        specialRulesApplied.push({ rule: 'Guarded', value: 1, effect: `attacker from ${attackDistance}" (>9") → +1 defense` });
-        return { defense: Math.max(2, (defense ?? 6) - 1) };
+        specialRulesApplied.push({ rule: 'Guarded', effect: '+1 defense' });
+        return { defense: Math.max(2, defense - 1) };
       },
     },
   },
 
   'Guarded Buff': {
-    description: 'Once per activation, before attacking, pick one friendly unit within 12" — it gets Guarded once.',
-    hooks: {},
+    description: 'Once per activation, give one friendly unit Guarded once.',
+    hooks: {
+      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
+        if (unit._guardedBuffUsed) return {};
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        if (friendly) {
+          friendly._tempGuarded = true;
+          unit._guardedBuffUsed = true;
+          specialRulesApplied.push({ rule: 'Guarded Buff', effect: `gave Guarded to ${friendly.name}` });
+        }
+        return {};
+      },
+      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, defense, attackDistance, specialRulesApplied }) => {
+        if (unit._tempGuarded && (attackDistance ?? 0) > 9) {
+          delete unit._tempGuarded;
+          specialRulesApplied.push({ rule: 'Guarded Buff', effect: '+1 defense' });
+          return { defense: Math.max(2, defense - 1) };
+        }
+        return {};
+      },
+    },
   },
 
-  // ── Piercing Assault ──────────────────────────────────────────────────────
   'Piercing Assault': {
-    description: 'Gets AP(+1) when charging.',
+    description: 'AP+1 when charging.',
     hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ isCharging, ap, isMelee, specialRulesApplied }) => {
-        if (!isMelee || !isCharging) return {};
-        specialRulesApplied.push({ rule: 'Piercing Assault', value: 1, effect: 'AP+1 when charging' });
+      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ isCharging, ap, specialRulesApplied }) => {
+        if (!isCharging) return {};
+        specialRulesApplied.push({ rule: 'Piercing Assault', effect: 'AP+1' });
         return { ap: (ap ?? 0) + 1 };
       },
     },
   },
 
-  // ── Piercing Hunter ───────────────────────────────────────────────────────
   'Piercing Hunter': {
-    description: 'When shooting at enemies over 9" away, weapons get AP(+1).',
+    description: 'When shooting >9", AP+1.',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ attackDistance, isMelee, ap, specialRulesApplied }) => {
         if (isMelee || (attackDistance ?? 0) <= 9) return {};
-        specialRulesApplied.push({ rule: 'Piercing Hunter', value: 1, effect: `AP+1 shooting target at ${attackDistance}" (>9")` });
+        specialRulesApplied.push({ rule: 'Piercing Hunter', effect: 'AP+1' });
         return { ap: (ap ?? 0) + 1 };
       },
     },
   },
 
-  // ── Point-Blank Piercing / Aura ───────────────────────────────────────────
   'Point-Blank Piercing': {
-    description: 'Gets AP(+1) when shooting enemies within 12".',
+    description: 'When shooting within 12", AP+1.',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ attackDistance, isMelee, ap, specialRulesApplied }) => {
         if (isMelee || (attackDistance ?? Infinity) > 12) return {};
-        specialRulesApplied.push({ rule: 'Point-Blank Piercing', value: 1, effect: `AP+1 shooting within 12" (${attackDistance}")` });
+        specialRulesApplied.push({ rule: 'Point-Blank Piercing', effect: 'AP+1' });
         return { ap: (ap ?? 0) + 1 };
       },
     },
@@ -84,120 +108,196 @@ export const BLESSED_SISTERS_RULES = {
 
   'Point-Blank Piercing Aura': {
     description: 'This model and its unit get Point-Blank Piercing.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Point-Blank Piercing Aura')) {
+          return { additionalRules: ['Point-Blank Piercing'] };
+        }
+        return {};
+      },
+    },
   },
 
-  // ── Point-Blank Surge ─────────────────────────────────────────────────────
   'Point-Blank Surge': {
-    description: 'When shooting at enemies within 12", unmodified 6 to hit deals 1 extra hit (no chain).',
+    description: 'When shooting within 12", unmodified 6 to hit deals 1 extra hit.',
     hooks: {
       [HOOKS.AFTER_HIT_ROLLS]: ({ hitRolls, attackDistance, isMelee, specialRulesApplied }) => {
         if (isMelee || (attackDistance ?? Infinity) > 12) return {};
-        const extraHits = (hitRolls ?? []).filter(r => r === 6).length;
-        if (extraHits === 0) return {};
-        specialRulesApplied.push({ rule: 'Point-Blank Surge', value: extraHits, effect: `${extraHits} extra hit(s) from 6s within 12"` });
-        return { extraHits, extraHitsCountAsSix: false };
+        const sixes = (hitRolls ?? []).filter(r => r === 6).length;
+        if (sixes === 0) return {};
+        specialRulesApplied.push({ rule: 'Point-Blank Surge', value: sixes, effect: `${sixes} extra hits` });
+        return { extraHits: sixes, extraHitsCountAsSix: false };
       },
     },
   },
 
-  // ── Casting Debuff ────────────────────────────────────────────────────────
   'Casting Debuff': {
-    description: 'Once per activation, pick one enemy Caster within 18" — it gets -1 to casting rolls once.',
-    hooks: {},
+    description: 'Once per activation, give an enemy Caster -1 to casting once.',
+    hooks: {
+      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
+        if (unit._castingDebuffUsed) return {};
+        const target = gameState.units.find(u => u.owner !== unit.owner && u.rules.some(r => r.includes('Caster')) && u.distanceTo(unit) <= 18);
+        if (target) {
+          target.casting_debuff = (target.casting_debuff || 0) + 1;
+          unit._castingDebuffUsed = true;
+          specialRulesApplied.push({ rule: 'Casting Debuff', effect: `gave -1 casting to ${target.name}` });
+        }
+        return {};
+      },
+      [HOOKS.ON_SPELL_CAST]: ({ caster, specialRulesApplied }) => {
+        if (caster.casting_debuff) {
+          delete caster.casting_debuff;
+          specialRulesApplied.push({ rule: 'Casting Debuff', effect: '-1 to cast' });
+          return { castModifier: -1 };
+        }
+        return {};
+      },
+    },
   },
 
-  // ── Courage Buff / Aura ───────────────────────────────────────────────────
   'Courage Buff': {
-    description: 'Once per activation, pick one friendly unit within 12" — it gets +1 to morale rolls once.',
-    hooks: {},
+    description: 'Once per activation, give a friendly unit +1 to morale once.',
+    hooks: {
+      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
+        if (unit._courageBuffUsed) return {};
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        if (friendly) {
+          friendly._courageBuff = true;
+          unit._courageBuffUsed = true;
+          specialRulesApplied.push({ rule: 'Courage Buff', effect: `gave +1 morale to ${friendly.name}` });
+        }
+        return {};
+      },
+      [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
+        if (unit._courageBuff) {
+          delete unit._courageBuff;
+          specialRulesApplied.push({ rule: 'Courage Buff', effect: '+1 to morale' });
+          return { roll: roll + 1 };
+        }
+        return {};
+      },
+    },
   },
 
   'Courage Aura': {
-    description: 'This model and its unit get +1 to morale test rolls permanently.',
+    description: '+1 to morale for this model and its unit.',
     hooks: {
-      [HOOKS.ON_MORALE_TEST]: ({ roll, specialRulesApplied }) => {
-        specialRulesApplied.push({ rule: 'Courage Aura', value: 1, effect: '+1 to morale roll (aura)' });
-        return { roll: roll + 1 };
+      [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
+        if (unit.rules.includes('Courage Aura')) {
+          specialRulesApplied.push({ rule: 'Courage Aura', effect: '+1 to morale' });
+          return { roll: roll + 1 };
+        }
+        return {};
       },
     },
   },
 
-  // ── Precision Shooter Buff ────────────────────────────────────────────────
   'Precision Shooter Buff': {
-    description: 'Once per activation, pick one friendly unit within 12" — it gets +1 to hit when shooting once.',
+    description: 'Once per activation, give a friendly unit +1 to hit when shooting once.',
     hooks: {
-      [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, isMelee, specialRulesApplied }) => {
-        if (isMelee || !unit.precision_shooter_buff_active) return {};
-        unit.precision_shooter_buff_active = false;
-        specialRulesApplied.push({ rule: 'Precision Shooter Buff', value: 1, effect: '+1 to hit (shooting, buffed)' });
-        return { quality: Math.max(2, quality - 1) };
+      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
+        if (unit._precisionShooterBuffUsed) return {};
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        if (friendly) {
+          friendly._precisionShooterBuff = true;
+          unit._precisionShooterBuffUsed = true;
+          specialRulesApplied.push({ rule: 'Precision Shooter Buff', effect: `gave +1 shooting to ${friendly.name}` });
+        }
+        return {};
+      },
+      [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, weapon, quality, isMelee, specialRulesApplied }) => {
+        if (isMelee) return {};
+        if (unit._precisionShooterBuff) {
+          delete unit._precisionShooterBuff;
+          specialRulesApplied.push({ rule: 'Precision Shooter Buff', effect: '+1 to hit' });
+          return { quality: Math.max(2, quality - 1) };
+        }
+        return {};
       },
     },
   },
 
-  // ── Precision Fighter Buff ────────────────────────────────────────────────
   'Precision Fighter Buff': {
-    description: 'Once per activation, pick one friendly unit within 12" — it gets +1 to hit in melee once.',
+    description: 'Once per activation, give a friendly unit +1 to hit in melee once.',
     hooks: {
-      [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, isMelee, specialRulesApplied }) => {
-        if (!isMelee || !unit.precision_fighter_buff_active) return {};
-        unit.precision_fighter_buff_active = false;
-        specialRulesApplied.push({ rule: 'Precision Fighter Buff', value: 1, effect: '+1 to hit (melee, buffed)' });
-        return { quality: Math.max(2, quality - 1) };
+      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
+        if (unit._precisionFighterBuffUsed) return {};
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        if (friendly) {
+          friendly._precisionFighterBuff = true;
+          unit._precisionFighterBuffUsed = true;
+          specialRulesApplied.push({ rule: 'Precision Fighter Buff', effect: `gave +1 melee to ${friendly.name}` });
+        }
+        return {};
+      },
+      [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, isMelee, quality, specialRulesApplied }) => {
+        if (!isMelee) return {};
+        if (unit._precisionFighterBuff) {
+          delete unit._precisionFighterBuff;
+          specialRulesApplied.push({ rule: 'Precision Fighter Buff', effect: '+1 to hit' });
+          return { quality: Math.max(2, quality - 1) };
+        }
+        return {};
       },
     },
   },
 
-  // ── Precision Target(X) ───────────────────────────────────────────────────
   'Precision Target': {
-    description: 'Once per game, place X markers on an enemy within 36" LOS. Friendlies get +X to hit rolls when attacking it.',
+    description: 'Once per game, place X markers on an enemy. Friendlies get +X to hit when attacking it.',
     hooks: {
+      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
+        if (unit._precisionTargetUsed) return {};
+        const x = unit._ruleParamValue ?? 1;
+        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 36);
+        if (target) {
+          target.precision_target_markers = (target.precision_target_markers || 0) + x;
+          unit._precisionTargetUsed = true;
+          specialRulesApplied.push({ rule: 'Precision Target', effect: `placed ${x} markers on ${target.name}` });
+        }
+        return {};
+      },
       [HOOKS.BEFORE_HIT_QUALITY]: ({ target, quality, specialRulesApplied }) => {
         const markers = target?.precision_target_markers ?? 0;
         if (markers <= 0) return {};
         target.precision_target_markers = 0;
-        specialRulesApplied.push({ rule: 'Precision Target', value: markers, effect: `+${markers} to hit (precision target markers)` });
+        specialRulesApplied.push({ rule: 'Precision Target', value: markers, effect: `+${markers} to hit` });
         return { quality: Math.max(2, quality - markers) };
       },
     },
   },
 
-  // ── Purge ─────────────────────────────────────────────────────────────────
   Purge: {
-    description: 'Ignores Regeneration. Against units where most models have Defense 2+ to 4+, gets AP(+1).',
+    description: 'Ignores Regeneration. Against Defense 2+ to 4+, AP+1.',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ specialRulesApplied }) => {
-        specialRulesApplied.push({ rule: 'Purge', value: null, effect: 'Regeneration suppressed' });
         return { suppressRegeneration: true };
       },
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ targetDefense, ap, specialRulesApplied }) => {
         if ((targetDefense ?? 7) < 2 || (targetDefense ?? 7) > 4) return {};
-        specialRulesApplied.push({ rule: 'Purge', value: 1, effect: `AP+1 vs Defense ${targetDefense}+ target` });
+        specialRulesApplied.push({ rule: 'Purge', effect: 'AP+1' });
         return { ap: (ap ?? 0) + 1 };
       },
     },
   },
 
-  // ── Fast Aura ─────────────────────────────────────────────────────────────
   'Fast Aura': {
-    description: 'This model and its unit move +2" on Advance and +4" on Rush/Charge.',
+    description: 'This model and its unit get Fast.',
     hooks: {
-      [HOOKS.MODIFY_SPEED]: ({ action, speedDelta, specialRulesApplied }) => {
-        const delta = action === 'Advance' ? 2 : 4;
-        specialRulesApplied.push({ rule: 'Fast Aura', value: delta, effect: `+${delta}" movement (Fast Aura)` });
-        return { speedDelta: (speedDelta ?? 0) + delta };
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Fast Aura')) {
+          return { additionalRules: ['Fast'] };
+        }
+        return {};
       },
     },
   },
 
-  // ── Fortified / Aura ──────────────────────────────────────────────────────
   Fortified: {
-    description: 'Incoming hits count as AP(-1), minimum AP(0).',
+    description: 'Incoming hits count as AP(-1), min AP(0).',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ ap, specialRulesApplied }) => {
         const newAp = Math.max(0, (ap ?? 0) - 1);
-        specialRulesApplied.push({ rule: 'Fortified', value: -1, effect: `AP reduced from ${ap} to ${newAp}` });
+        specialRulesApplied.push({ rule: 'Fortified', effect: `AP reduced to ${newAp}` });
         return { ap: newAp };
       },
     },
@@ -205,6 +305,13 @@ export const BLESSED_SISTERS_RULES = {
 
   'Fortified Aura': {
     description: 'This model and its unit get Fortified.',
-    hooks: {},
+    hooks: {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
+        if (unit.rules.includes('Fortified Aura')) {
+          return { additionalRules: ['Fortified'] };
+        }
+        return {};
+      },
+    },
   },
 };
