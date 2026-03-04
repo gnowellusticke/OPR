@@ -168,12 +168,6 @@ export class DMNEngine {
     return score;
   }
 
-  // ── 3. ATTRITION / RETREAT LOGIC ─────────────────────────────────────────
-  // Units below 40% health should avoid melee and retreat if possible.
-  isAttritionCritical(unit) {
-    const healthRatio = unit.current_models / Math.max(unit.total_models, 1);
-    return healthRatio < 0.4;
-  }
 
   // ── 4. THREAT ZONE MAP ────────────────────────────────────────────────────
   // Returns a threat level at (x, y) given all enemies — used to route units around danger.
