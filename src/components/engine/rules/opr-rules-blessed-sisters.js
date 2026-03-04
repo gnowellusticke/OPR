@@ -30,7 +30,7 @@ export const BLESSED_SISTERS_RULES = {
     description: 'This model and its unit get Devout Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Devout Boost Aura')) {
+        if (unit.special_rules.includes('Devout Boost Aura')) {
           return { additionalRules: ['Devout Boost'] };
         }
         return {};
@@ -110,7 +110,7 @@ export const BLESSED_SISTERS_RULES = {
     description: 'This model and its unit get Point-Blank Piercing.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Point-Blank Piercing Aura')) {
+        if (unit.special_rules.includes('Point-Blank Piercing Aura')) {
           return { additionalRules: ['Point-Blank Piercing'] };
         }
         return {};
@@ -183,7 +183,7 @@ export const BLESSED_SISTERS_RULES = {
     description: '+1 to morale for this model and its unit.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
-        if (unit.rules.includes('Courage Aura')) {
+        if (unit.special_rules.includes('Courage Aura')) {
           specialRulesApplied.push({ rule: 'Courage Aura', effect: '+1 to morale' });
           return { roll: roll + 1 };
         }
@@ -284,7 +284,7 @@ export const BLESSED_SISTERS_RULES = {
     description: 'This model and its unit get Fast.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Fast Aura')) {
+        if (unit.special_rules.includes('Fast Aura')) {
           return { additionalRules: ['Fast'] };
         }
         return {};
@@ -307,7 +307,7 @@ export const BLESSED_SISTERS_RULES = {
     description: 'This model and its unit get Fortified.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Fortified Aura')) {
+        if (unit.special_rules.includes('Fortified Aura')) {
           return { additionalRules: ['Fortified'] };
         }
         return {};
