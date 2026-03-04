@@ -15,10 +15,10 @@ export const REBEL_GUERRILLAS_RULES = {
     description: 'Once per round, units where all models have this rule may move by up to 3" after shooting or being in melee.',
     hooks: {
       [HOOKS.AFTER_ATTACK]: ({ unit, specialRulesApplied }) => {
-        if (!unit.rules.includes('Guerrilla')) return {};
+        if (!unit.special_rules.includes('Guerrilla')) return {};
         if (unit._guerrillaUsedThisRound) return {};
 
-        const hasBoost = unit.rules.includes('Guerrilla Boost') ||
+        const hasBoost = unit.special_rules.includes('Guerrilla Boost') ||
                          specialRulesApplied.includes('Guerrilla Boost');
         const distance = hasBoost ? 6 : 3;
         unit._guerrillaUsedThisRound = true;
@@ -26,10 +26,10 @@ export const REBEL_GUERRILLAS_RULES = {
         return { guerrillaMove: { distance } };
       },
       [HOOKS.AFTER_MELEE]: ({ unit, specialRulesApplied }) => {
-        if (!unit.rules.includes('Guerrilla')) return {};
+        if (!unit.special_rules.includes('Guerrilla')) return {};
         if (unit._guerrillaUsedThisRound) return {};
 
-        const hasBoost = unit.rules.includes('Guerrilla Boost') ||
+        const hasBoost = unit.special_rules.includes('Guerrilla Boost') ||
                          specialRulesApplied.includes('Guerrilla Boost');
         const distance = hasBoost ? 6 : 3;
         unit._guerrillaUsedThisRound = true;
@@ -169,7 +169,7 @@ export const REBEL_GUERRILLAS_RULES = {
     description: 'Gets +1 to hit when attacking.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, specialRulesApplied }) => {
-        if (unit.rules.includes('Precise')) {
+        if (unit.special_rules.includes('Precise')) {
           specialRulesApplied.push({ rule: 'Precise', effect: '+1 to hit' });
           return { quality: Math.max(2, quality - 1) };
         }
@@ -195,13 +195,13 @@ export const REBEL_GUERRILLAS_RULES = {
     description: 'Counts as having Ambush, and gets AP(+2) when shooting on the round in which it deploys via this rule.',
     hooks: {
       [HOOKS.ON_RESERVE_ENTRY]: ({ unit, specialRulesApplied }) => {
-        if (!unit.rules.includes('Surprise Piercing Shot')) return {};
+        if (!unit.special_rules.includes('Surprise Piercing Shot')) return {};
         unit._deployedThisRound = true;
         specialRulesApplied.push({ rule: 'Surprise Piercing Shot', effect: 'deployed via Ambush' });
         return {};
       },
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, ap, isMelee, specialRulesApplied }) => {
-        if (!isMelee && unit._deployedThisRound && unit.rules.includes('Surprise Piercing Shot')) {
+        if (!isMelee && unit._deployedThisRound && unit.special_rules.includes('Surprise Piercing Shot')) {
           delete unit._deployedThisRound; // use once
           specialRulesApplied.push({ rule: 'Surprise Piercing Shot', effect: 'AP+2' });
           return { ap: (ap ?? 0) + 2 };
@@ -263,7 +263,7 @@ export const REBEL_GUERRILLAS_RULES = {
     // We'll implement in ON_WOUND_CALC.
     hooks: {
       [HOOKS.ON_WOUND_CALC]: ({ unit, weapon, unsavedHit, toughPerModel, wounds, specialRulesApplied }) => {
-        if (unit.rules.includes('Bane when Shooting') && unsavedHit.value >= 6) {
+        if (unit.special_rules.includes('Bane when Shooting') && unsavedHit.value >= 6) {
           specialRulesApplied.push({ rule: 'Bane when Shooting', effect: '+1 wound' });
           return { wounds: wounds + 1 };
         }
@@ -284,7 +284,7 @@ export const REBEL_GUERRILLAS_RULES = {
     // If not, we need to define it. We'll provide a basic implementation.
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
-        if (!unit.rules.includes('Regeneration')) return {};
+        if (!unit.special_rules.includes('Regeneration')) return {};
         let ignored = 0;
         for (let i = 0; i < wounds; i++) {
           const roll = Dice.roll();
@@ -303,7 +303,7 @@ export const REBEL_GUERRILLAS_RULES = {
     // Rending: on 6 to hit, AP+? In OPR, Rending gives AP+1 on 6 to hit.
     hooks: {
       [HOOKS.ON_PER_HIT]: ({ unit, hitRoll, ap, isMelee, specialRulesApplied }) => {
-        if (isMelee && unit.rules.includes('Rending in Melee') && hitRoll.value === 6 && !hitRoll.auto) {
+        if (isMelee && unit.special_rules.includes('Rending in Melee') && hitRoll.value === 6 && !hitRoll.auto) {
           specialRulesApplied.push({ rule: 'Rending in Melee', effect: 'AP+1' });
           return { apBonus: 1 };
         }
@@ -319,7 +319,7 @@ export const REBEL_GUERRILLAS_RULES = {
     // Strider: ignores movement penalties from difficult terrain.
     hooks: {
       [HOOKS.ON_TERRAIN_MOVE]: ({ unit, specialRulesApplied }) => {
-        if (unit.rules.includes('Strider')) {
+        if (unit.special_rules.includes('Strider')) {
           specialRulesApplied.push({ rule: 'Strider', effect: 'ignore difficult terrain' });
           return { ignoreDifficult: true };
         }
