@@ -177,19 +177,18 @@ export const DWARF_GUILDS_RULES = {
   },
 
   // ── Mend ──────────────────────────────────────────────────────────────────
-  Mend: {
+Mend: {
     description: 'Once per activation, pick one friendly Tough model within 3" and remove D3 wounds from it.',
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._mendUsed) return {};
-        // Find a friendly Tough model within 3" (including self)
-        const targets = gameState.units.filter(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 3 && u.tough > 1 && u.current_models < u.total_models);
-        if (targets.length === 0 && unit.tough > 1 && unit.current_models < unit.total_models) {
-          targets.push(unit); // can target self
+        const targets = gameState.units.filter(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 && (u.tough_per_model || 1) > 1 && u.current_models < u.total_models);
+        if (targets.length === 0 && (unit.tough_per_model || 1) > 1 && unit.current_models < unit.total_models) {
+          targets.push(unit);
         }
         if (targets.length > 0) {
-          const target = targets[0]; // pick first (AI would choose)
-          const heal = dice.roll() % 3 + 1; // D3
+          const target = targets[0];
+          const heal = dice.roll() % 3 + 1;
           target.current_models = Math.min(target.total_models, target.current_models + heal);
           unit._mendUsed = true;
           specialRulesApplied.push({ rule: 'Mend', effect: `healed ${heal} wound(s) on ${target.name}` });
@@ -200,17 +199,15 @@ export const DWARF_GUILDS_RULES = {
   },
 
   // ── Re-Position Artillery ─────────────────────────────────────────────────
-  'Re-Position Artillery': {
+'Re-Position Artillery': {
     description: 'Once per activation, pick one friendly Artillery model within 6" — it may immediately move up to 9".',
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._repositionUsed) return {};
-        // Find friendly Artillery within 6"
-        const artillery = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 6 && u.rules.includes('Artillery'));
+        const artillery = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 6 && (u.special_rules || '').includes('Artillery'));
         if (artillery) {
           unit._repositionUsed = true;
           specialRulesApplied.push({ rule: 'Re-Position Artillery', effect: `${artillery.name} may move up to 9"` });
-          // Return a command for the engine to allow repositioning.
           return { repositionUnit: artillery, distance: 9 };
         }
         return {};
@@ -219,12 +216,12 @@ export const DWARF_GUILDS_RULES = {
   },
 
   // ── Speed Debuff ──────────────────────────────────────────────────────────
-  'Speed Debuff': {
+'Speed Debuff': {
     description: 'Once per activation, pick one enemy within 18" — it moves -2" on Advance and -4" on Rush/Charge until next activation.',
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._speedDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.speed_debuff = true;
           unit._speedDebuffUsed = true;
