@@ -90,6 +90,8 @@ export default function Battle() {
   // Engines (stable refs)
   const dmnARef = useRef(new DMNAgent(new DMNEngine()));
   const dmnBRef = useRef(new DMNAgent(new DMNEngine()));
+  const bpmnRef = useRef(new BPMNEngine());
+  const cmmnRef = useRef(new CMMNEngine());
   const dmnRef = useRef(null); // will be set per-activation
   const rulesRef = useRef(null);  // will be set after registry is built
   const loggerRef = useRef(null);
