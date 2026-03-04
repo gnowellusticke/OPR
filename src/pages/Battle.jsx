@@ -20,6 +20,7 @@ import { processLogToActivations, NARRATIVE_SYSTEM_PROMPT, STYLE_SUFFIXES, Battl
 import { DMNAgent } from '../components/engine/agents/DMNAgent';
 import { LLMAgent }  from '../components/engine/agents/LLMAgent';
 import NarrativeCommentaryBox from '../components/battle/NarrativeCommentaryBox';
+import { Terrain } from '../components/engine/models/Terrain';
 
 // Map faction names to their rule modules – dynamically imported
 const factionRuleMap = {
@@ -239,41 +240,401 @@ export default function Battle() {
     setBattle({ ...battleRef.current });
   };
 
-  // ─── TERRAIN / OBJECTIVES ────────────────────────────────────────────────────
-  // (Unchanged – copy from original file)
+// ─── TERRAIN / OBJECTIVES ────────────────────────────────────────────────────
+
   const generateTerrain = (theme = 'mixed') => {
-    // ... (full implementation as in original)
+    // Theme configs: each entry defines a piece type, its terrain flags, how many
+    // to place, and a min/max radius range (in board units).
+    const themeConfigs = {
+      urban: [
+        { name: 'Ruins',    types: ['blocking', 'cover'],            count: 4, radiusRange: [3, 5] },
+        { name: 'Building', types: ['impassable', 'cover'],          count: 3, radiusRange: [4, 6] },
+        { name: 'Rubble',   types: ['difficult', 'cover'],           count: 3, radiusRange: [2, 4] },
+      ],
+      forest: [
+        { name: 'Dense Forest', types: ['difficult', 'cover', 'blocking'], count: 4, radiusRange: [4, 7] },
+        { name: 'Light Forest', types: ['difficult', 'cover'],             count: 4, radiusRange: [3, 5] },
+        { name: 'Rocky Ground', types: ['difficult'],                      count: 2, radiusRange: [2, 4] },
+      ],
+      desert: [
+        { name: 'Dunes',        types: ['difficult'],                count: 4, radiusRange: [3, 6] },
+        { name: 'Rocky Outcrop',types: ['blocking', 'cover'],        count: 3, radiusRange: [2, 4] },
+        { name: 'Oasis',        types: ['difficult', 'cover'],       count: 2, radiusRange: [3, 5] },
+      ],
+      mixed: [
+        { name: 'Woods',        types: ['difficult', 'cover'],       count: 3, radiusRange: [3, 5] },
+        { name: 'Ruins',        types: ['blocking', 'cover'],        count: 2, radiusRange: [3, 5] },
+        { name: 'Hill',         types: ['cover'],                    count: 2, radiusRange: [4, 6] },
+        { name: 'Swamp',        types: ['difficult', 'dangerous'],   count: 1, radiusRange: [3, 4] },
+        { name: 'Rocky Ground', types: ['difficult'],                count: 2, radiusRange: [2, 4] },
+      ],
+    };
+
+    const config = themeConfigs[theme] || themeConfigs.mixed;
+    const pieces = [];
+    let pieceId = 0;
+
+    // Playable area — keep terrain away from the board edges and deployment strips.
+    // Deployment bands are y=4-15 (agent_a) and y=33-44 (agent_b), so we leave a
+    // small buffer inside those bands and concentrate terrain in the centre.
+    const X_MIN = 7, X_MAX = 63;
+    const Y_MIN = 7, Y_MAX = 41;
+
+    for (const terrainType of config) {
+      for (let i = 0; i < terrainType.count; i++) {
+        const [rMin, rMax] = terrainType.radiusRange;
+        const radius = rMin + Math.random() * (rMax - rMin);
+
+        // Try up to 60 times to place without overlapping existing pieces.
+        let x, y, placed = false;
+        for (let attempt = 0; attempt < 60; attempt++) {
+          x = X_MIN + Math.random() * (X_MAX - X_MIN);
+          y = Y_MIN + Math.random() * (Y_MAX - Y_MIN);
+          const overlaps = pieces.some(
+            p => Math.hypot(p.x - x, p.y - y) < p.radius + radius + 2
+          );
+          if (!overlaps) { placed = true; break; }
+        }
+        // If we exhausted attempts, place anyway rather than silently drop a piece.
+        if (!placed) {
+          x = X_MIN + Math.random() * (X_MAX - X_MIN);
+          y = Y_MIN + Math.random() * (Y_MAX - Y_MIN);
+        }
+
+        pieces.push(new Terrain({
+          id: `terrain_${pieceId++}`,
+          name: terrainType.name,
+          x,
+          y,
+          radius,
+          types: terrainType.types,
+        }));
+      }
+    }
+
+    return pieces;
   };
 
   const generateObjectives = () => {
-    // ... (full implementation as in original)
+    // Three objectives: one central, one on each flank, all in the mid-table strip.
+    // Controlled_by starts null — RulesEngine.updateObjectives() sets this each round.
+    return [
+      { id: 'obj_centre', name: 'Central Objective', x: 35, y: 24, controlled_by: null },
+      { id: 'obj_left',   name: 'Left Flank',        x: 14, y: 24, controlled_by: null },
+      { id: 'obj_right',  name: 'Right Flank',       x: 56, y: 24, controlled_by: null },
+    ];
   };
 
-  // ─── DEPLOY ──────────────────────────────────────────────────────────────────
-  // (Unchanged – copy from original file)
-  const computeWounds = (unit) => {
-    // ... (full implementation as in original)
+  // ─── DEPLOY HELPERS ───────────────────────────────────────────────────────────
+
+  // Returns the wounds (Tough value) for a single model in this unit.
+  // A unit with Tough(6) has 6 wounds per model; default is 1.
+  const computeWounds = (unitData) => {
+    const sr = Array.isArray(unitData.special_rules)
+      ? unitData.special_rules.join(' ')
+      : (unitData.special_rules || '');
+    const m = sr.match(/Tough\((\d+)\)/);
+    return m ? parseInt(m[1]) : 1;
   };
 
-  const resolveMeleeWeaponName = (unit) => {
-    // ... (full implementation as in original)
+  // Returns the display name of the best melee weapon on a unit,
+  // falling back to 'CCW' (close-combat weapon) if none is found.
+  const resolveMeleeWeaponName = (unitData) => {
+    const melee = (unitData.weapons || []).filter(w => (w.range ?? 0) <= 2);
+    if (melee.length === 0) return 'CCW';
+    const best = melee.reduce((a, b) => ((b.attacks ?? 1) > (a.attacks ?? 1) ? b : a));
+    return best.name || 'CCW';
   };
 
+  // Appends "#1", "#2" etc. to unit names that appear more than once within the
+  // same army so that the battle log and UI can tell them apart.
   const disambiguateUnitNames = (units) => {
-    // ... (full implementation as in original)
+    const counts  = {};   // "owner:name" → total occurrences
+    const indices = {};   // "owner:name" → running index
+
+    units.forEach(u => {
+      const key = `${u.owner}:${u.name}`;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+
+    return units.map(u => {
+      const key = `${u.owner}:${u.name}`;
+      if (counts[key] > 1) {
+        indices[key] = (indices[key] || 0) + 1;
+        return { ...u, name: `${u.name} #${indices[key]}` };
+      }
+      return u;
+    });
   };
 
+  // Converts raw army data from the database into the flat unit objects that
+  // the game engine works with.  Positions are rough placeholders — the DMN
+  // deployment phase will overwrite x/y with its own scored placement.
   const deployArmies = (armyA, armyB, advRules) => {
-    // ... (full implementation as in original)
+    let idCounter = 0;
+
+    const processArmy = (army, owner) => {
+      const roster = army.units || army.roster || [];
+      return roster.map(unitData => {
+        const weapons = (unitData.weapons || unitData.loadout || []).map(w => ({
+          name:          w.name     || 'Weapon',
+          range:         w.range    ?? 12,
+          attacks:       w.attacks  ?? 1,
+          ap:            w.ap       ?? 0,
+          special_rules: Array.isArray(w.special_rules)
+            ? w.special_rules.join(' ')
+            : (w.special_rules || ''),
+        }));
+
+        const modelCount   = unitData.size || unitData.model_count || 1;
+        const toughPerModel = computeWounds(unitData);
+
+        // Reserve flag — real placement happens in runDeploymentPhase.
+        const srStr = Array.isArray(unitData.special_rules)
+          ? unitData.special_rules.join(' ')
+          : (unitData.special_rules || '');
+        const isReserve = /Ambush|Teleport|Infiltrate/.test(srStr);
+
+        return {
+          id:               `unit_${owner}_${idCounter++}`,
+          name:             unitData.name || 'Unknown Unit',
+          owner,
+          // Rough starting coordinates; DMN will move these during deployment.
+          x:  owner === 'agent_a' ? 10 + Math.random() * 50 : 10 + Math.random() * 50,
+          y:  owner === 'agent_a' ? 10 : 38,
+          quality:          unitData.quality  ?? 4,
+          defense:          unitData.defense  ?? 4,
+          total_models:     modelCount,
+          current_models:   modelCount,
+          tough_per_model:  toughPerModel,
+          model_count:      modelCount,
+          weapons,
+          special_rules:    srStr,
+          status:           'normal',
+          is_in_reserve:    isReserve,
+          just_charged:     false,
+          fatigued:         false,
+          rounds_without_offense: 0,
+          spell_tokens:     0,
+          melee_weapon_name: resolveMeleeWeaponName(unitData),
+        };
+      });
+    };
+
+    const raw = [
+      ...processArmy(armyA, 'agent_a'),
+      ...processArmy(armyB, 'agent_b'),
+    ];
+
+    return disambiguateUnitNames(raw);
   };
 
+  // ─── DEPLOYMENT PHASE ────────────────────────────────────────────────────────
+
+  // Called once at the start of a battle.  Iterates through all non-reserve
+  // units in alternating order (agent_a, agent_b, agent_a, …) and asks each
+  // side's DMN engine to choose a placement.  Reserve units are flagged and
+  // will enter via Ambush/Teleport hooks at the start of later rounds.
   const runDeploymentPhase = async (units, objectives, terrain, logger, advRules) => {
-    // ... (full implementation as in original)
+    // Mark reserve units and separate them out.
+    const toPlace = [];
+    units.forEach(u => {
+      if (u.is_in_reserve) {
+        const evs = evRef.current;
+        const ruleName = (u.special_rules || '').match(/Ambush|Teleport|Infiltrate/)?.[0] || 'Reserve';
+        evs.push({
+          round: 0, type: 'setup',
+          message: `${u.name} (${u.owner}) held in ${ruleName}`,
+          timestamp: new Date().toLocaleTimeString(),
+        });
+        logger?.logAbility({ round: 0, unit: u, ability: ruleName, details: { status: 'in_reserve' } });
+      } else {
+        toPlace.push(u);
+      }
+    });
+
+    // Interleave: one agent_a unit, one agent_b unit, repeat.
+    const aUnits = toPlace.filter(u => u.owner === 'agent_a');
+    const bUnits = toPlace.filter(u => u.owner === 'agent_b');
+    const deployOrder = [];
+    for (let i = 0; i < Math.max(aUnits.length, bUnits.length); i++) {
+      if (i < aUnits.length) deployOrder.push(aUnits[i]);
+      if (i < bUnits.length) deployOrder.push(bUnits[i]);
+    }
+
+    // Track already-placed units per side for the DMN's spread heuristic.
+    const deployedA   = [];
+    const deployedB   = [];
+    const usedZonesA  = new Set();
+    const usedZonesB  = new Set();
+
+    for (const unit of deployOrder) {
+      const isAgentA       = unit.owner === 'agent_a';
+      const deployedFriends = isAgentA ? deployedA : deployedB;
+      const deployedEnemies = isAgentA ? deployedB : deployedA;
+      const usedZones       = isAgentA ? usedZonesA : usedZonesB;
+
+      // DMNEngine.decideDeployment lives on the inner engine, not the DMNAgent wrapper.
+      // Access it via .engine if DMNAgent exposes it, otherwise fall through to the ref.
+      const agentRef  = isAgentA ? dmnARef.current : dmnBRef.current;
+      const dmnEngine = agentRef.engine || agentRef;  // DMNAgent wraps DMNEngine as .engine
+
+      const placement = dmnEngine.decideDeployment(
+        unit, isAgentA, deployedEnemies, deployedFriends, objectives, terrain, usedZones
+      );
+
+      // Hard-clamp to deployment band regardless of what DMN returned.
+      const yMin = isAgentA ? 4 : 33;
+      const yMax = isAgentA ? 15 : 44;
+      unit.x = Math.max(5, Math.min(65, placement.x));
+      unit.y = Math.max(yMin, Math.min(yMax, placement.y));
+
+      if (placement.zone) usedZones.add(placement.zone);
+      if (isAgentA) deployedA.push(unit); else deployedB.push(unit);
+
+      const evs = [...evRef.current];
+      evs.push({
+        round: 0, type: 'setup',
+        message: `${unit.name} (${unit.owner}) → (${unit.x.toFixed(1)}, ${unit.y.toFixed(1)}) — ${placement.dmnReason}`,
+        timestamp: new Date().toLocaleTimeString(),
+      });
+      logger?.logAbility({
+        round: 0, unit, ability: 'Deploy',
+        details: {
+          x: unit.x.toFixed(1), y: unit.y.toFixed(1),
+          zone: placement.zone, reason: placement.dmnReason,
+          specialRulesApplied: placement.specialRulesApplied || [],
+        },
+      });
+
+      // Commit after each unit so the battlefield view updates in real time.
+      commitState({ ...gsRef.current, units: [...units] }, evs);
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    // Transition BPMN and start Round 1.
+    bpmnRef.current.transition('round_start');
+
+    const evs = [...evRef.current];
+    evs.push({
+      round: 1, type: 'round',
+      message: '━━━ Round 1 begins ━━━',
+      timestamp: new Date().toLocaleTimeString(),
+    });
+
+    commitState({
+      ...gsRef.current,
+      units:            [...units],
+      pending_deployment: false,
+      current_round:    1,
+      units_activated:  [],
+      active_agent:     'agent_a',
+    }, evs);
+  };
+
+  // Thin wrapper called by the useEffect when pending_deployment is true.
+  // Pulls the current units/objectives/terrain out of the ref so the async
+  // deployment phase always works on the freshest state.
+  const runPendingDeployment = async () => {
+    setPlayingBoth(false); // Pause auto-advance while we do deployment
+    const gs = gsRef.current;
+    await runDeploymentPhase(
+      gs.units,
+      gs.objectives,
+      gs.terrain,
+      loggerRef.current,
+      gs.advance_rules || {}
+    );
+    setPlayingBoth(true); // Resume once deployment is done
   };
 
   // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
+
+  // Called by the useEffect timer on every state update while playing === true.
+  // Decides what happens next: start deployment, activate the next unit,
+  // end the round, or end the battle.
   const processNextAction = async () => {
-    // ... (unchanged – scheduling logic as in original)
+    if (!playingRef.current) return;
+
+    const gs = gsRef.current;
+    if (!gs) return;
+
+    // Nothing to do if the battle is over.
+    if (battleRef.current?.status === 'completed') {
+      setPlayingBoth(false);
+      return;
+    }
+
+    // Deployment hasn't happened yet — hand off to the deployment phase.
+    if (gs.pending_deployment) {
+      await runPendingDeployment();
+      return;
+    }
+
+    const round = gs.current_round;
+    if (!round || round > 4) {
+      await endBattle(gs);
+      return;
+    }
+
+    // Which units haven't activated yet this round?
+    const activatedSet = new Set(gs.units_activated || []);
+    const liveUnits = gs.units.filter(u =>
+      u.current_models > 0 &&
+      u.status !== 'destroyed' &&
+      u.status !== 'routed'  &&
+      !u.is_in_reserve       &&
+      !activatedSet.has(u.id)
+    );
+
+    if (liveUnits.length === 0) {
+      // Every live unit has activated — close the round.
+      await endRound(gs);
+      return;
+    }
+
+    // Alternate activations: prefer the active agent's units.
+    // If they have nothing left to activate, hand priority to the other side.
+    const activeAgent = gs.active_agent || 'agent_a';
+    const otherAgent  = activeAgent === 'agent_a' ? 'agent_b' : 'agent_a';
+
+    let candidateAgent = activeAgent;
+    let candidates = liveUnits.filter(u => u.owner === activeAgent);
+    if (candidates.length === 0) {
+      candidateAgent = otherAgent;
+      candidates = liveUnits.filter(u => u.owner === otherAgent);
+    }
+
+    if (candidates.length === 0) {
+      await endRound(gs);
+      return;
+    }
+
+    // Ask the agent's DMN to score each candidate and pick the highest-priority one.
+    // This means units with urgent actions (e.g. shaken recovery, charge opportunity)
+    // bubble up before passive holders.
+    const agentRef = candidateAgent === 'agent_a' ? dmnARef.current : dmnBRef.current;
+
+    const scored = candidates.map(u => {
+      try {
+        const options = agentRef.evaluateActionOptions
+          ? agentRef.evaluateActionOptions(u, gs, candidateAgent)
+          : [];
+        const topScore = options[0]?.score ?? 0;
+        return { unit: u, score: topScore };
+      } catch {
+        return { unit: u, score: 0 };
+      }
+    });
+    scored.sort((a, b) => b.score - a.score);
+    const unitToActivate = scored[0].unit;
+
+    // If the active agent changed, update state before activating.
+    if (candidateAgent !== activeAgent) {
+      commitState({ ...gsRef.current, active_agent: candidateAgent });
+    }
+
+    await activateUnit(unitToActivate, gsRef.current);
   };
 
   // ─── ACTIVATE ─────────────────────────────────────────────────────────────────
@@ -389,7 +750,7 @@ export default function Battle() {
         gs
       );
       if (moveTarget) {
-        const result = rules.executeMovement(unit, action, moveTarget, gs.terrain);
+        const result = rules.executeMovement(unit, action, moveTarget, gs.terrain, gs);
         const zone = rules.getZone(unit.x, unit.y);
         evs.push({ round, type: 'movement', message: `${unit.name} advanced ${result.distance.toFixed(1)}"`, timestamp: new Date().toLocaleTimeString() });
         logger?.logMove({ round, actingUnit: unit, action, distance: result.distance, zone, dmnReason, specialRulesApplied: result.specialRulesApplied });
@@ -404,7 +765,7 @@ export default function Battle() {
         gs
       );
       if (rushTarget) {
-        const result = rules.executeMovement(unit, action, rushTarget, gs.terrain);
+        const result = rules.executeMovement(unit, action, rushTarget, gs.terrain, gs);
         const zone = rules.getZone(unit.x, unit.y);
         // Dangerous terrain check is already inside executeMovement; we just need to apply wounds if any
         // But executeMovement already applies them via _applyWounds.
@@ -419,7 +780,7 @@ export default function Battle() {
       const target = dmn.selectTarget(unit, enemies);
       if (target) {
         unit.just_charged = true;
-        const moveResult = rules.executeMovement(unit, action, target, gs.terrain);
+        const moveResult = rules.executeMovement(unit, action, target, gs.terrain, gs);
         const zone = rules.getZone(unit.x, unit.y);
         evs.push({ round, type: 'movement', message: `${unit.name} charges ${target.name}!`, timestamp: new Date().toLocaleTimeString() });
         logger?.logMove({ round, actingUnit: unit, action: 'Charge', distance: moveResult.distance, zone, dmnReason, chargeTarget: target.name, chargeTargetState: { wounds_remaining: target.current_models, max_wounds: target.total_models, status: target.status || 'normal' }, specialRulesApplied: moveResult.specialRulesApplied });
@@ -448,7 +809,7 @@ export default function Battle() {
         // No target in range – fall back to rush
         const nearest = dmn.findNearestEnemy(unit, enemies);
         if (nearest) {
-          const result = rules.executeMovement(unit, 'Rush', nearest, gs.terrain);
+          const result = rules.executeMovement(unit, 'Rush', nearest, gs.terrain, gs);
           evs.push({ round, type: 'movement', message: `${unit.name} rushes toward ${nearest.name} (no charge target in range)`, timestamp: new Date().toLocaleTimeString() });
           logger?.logMove({ round, actingUnit: unit, action: 'Rush', distance: result.distance, zone: rules.getZone(unit.x, unit.y), dmnReason, specialRulesApplied: result.specialRulesApplied });
         }
