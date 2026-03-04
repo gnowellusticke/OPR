@@ -279,7 +279,7 @@ export const HAVOC_BROTHERS_RULES = {
     description: 'This model and its unit get Furious.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Furious Aura')) {
+        if (unit.special_rules.includes('Furious Aura')) {
           return { additionalRules: ['Furious'] };
         }
         return {};
@@ -290,7 +290,7 @@ export const HAVOC_BROTHERS_RULES = {
     description: 'This model and its unit get Havocbound Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Havocbound Boost Aura')) {
+        if (unit.special_rules.includes('Havocbound Boost Aura')) {
           return { additionalRules: ['Havocbound Boost'] };
         }
         return {};
@@ -301,7 +301,7 @@ export const HAVOC_BROTHERS_RULES = {
     description: 'This model and its unit get Relentless.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Relentless Aura')) {
+        if (unit.special_rules.includes('Relentless Aura')) {
           return { additionalRules: ['Relentless'] };
         }
         return {};
@@ -312,7 +312,7 @@ export const HAVOC_BROTHERS_RULES = {
     description: 'This model and its unit get Resistance.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Resistance Aura')) {
+        if (unit.special_rules.includes('Resistance Aura')) {
           return { additionalRules: ['Resistance'] };
         }
         return {};
@@ -323,7 +323,7 @@ export const HAVOC_BROTHERS_RULES = {
     description: 'This model and its unit get Scout.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Scout Aura')) {
+        if (unit.special_rules.includes('Scout Aura')) {
           return { additionalRules: ['Scout'] };
         }
         return {};
@@ -334,7 +334,7 @@ export const HAVOC_BROTHERS_RULES = {
     description: 'This model and its unit get Versatile Defense.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Versatile Defense Aura')) {
+        if (unit.special_rules.includes('Versatile Defense Aura')) {
           return { additionalRules: ['Versatile Defense'] };
         }
         return {};
