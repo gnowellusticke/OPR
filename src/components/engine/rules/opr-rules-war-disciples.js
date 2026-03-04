@@ -113,7 +113,7 @@ export const WAR_DISCIPLES_RULES = {
     description: 'This model gets AP(+1) when charging.',
     hooks: {
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, specialRulesApplied }) => {
-        if (unit._charged && unit.rules.includes('Piercing Assault')) {
+        if (unit._charged && unit.special_rules.includes('Piercing Assault')) {
           unit._piercingAssault = true;
           specialRulesApplied.push({ rule: 'Piercing Assault', effect: 'AP+1 on charge' });
         }
@@ -133,7 +133,7 @@ export const WAR_DISCIPLES_RULES = {
     description: 'When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored. If the wounds were from a spell, then they are ignored on a 2+ instead.',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, fromSpell, specialRulesApplied }) => {
-        if (!unit.rules.includes('Resistance')) return {};
+        if (!unit.special_rules.includes('Resistance')) return {};
 
         const threshold = fromSpell ? 2 : 6;
         let ignored = 0;
@@ -170,7 +170,7 @@ export const WAR_DISCIPLES_RULES = {
     description: 'If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+ it stops being Shaken.',
     hooks: {
       [HOOKS.ON_ROUND_START]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Steadfast')) return {};
+        if (!unit.special_rules.includes('Steadfast')) return {};
         if (unit.status !== 'shaken') return {};
 
         const roll = dice.roll();
@@ -218,7 +218,7 @@ export const WAR_DISCIPLES_RULES = {
     description: 'When attacking, roll one die and apply one effect: on 1‑3 they get AP(+1), on 4‑6 they get +1 to hit.',
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Unpredictable')) return {};
+        if (!unit.special_rules.includes('Unpredictable')) return {};
         const roll = dice.roll();
         const mode = roll <= 3 ? 'ap' : 'hit';
         unit._unpredictableMode = mode;
@@ -249,7 +249,7 @@ export const WAR_DISCIPLES_RULES = {
     description: 'When in melee, roll one die and apply one effect: on 1‑3 AP(+1), on 4‑6 +1 to hit.',
     hooks: {
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Unpredictable Fighter')) return {};
+        if (!unit.special_rules.includes('Unpredictable Fighter')) return {};
         const roll = dice.roll();
         const mode = roll <= 3 ? 'ap' : 'hit';
         unit._unpredictableFighterMode = mode;
