@@ -395,7 +395,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'This model and its unit get Ferocious Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Ferocious Boost Aura')) {
+        if (unit.special_rules.includes('Ferocious Boost Aura')) {
           return { additionalRules: ['Ferocious Boost'] };
         }
       },
@@ -405,7 +405,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'This model and its unit get Hit & Run Fighter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Hit & Run Fighter Aura')) {
+        if (unit.special_rules.includes('Hit & Run Fighter Aura')) {
           return { additionalRules: ['Hit & Run Fighter'] };
         }
       },
@@ -415,7 +415,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'This model and its unit get AP(+1) in melee.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Piercing Fighter Aura')) {
+        if (unit.special_rules.includes('Piercing Fighter Aura')) {
           // This is not a rule but a bonus; we could add a flag or directly apply in melee.
           // For simplicity, we'll add a temporary rule.
           return { additionalRules: ['Piercing Fighter'] }; // need to define Piercing Fighter rule?
@@ -428,7 +428,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'This model and its unit get +1 to hit when charging.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Precision Charge Aura')) {
+        if (unit.special_rules.includes('Precision Charge Aura')) {
           return { additionalRules: ['Precision Charge'] };
         }
       },
@@ -438,7 +438,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'This model and its unit get Ranged Shrouding.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Ranged Shrouding Aura')) {
+        if (unit.special_rules.includes('Ranged Shrouding Aura')) {
           return { additionalRules: ['Ranged Shrouding'] };
         }
       },
@@ -448,7 +448,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'This model and its unit get Regeneration.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Regeneration Aura')) {
+        if (unit.special_rules.includes('Regeneration Aura')) {
           return { additionalRules: ['Regeneration'] };
         }
       },
@@ -458,7 +458,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'This model and its unit get Speed Feat.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Speed Feat Aura')) {
+        if (unit.special_rules.includes('Speed Feat Aura')) {
           return { additionalRules: ['Speed Feat'] };
         }
       },
@@ -468,7 +468,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'This model and its unit get Unpredictable Shooter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Unpredictable Shooter Aura')) {
+        if (unit.special_rules.includes('Unpredictable Shooter Aura')) {
           return { additionalRules: ['Unpredictable Shooter'] };
         }
       },
