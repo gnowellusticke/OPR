@@ -12,6 +12,71 @@ export class RulesEngine {
   }
 
   // =========================================================================
+  // ROUND MANAGEMENT
+  // =========================================================================
+
+  /**
+   * Called at the start of a new round.
+   * @param {Object} gameState – full game state
+   * @returns {Object} { specialRulesApplied }
+   */
+  startRound(gameState) {
+    const specialRulesApplied = [];
+    const ctx = { gameState, dice: Dice, specialRulesApplied };
+    this.registry.applyHook(HOOKS.ON_ROUND_START, ctx);
+    return { specialRulesApplied };
+  }
+
+  /**
+   * Called at the end of a round.
+   * @param {Object} gameState
+   * @returns {Object} { specialRulesApplied }
+   */
+  endRound(gameState) {
+    const specialRulesApplied = [];
+    const ctx = { gameState, dice: Dice, specialRulesApplied };
+    this.registry.applyHook(HOOKS.ON_ROUND_END, ctx);
+    return { specialRulesApplied };
+  }
+
+  // =========================================================================
+  // DEPLOYMENT
+  // =========================================================================
+
+  /**
+   * Called when a unit is initially placed on the table.
+   * @param {Unit} unit
+   * @param {Object} gameState
+   * @returns {Object} { specialRulesApplied, ... }
+   */
+  onDeploy(unit, gameState) {
+    const specialRulesApplied = [];
+    const ctx = { unit, gameState, dice: Dice, specialRulesApplied };
+    const results = this.registry.applyHook(HOOKS.ON_DEPLOY, ctx);
+    this._processDeployResults(results, unit, gameState, specialRulesApplied);
+    return { specialRulesApplied };
+  }
+
+  /**
+   * Called after all units have been deployed (before the first round).
+   * @param {Object} gameState
+   * @returns {Object} { specialRulesApplied, redeployUnits }
+   */
+  afterDeployment(gameState) {
+    const specialRulesApplied = [];
+    const ctx = { gameState, dice: Dice, specialRulesApplied };
+    const results = this.registry.applyHook(HOOKS.AFTER_DEPLOYMENT, ctx);
+    // Process any redeployments, etc.
+    const redeployUnits = [];
+    results.forEach(r => {
+      if (r.redeployUnits) {
+        redeployUnits.push(...r.redeployUnits);
+      }
+    });
+    return { specialRulesApplied, redeployUnits };
+  }
+
+  // =========================================================================
   // ACTIVATION
   // =========================================================================
 
@@ -53,12 +118,13 @@ export class RulesEngine {
    * @param {Object} target – target position {x, y} (for charge, this is the enemy unit)
    * @param {Array} terrain – list of terrain objects
    * @param {Object} gameState – full game state (for hooks that need other units)
-   * @returns {Object} { distance, specialRulesApplied, pathIntersections, ... }
+   * @returns {Object} { distance, specialRulesApplied, blocked, ... }
    */
   executeMovement(unit, action, target, terrain, gameState) {
     const ctx = { unit, action, target, gameState, terrain, dice: Dice };
     const specialRulesApplied = [];
 
+    // Base speed
     let speed = (action === 'Advance') ? 6 : (action === 'Rush' || action === 'Charge') ? 12 : 0;
 
     // GET_BASE_SPEED hooks
@@ -70,6 +136,7 @@ export class RulesEngine {
     const modifyResults = this.registry.applyHook(HOOKS.MODIFY_SPEED, modifyCtx);
     modifyResults.forEach(r => { if (r.speedDelta) speed += r.speedDelta; });
 
+    // Determine path (straight line)
     const startX = unit.x, startY = unit.y;
     const endX = target.x, endY = target.y;
     const distance = Math.hypot(endX - startX, endY - startY);
@@ -83,6 +150,7 @@ export class RulesEngine {
     const ignoreUnits = movePathResults.some(r => r.ignoreUnits);
     const ignoreTerrain = movePathResults.some(r => r.ignoreTerrain);
 
+    // Unit blocking
     if (!ignoreUnits) {
       const blockers = gameState.units.filter(u =>
         u.id !== unit.id &&
@@ -100,6 +168,7 @@ export class RulesEngine {
     const ignoreDifficult = terrainResults.some(r => r.ignoreDifficult);
     const ignoreAllTerrain = terrainResults.some(r => r.ignoreTerrain);
 
+    // Check for difficult terrain penalty
     let effectiveSpeed = speed;
     if (!ignoreAllTerrain && !ignoreDifficult) {
       const difficultTerrain = terrain.filter(t => t.difficult && this._lineIntersectsTerrain(startX, startY, newX, newY, t));
@@ -136,16 +205,26 @@ export class RulesEngine {
       }
     }
 
+    // Update position
     unit.x = finalX;
     unit.y = finalY;
+    unit._moved = true; // flag for movement-related hooks
 
     return { distance: finalDist, specialRulesApplied };
   }
 
   // =========================================================================
-  // SHOOTING – CLEAN HOOK ARCHITECTURE
+  // SHOOTING
   // =========================================================================
 
+  /**
+   * Resolves a shooting attack from one unit against another.
+   * @param {Unit} attacker
+   * @param {Unit} defender
+   * @param {Weapon} weapon
+   * @param {Object} gameState
+   * @returns {Object} { hits, saves, wounds, hit_rolls, defense_rolls, specialRulesApplied }
+   */
   resolveShooting(attacker, defender, weapon, gameState) {
     const specialRulesApplied = [];
     const ctx = {
@@ -156,10 +235,18 @@ export class RulesEngine {
       dice: Dice,
       specialRulesApplied,
       isMelee: false,
-      // Generic weapon info – hooks inspect these themselves
       weaponRules: weapon.rules || [],
       weaponParams: weapon.ruleParams || {}
     };
+
+    // Check if shooting is allowed after moving (Quick Shot, etc.)
+    if (attacker._moved) {
+      const moveCheckCtx = { unit: attacker, action: 'Rush', gameState };
+      const moveResults = this.registry.applyHook(HOOKS.CAN_SHOOT_AFTER_MOVE, moveCheckCtx);
+      if (!moveResults.some(r => r.canShoot)) {
+        return { hits: 0, saves: 0, wounds: 0, hit_rolls: [], defense_rolls: [], specialRulesApplied };
+      }
+    }
 
     // BEFORE_ATTACK
     const beforeAttackResults = this.registry.applyHook(HOOKS.BEFORE_ATTACK, ctx);
@@ -184,7 +271,7 @@ export class RulesEngine {
       if (success) hits++;
     }
 
-    // AFTER_HIT_ROLLS – no hardcoded rule names, hooks check weaponRules themselves
+    // AFTER_HIT_ROLLS
     const afterHitCtx = { ...ctx, rolls: hitRolls, successes: hits };
     const afterHitResults = this.registry.applyHook(HOOKS.AFTER_HIT_ROLLS, afterHitCtx);
     afterHitResults.forEach(r => {
@@ -268,7 +355,7 @@ export class RulesEngine {
   }
 
   // =========================================================================
-  // MELEE (unchanged, but also uses same generic weapon info)
+  // MELEE
   // =========================================================================
 
   resolveMelee(attacker, defender, gameState) {
@@ -380,7 +467,7 @@ export class RulesEngine {
   }
 
   // =========================================================================
-  // MORALE, REGENERATION, OBJECTIVES, DEPLOYMENT, TOKENS (unchanged)
+  // MORALE
   // =========================================================================
 
   checkMorale(unit, reason) {
@@ -413,6 +500,10 @@ export class RulesEngine {
     }
   }
 
+  // =========================================================================
+  // REGENERATION (separate, but could be a hook; kept for backward compat)
+  // =========================================================================
+
   applyRegeneration(unit, wounds, suppressed = false) {
     if (suppressed || wounds <= 0) return { finalWounds: wounds, ignored: 0, rolls: [] };
     const rolls = [];
@@ -425,6 +516,10 @@ export class RulesEngine {
     return { finalWounds: wounds - ignored, ignored, rolls };
   }
 
+  // =========================================================================
+  // OBJECTIVES
+  // =========================================================================
+
   updateObjectives(gameState) {
     for (const obj of gameState.objectives) {
       const controllingUnit = gameState.units.find(u =>
@@ -436,6 +531,10 @@ export class RulesEngine {
       obj.controlled_by = controllingUnit ? controllingUnit.owner : null;
     }
   }
+
+  // =========================================================================
+  // DEPLOYMENT (Ambush, etc.)
+  // =========================================================================
 
   deployAmbush(unit, gameState) {
     const ctx = { unit, gameState, dice: Dice };
@@ -451,6 +550,10 @@ export class RulesEngine {
     return false;
   }
 
+  // =========================================================================
+  // SPELL TOKENS
+  // =========================================================================
+
   replenishSpellTokens(unit) {
     const tokensBefore = unit.spell_tokens || 0;
     const ctx = { unit, currentTokens: tokensBefore };
@@ -465,16 +568,19 @@ export class RulesEngine {
     return unit.spell_tokens || 0;
   }
 
+  // =========================================================================
+  // DANGEROUS TERRAIN (legacy)
+  // =========================================================================
+
   checkDangerousTerrain(unit, terrain, action) {
     const dangerCtx = { unit, terrain, action, dice: Dice };
     const results = this.registry.applyHook(HOOKS.ON_DANGEROUS_TERRAIN, dangerCtx);
     return results.reduce((sum, r) => sum + (r.wounds || 0), 0);
   }
 
-  onRoundEnd(gameState) {
-    const ctx = { gameState, dice: Dice };
-    this.registry.applyHook(HOOKS.ON_ROUND_END, ctx);
-  }
+  // =========================================================================
+  // AURA RESOLUTION
+  // =========================================================================
 
   getActiveRules(unit, gameState) {
     const rules = new Set(unit.rules || []);
@@ -489,13 +595,22 @@ export class RulesEngine {
   }
 
   // =========================================================================
-  // INTERNAL PROCESSORS (handle generic effect descriptors)
+  // INTERNAL PROCESSORS
   // =========================================================================
+
+  _processDeployResults(results, unit, gameState, specialRulesApplied) {
+    results.forEach(r => {
+      if (r.fanaticRedeploy) {
+        // The engine should allow the player to reposition within the given distance
+        console.log(`Fanatic redeploy: may reposition up to ${r.fanaticRedeploy.distance}"`);
+      }
+    });
+  }
 
   _processActivationStartResults(results, unit, gameState, specialRulesApplied) {
     results.forEach(r => {
       if (r.boundingMove) {
-        console.log(`Bounding move: may reposition up to ${r.boundingMove}"`);
+        console.log(`Bounding move: may reposition up to ${r.boundingMove.distance}"`);
       }
       if (r.mend) {
         const { target, healAmount } = r.mend;
@@ -508,9 +623,21 @@ export class RulesEngine {
       if (r.setVersatileDefense) {
         unit._versatileDefenseMode = r.setVersatileDefense;
       }
+      if (r.setVersatileReach) {
+        unit._versatileReachMode = r.setVersatileReach;
+      }
       if (r.dangerousTerrainTest) {
         const { target } = r.dangerousTerrainTest;
         target._forcedDangerousTerrain = true;
+      }
+      if (r.teleport) {
+        console.log(`Teleport: may reposition up to ${r.teleport.distance}"`);
+      }
+      if (r.repositionUnit) {
+        console.log(`Re-position Artillery: ${r.repositionUnit.name} may move up to ${r.distance}"`);
+      }
+      if (r.skipActivation) {
+        unit._skipActivation = true;
       }
     });
   }
@@ -535,6 +662,18 @@ export class RulesEngine {
       if (r.boundingMove) {
         console.log(`Bounding move: may reposition up to ${r.boundingMove}"`);
       }
+      if (r.selfWounds) {
+        // Apply self-wounds from Hazardous etc.
+        for (let i = 0; i < r.selfWounds; i++) {
+          unit.current_models = Math.max(0, unit.current_models - 1);
+          if (unit.current_models <= 0) unit.status = 'destroyed';
+        }
+      }
+      if (r.weaponRangeBonus) {
+        // This is a temporary bonus for this attack; we handle it in the weapon range check.
+        // For now, we just note it.
+        console.log(`Weapon range +${r.weaponRangeBonus}"`);
+      }
     });
   }
 
@@ -557,6 +696,13 @@ export class RulesEngine {
         const { target: ruleTarget, rule, duration } = r.grantRule;
         ruleTarget._tempRules = ruleTarget._tempRules || [];
         ruleTarget._tempRules.push({ rule, duration });
+      }
+      if (r.forcedMove) {
+        const { target: moveTarget, distance } = r.forcedMove;
+        console.log(`Forced move: ${moveTarget.name} may be moved up to ${distance}"`);
+      }
+      if (r.forcedMoves) {
+        r.forcedMoves.forEach(m => console.log(`Forced move: ${m.target.name} up to ${m.distance}"`));
       }
     });
   }
