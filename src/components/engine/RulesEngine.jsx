@@ -100,13 +100,13 @@ export class RulesEngine {
    * @param {Object} gameState
    * @returns {Object} { specialRulesApplied }
    */
-  endActivation(unit, gameState) {
+endActivation(unit, gameState) {
     const specialRulesApplied = [];
     const ctx = { unit, gameState, dice: Dice, specialRulesApplied };
     this.registry.applyHook(HOOKS.ON_ACTIVATION_END, ctx);
+    this.registry.applyHook(HOOKS.AFTER_ACTIVATION, ctx);
     return { specialRulesApplied };
   }
-
   // =========================================================================
   // MOVEMENT
   // =========================================================================
@@ -239,15 +239,15 @@ export class RulesEngine {
       weaponParams: weapon.ruleParams || {}
     };
 
-    // Check if shooting is allowed after moving (Quick Shot, etc.)
+// Check if shooting is blocked after moving (e.g. after Rush action)
     if (attacker._moved) {
       const moveCheckCtx = { unit: attacker, action: 'Rush', gameState };
       const moveResults = this.registry.applyHook(HOOKS.CAN_SHOOT_AFTER_MOVE, moveCheckCtx);
-      if (!moveResults.some(r => r.canShoot)) {
+      if (moveResults.some(r => r.preventShooting)) {
         return { hits: 0, saves: 0, wounds: 0, hit_rolls: [], defense_rolls: [], specialRulesApplied };
       }
     }
-
+    
     // BEFORE_ATTACK
     const beforeAttackResults = this.registry.applyHook(HOOKS.BEFORE_ATTACK, ctx);
     if (beforeAttackResults.some(r => r.preventAttack)) {
@@ -271,12 +271,24 @@ export class RulesEngine {
       if (success) hits++;
     }
 
-    // AFTER_HIT_ROLLS
+// AFTER_HIT_ROLLS
     const afterHitCtx = { ...ctx, rolls: hitRolls, successes: hits };
     const afterHitResults = this.registry.applyHook(HOOKS.AFTER_HIT_ROLLS, afterHitCtx);
     afterHitResults.forEach(r => {
       if (r.successes !== undefined) hits = r.successes;
       if (r.rolls) hitRolls.push(...r.rolls);
+      if (r.extraAttacks && !r.noChainExtraAttacks) {
+        for (let i = 0; i < r.extraAttacks; i++) {
+          let quality = attacker.quality;
+          const extraHitCtx = { ...ctx, quality, hitIndex: attacks + i };
+          const extraHitResults = this.registry.applyHook(HOOKS.BEFORE_HIT_QUALITY, extraHitCtx);
+          extraHitResults.forEach(hr => { if (hr.quality !== undefined) quality = hr.quality; });
+          const extraRoll = Dice.roll();
+          const extraSuccess = extraRoll >= quality;
+          hitRolls.push({ value: extraRoll, success: extraSuccess, auto: false, relentless: false });
+          if (extraSuccess) hits++;
+        }
+      }
     });
 
    if (hits === 0) {
