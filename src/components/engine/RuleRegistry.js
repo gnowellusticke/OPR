@@ -150,6 +150,69 @@ export class RuleRegistry {
 
     return context;
   }
+  
+  /**
+   * Alias for runHook. RulesEngine calls applyHook; this keeps both names working.
+   * Returns an array of result objects from each handler that returned a value.
+   */
+  applyHook(hookName, context, special_rules) {
+    const handlers = this._hooks.get(hookName);
+    if (!handlers || handlers.length === 0) return [];
+
+    const results = [];
+
+    // If special_rules is provided, filter to only matching rules (original runHook behaviour).
+    // If omitted (called from RulesEngine without a specific entity's rules),
+    // run ALL registered handlers for this hook — the engine is responsible for
+    // passing the right context so handlers can self-filter.
+    if (special_rules !== undefined) {
+      const parsedRules = this.parse(special_rules);
+      const ruleMap = new Map(parsedRules.map(r => [r.name, r]));
+
+      for (const handler of handlers) {
+        const parsedRule = ruleMap.get(handler.ruleName);
+        if (!parsedRule) continue;
+
+        const enrichedContext = {
+          ...context,
+          _ruleName: handler.ruleName,
+          _ruleParams: parsedRule.params,
+          _ruleParamValue: parsedRule.paramValue,
+        };
+
+        const updates = handler.fn(enrichedContext);
+        if (updates && typeof updates === 'object') {
+          Object.assign(context, updates);
+          results.push(updates);
+        }
+      }
+    } else {
+      // No special_rules filter — run all handlers, let each self-filter via context
+      for (const handler of handlers) {
+        const enrichedContext = {
+          ...context,
+          _ruleName: handler.ruleName,
+          _ruleParams: null,
+          _ruleParamValue: null,
+        };
+
+        const updates = handler.fn(enrichedContext);
+        if (updates && typeof updates === 'object') {
+          Object.assign(context, updates);
+          results.push(updates);
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Alias for registerAll. Battle.jsx calls registry.registerRules().
+   */
+  registerRules(definitions) {
+    this.registerAll(definitions);
+  }
 
   /**
    * Convenience: run a hook on BOTH unit and weapon rules, merging results.
@@ -185,6 +248,8 @@ export const HOOKS = {
   // Activation
   ON_ACTIVATION_START:   'onActivationStart',
   ON_ACTIVATION_END:     'onActivationEnd',
+  BEFORE_ACTIVATION:     'beforeActivation',
+  AFTER_ACTIVATION:      'afterActivation',
 
   // Movement
   GET_BASE_SPEED:        'getBaseSpeed',
@@ -193,6 +258,8 @@ export const HOOKS = {
   ON_TERRAIN_MOVE:       'onTerrainMove',
   ON_MOVE_THROUGH_ENEMY: 'onMoveThroughEnemy',
   ON_DANGEROUS_TERRAIN:  'onDangerousTerrain',
+  BEFORE_RANGE_CHECK:    'beforeRangeCheck',
+  ON_RANGE_CHECK:        'onRangeCheck',
 
   // Shooting & Melee — hit phase
   BEFORE_ATTACK:         'beforeAttack',
@@ -203,6 +270,10 @@ export const HOOKS = {
   // Shooting & Melee — save phase
   BEFORE_SAVE_DEFENSE:   'beforeSaveDefense',
   ON_PER_HIT:            'onPerHit',
+
+  // Post-attack
+  AFTER_SHOOTING:        'afterShooting',
+  AFTER_COMBAT:          'afterCombat',
 
   // Damage
   ON_WOUND_CALC:         'onWoundCalc',
@@ -224,10 +295,13 @@ export const HOOKS = {
   ON_SPELL_CAST:         'onSpellCast',
   ON_TOKEN_GAIN:         'onTokenGain',
 
+  // Unit lifecycle
+  ON_UNIT_CREATED:       'onUnitCreated',
+
   // Deployment & Special Entry
-  ON_DEPLOY:             'onDeploy',              // initial placement of a unit
-  AFTER_DEPLOYMENT:      'afterDeployment',       // after all units are deployed
-  ON_RESERVE_ENTRY:      'onReserveEntry',        // Ambush, Teleport mid-game placement
+  ON_DEPLOY:             'onDeploy',
+  AFTER_DEPLOYMENT:      'afterDeployment',
+  ON_RESERVE_ENTRY:      'onReserveEntry',
 
   // Transport
   ON_TRANSPORT_DESTROY:  'onTransportDestroy',
@@ -238,7 +312,7 @@ export const HOOKS = {
   ON_ROUND_END:          'onRoundEnd',
 
   // Shooting eligibility
-  CAN_SHOOT_AFTER_MOVE:  'canShootAfterMove',     // can unit shoot after moving?
+  CAN_SHOOT_AFTER_MOVE:  'canShootAfterMove',
 
   // Rule Aggregation
   ON_GET_RULES:          'onGetRules',
