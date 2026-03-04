@@ -15,9 +15,9 @@ export const ROBOT_LEGIONS_RULES = {
     description: 'When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
-        if (!unit.rules.includes('Self-Repair')) return {};
+        if (!unit.special_rules.includes('Self-Repair')) return {};
 
-        const hasBoost = unit.rules.includes('Self-Repair Boost') ||
+        const hasBoost = unit.special_rules.includes('Self-Repair Boost') ||
                          specialRulesApplied.includes('Self-Repair Boost');
         const threshold = hasBoost ? 5 : 6;
 
@@ -112,7 +112,7 @@ export const ROBOT_LEGIONS_RULES = {
     description: 'Counts as having Ambush, but may be deployed up to 1" away from enemy units.',
     hooks: {
       [HOOKS.ON_RESERVE_ENTRY]: ({ unit, gameState, specialRulesApplied }) => {
-        if (!unit.rules.includes('Infiltrate')) return {};
+        if (!unit.special_rules.includes('Infiltrate')) return {};
         // Allow placement up to 1" from enemy units. The engine should check this constraint.
         // We just mark it as Infiltrate for the deployment logic.
         specialRulesApplied.push({ rule: 'Infiltrate', effect: 'may deploy within 1" of enemies' });
@@ -174,7 +174,7 @@ export const ROBOT_LEGIONS_RULES = {
     description: 'When a unit where most models have this rule fails a morale test that causes it to be Shaken or Routed, the test counts as passed instead. Then, roll as many dice as the number of wounds it would take to fully destroy it, and for each result of 1-3 the unit takes one wound, which can\'t be ignored.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, passed, reason, specialRulesApplied }) => {
-        if (!unit.rules.includes('No Retreat')) return {};
+        if (!unit.special_rules.includes('No Retreat')) return {};
         if (!passed) {
           // Override to passed
           specialRulesApplied.push({ rule: 'No Retreat', effect: 'morale test passed instead' });
@@ -198,7 +198,7 @@ export const ROBOT_LEGIONS_RULES = {
     description: 'This model gets AP(+1) when charging.',
     hooks: {
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, specialRulesApplied }) => {
-        if (unit._charged && unit.rules.includes('Piercing Assault')) {
+        if (unit._charged && unit.special_rules.includes('Piercing Assault')) {
           unit._piercingAssault = true;
           specialRulesApplied.push({ rule: 'Piercing Assault', effect: 'AP+1 on charge' });
         }
@@ -250,7 +250,7 @@ export const ROBOT_LEGIONS_RULES = {
     description: 'When a unit where all models have this rule is activated, roll as many dice as the max. number of models/wounds it could restore. For each 5+ you may restore one model/wound. New models may only be restored if they can be placed in coherency with non-restored models.',
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Reanimation')) return {};
+        if (!unit.special_rules.includes('Reanimation')) return {};
         const maxRestore = unit.total_models - unit.current_models;
         if (maxRestore <= 0) return {};
         let restored = 0;
@@ -386,14 +386,14 @@ export const ROBOT_LEGIONS_RULES = {
     description: 'Counts as having Ambush, and gets AP(+2) when shooting on the round in which it deploys via this rule.',
     hooks: {
       [HOOKS.ON_RESERVE_ENTRY]: ({ unit, specialRulesApplied }) => {
-        if (!unit.rules.includes('Surprise Piercing Shot')) return {};
+        if (!unit.special_rules.includes('Surprise Piercing Shot')) return {};
         // Mark that this unit deployed this round
         unit._deployedThisRound = true;
         specialRulesApplied.push({ rule: 'Surprise Piercing Shot', effect: 'deployed via Ambush' });
         return {};
       },
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, ap, isMelee, specialRulesApplied }) => {
-        if (!isMelee && unit._deployedThisRound && unit.rules.includes('Surprise Piercing Shot')) {
+        if (!isMelee && unit._deployedThisRound && unit.special_rules.includes('Surprise Piercing Shot')) {
           delete unit._deployedThisRound; // use once
           specialRulesApplied.push({ rule: 'Surprise Piercing Shot', effect: 'AP+2' });
           return { ap: (ap ?? 0) + 2 };
@@ -407,7 +407,7 @@ export const ROBOT_LEGIONS_RULES = {
     description: 'This model may ignore the Slow rule.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Swift') && unit.rules.includes('Slow')) {
+        if (unit.special_rules.includes('Swift') && unit.special_rules.includes('Slow')) {
           // Remove Slow from effective rules
           return { additionalRules: [] }; // Actually we need to remove Slow. The ON_GET_RULES returns additional rules, not removals.
           // Alternative: we can handle in MODIFY_SPEED: if unit has Swift, ignore Slow penalty.
@@ -415,7 +415,7 @@ export const ROBOT_LEGIONS_RULES = {
         return {};
       },
       [HOOKS.MODIFY_SPEED]: ({ unit, speedDelta, specialRulesApplied }) => {
-        if (unit.rules.includes('Swift') && unit.rules.includes('Slow')) {
+        if (unit.special_rules.includes('Swift') && unit.special_rules.includes('Slow')) {
           // Slow typically reduces speed. We'll assume Slow is implemented elsewhere as a speed penalty.
           // By having Swift, we can cancel that penalty. But we don't know the penalty amount.
           // For now, we'll just note it.
