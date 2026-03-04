@@ -31,7 +31,7 @@ export const DWARF_GUILDS_RULES = {
     description: 'This model and its unit get Sturdy Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Sturdy Boost Aura')) {
+        if (unit.special_rules.includes('Sturdy Boost Aura')) {
           return { additionalRules: ['Sturdy Boost'] };
         }
         return {};
@@ -83,7 +83,7 @@ export const DWARF_GUILDS_RULES = {
     description: 'This model and its unit get Swift.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Swift Aura')) {
+        if (unit.special_rules.includes('Swift Aura')) {
           return { additionalRules: ['Swift'] };
         }
         return {};
@@ -126,7 +126,7 @@ export const DWARF_GUILDS_RULES = {
     description: 'This model and its unit get Unpredictable Fighter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Unpredictable Fighter Aura')) {
+        if (unit.special_rules.includes('Unpredictable Fighter Aura')) {
           return { additionalRules: ['Unpredictable Fighter'] };
         }
         return {};
@@ -168,7 +168,7 @@ export const DWARF_GUILDS_RULES = {
     description: 'This model and its unit get Ignores Cover when shooting.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Ignores Cover when Shooting Aura')) {
+        if (unit.special_rules.includes('Ignores Cover when Shooting Aura')) {
           return { additionalRules: ['Ignores Cover when Shooting'] };
         }
         return {};
@@ -249,7 +249,7 @@ Mend: {
     description: 'This model and its unit get Infiltrate.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Infiltrate Aura')) {
+        if (unit.special_rules.includes('Infiltrate Aura')) {
           return { additionalRules: ['Infiltrate'] };
         }
         return {};
