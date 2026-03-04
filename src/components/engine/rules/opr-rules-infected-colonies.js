@@ -43,7 +43,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'If killed in melee, attacker takes X hits.',
     hooks: {
       [HOOKS.ON_MODEL_KILLED]: ({ unit, killer, specialRulesApplied }) => {
-        if (unit.rules.includes('Deathstrike') && killer) {
+        if (unit.special_rules.includes('Deathstrike') && killer) {
           const x = unit._ruleParamValue ?? 3; // from Boomers: Deathstrike(3)
           specialRulesApplied.push({ rule: 'Deathstrike', effect: `${x} hits on killer` });
           return { retaliateHits: { target: killer, hits: x } };
@@ -77,7 +77,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'On failed morale causing Shaken/Routed, pass instead, then roll wounds to destroy it; each 1-3 deals 1 wound.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, passed, dice, specialRulesApplied }) => {
-        if (passed || !unit.rules.includes('No Retreat')) return {};
+        if (passed || !unit.special_rules.includes('No Retreat')) return {};
         const woundsToKill = unit.current_models;
         let selfWounds = 0;
         for (let i = 0; i < woundsToKill; i++) {
@@ -119,12 +119,12 @@ export const INFECTED_COLONIES_RULES = {
     description: 'Gain one marker each round on table; each gives +1 to hit (max +2). Lose all if Shaken.',
     hooks: {
       [HOOKS.ON_ROUND_END]: ({ unit }) => {
-        if (unit.rules.includes('Precision Growth') && !unit.reserve && unit.current_models > 0) {
+        if (unit.special_rules.includes('Precision Growth') && !unit.reserve && unit.current_models > 0) {
           unit.precision_growth_markers = Math.min(2, (unit.precision_growth_markers || 0) + 1);
         }
       },
       [HOOKS.ON_MORALE_TEST]: ({ unit, passed }) => {
-        if (unit.rules.includes('Precision Growth') && !passed) {
+        if (unit.special_rules.includes('Precision Growth') && !passed) {
           unit.precision_growth_markers = 0;
         }
       },
@@ -216,7 +216,7 @@ export const INFECTED_COLONIES_RULES = {
     description: '+2" Advance, +4" Rush/Charge.',
     hooks: {
       [HOOKS.MODIFY_SPEED]: ({ unit, action, speedDelta, specialRulesApplied }) => {
-        if (unit.rules.includes('Fast Aura')) {
+        if (unit.special_rules.includes('Fast Aura')) {
           const delta = action === 'Advance' ? 2 : 4;
           specialRulesApplied.push({ rule: 'Fast Aura', value: delta, effect: `+${delta}"` });
           return { speedDelta: (speedDelta ?? 0) + delta };
@@ -229,7 +229,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'This model and its unit get Fortified.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Fortified Aura')) {
+        if (unit.special_rules.includes('Fortified Aura')) {
           return { additionalRules: ['Fortified'] };
         }
         return {};
@@ -240,7 +240,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'This model and its unit get Infected Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Infected Boost Aura')) {
+        if (unit.special_rules.includes('Infected Boost Aura')) {
           return { additionalRules: ['Infected Boost'] };
         }
         return {};
@@ -251,7 +251,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'This model and its unit get No Retreat.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('No Retreat Aura')) {
+        if (unit.special_rules.includes('No Retreat Aura')) {
           return { additionalRules: ['No Retreat'] };
         }
         return {};
@@ -262,7 +262,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'This model and its unit get Thrust in melee.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Thrust in Melee Aura')) {
+        if (unit.special_rules.includes('Thrust in Melee Aura')) {
           return { additionalRules: ['Thrust'] };
         }
         return {};
@@ -273,7 +273,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'This model and its unit get Unpredictable Shooter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Unpredictable Shooter Aura')) {
+        if (unit.special_rules.includes('Unpredictable Shooter Aura')) {
           return { additionalRules: ['Unpredictable Shooter'] };
         }
         return {};
