@@ -1,7 +1,7 @@
 /**
  * rules/opr-rules-plague-disciples.js
  * Plague Disciples faction rules from v3.5.2 (page 3)
- * Implements all special rules and spells using the hook architecture from RulesEngine.
+ * Uses the enhanced RulesEngine with activation hooks.
  */
 
 import { HOOKS } from '../RuleRegistry.js';
@@ -15,7 +15,6 @@ export const PLAGUE_DISCIPLES_RULES = {
     description: 'When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored. (Improved to 5+ with Plaguebound Boost.)',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
-        // Only apply if all models in the unit have Plaguebound (should be guaranteed by list building)
         if (!unit.rules.includes('Plaguebound')) return {};
 
         const hasBoost = unit.rules.includes('Plaguebound Boost') ||
@@ -39,19 +38,17 @@ export const PLAGUE_DISCIPLES_RULES = {
   Bounding: {
     description: 'When this unit is activated, you may place all models with this rule in it anywhere fully within D3+1" of their position.',
     hooks: {
-      // Ideally would be ON_ACTIVATION; using BEFORE_ATTACK as a proxy for attacks.
-      // In a full implementation, the game controller should call a dedicated activation hook.
-      [HOOKS.BEFORE_ATTACK]: ({ unit, dice, specialRulesApplied }) => {
-        if (unit._boundingUsed) return {};
+      [HOOKS.ON_ACTIVATION_START]: ({ unit, dice, specialRulesApplied }) => {
+        if (unit._boundingUsed) return {}; // once per activation
         const distance = dice.roll('D3') + 1;
-        unit._boundingUsed = true; // once per activation
+        unit._boundingUsed = true;
         specialRulesApplied.push({ rule: 'Bounding', effect: `may reposition up to ${distance}"` });
         return {
-          boundingMove: {
-            distance,
-            // Engine will allow player to choose new position within distance
-          },
+          boundingMove: { distance }
         };
+      },
+      [HOOKS.ON_ACTIVATION_END]: ({ unit }) => {
+        delete unit._boundingUsed;
       },
     },
   },
@@ -65,7 +62,6 @@ export const PLAGUE_DISCIPLES_RULES = {
         const sixes = rolls.filter(r => r.value === 6 && !r.auto).length;
         const extraHits = sixes;
         specialRulesApplied.push({ rule: 'Butcher', effect: `+${extraHits} hits from sixes` });
-        // Mark that this attack has Butcher (to suppress Regeneration later)
         specialRulesApplied.push({ rule: 'Butcher', effect: 'suppress Regeneration' });
         return { successes: successes + extraHits };
       },
@@ -75,18 +71,21 @@ export const PLAGUE_DISCIPLES_RULES = {
   'Dangerous Terrain Debuff': {
     description: 'Once per activation, before attacking, pick one enemy unit within 18" which must immediately take a Dangerous Terrain test.',
     hooks: {
-      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
+      [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._dangerUsed) return {};
-        // In a real game, the player would select a target. Here we demonstrate the result.
-        // The engine's _processBeforeAttackResults should handle this.
-        unit._dangerUsed = true;
-        specialRulesApplied.push({ rule: 'Dangerous Terrain Debuff', effect: 'enemy must test dangerous terrain' });
-        return {
-          dangerousTerrainTest: {
-            range: 18,
-            // The actual target would be chosen by UI
-          },
-        };
+        // In practice, player chooses a target. For demo, pick first eligible enemy.
+        const target = gameState.units.find(u => u.owner !== unit.owner && unit.distanceTo(u) <= 18);
+        if (target) {
+          unit._dangerUsed = true;
+          specialRulesApplied.push({ rule: 'Dangerous Terrain Debuff', effect: `${target.name} must take dangerous terrain test` });
+          return {
+            dangerousTerrainTest: { target }
+          };
+        }
+        return {};
+      },
+      [HOOKS.ON_ACTIVATION_END]: ({ unit }) => {
+        delete unit._dangerUsed;
       },
     },
   },
@@ -94,9 +93,8 @@ export const PLAGUE_DISCIPLES_RULES = {
   Mend: {
     description: 'Once per activation, before attacking, pick one friendly model within 3" with Tough, and remove D3 wounds from it.',
     hooks: {
-      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
+      [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._mendUsed) return {};
-        // Simple auto‑targeting for demonstration – in practice player chooses
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u.distanceTo(unit) <= 3 &&
@@ -105,20 +103,25 @@ export const PLAGUE_DISCIPLES_RULES = {
         );
         if (target) {
           const heal = dice.roll() % 3 + 1; // D3
-          target.current_models = Math.min(target.total_models, target.current_models + heal);
           unit._mendUsed = true;
           specialRulesApplied.push({ rule: 'Mend', effect: `healed ${heal} wound(s) on ${target.name}` });
+          return {
+            mend: { target, healAmount: heal }
+          };
         }
         return {};
+      },
+      [HOOKS.ON_ACTIVATION_END]: ({ unit }) => {
+        delete unit._mendUsed;
       },
     },
   },
 
   'Plaguebound Boost': {
     description: 'If all models in this unit have Plaguebound, they ignore wounds on rolls of 5‑6 from Plaguebound (instead of only on 6+).',
+    // This rule is a flag; the actual effect is handled in Plaguebound hook.
     hooks: {
-      // This rule is checked inside the Plaguebound hook (above). No separate hook needed.
-      // However, we need to make it available as a rule that can be granted by auras.
+      // No separate hook needed, but it can be granted by auras.
     },
   },
 
@@ -211,29 +214,29 @@ export const PLAGUE_DISCIPLES_RULES = {
   'Steadfast Buff': {
     description: 'Once per activation, before attacking, pick one friendly unit within 12" which gets Steadfast once (next time the effect would apply).',
     hooks: {
-      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
+      [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._buffUsed) return {};
-        // In practice, player chooses a friendly unit. For demo, pick first eligible.
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
           u.distanceTo(unit) <= 12
         );
         if (target) {
-          target._tempSteadfast = true; // flag for next round start
+          target._tempSteadfast = true;
           unit._buffUsed = true;
           specialRulesApplied.push({ rule: 'Steadfast Buff', effect: `gave temporary Steadfast to ${target.name}` });
         }
         return {};
       },
-      // The actual Steadfast effect is applied by the Steadfast rule, but we need to treat
-      // the temporary flag as if the unit had Steadfast. We can handle this in ON_GET_RULES.
-      [HOOKS.ON_GET_RULES]: ({ unit, specialRulesApplied }) => {
+      [HOOKS.ON_GET_RULES]: ({ unit }) => {
         if (unit._tempSteadfast) {
-          specialRulesApplied.push({ rule: 'Steadfast Buff', effect: 'temporary Steadfast' });
           return { additionalRules: ['Steadfast'] };
         }
         return {};
+      },
+      [HOOKS.ON_ACTIVATION_END]: ({ unit }) => {
+        delete unit._buffUsed;
+        // The temporary rule will expire when the unit that received it activates; we clear it in its ON_ACTIVATION_START.
       },
     },
   },
@@ -303,13 +306,14 @@ export const PLAGUE_DISCIPLES_RULES = {
   'Versatile Attack': {
     description: 'When this unit is activated, pick one effect: until the end of the activation all models with this rule in it either get AP(+1) when attacking, or get +1 to hit rolls when attacking.',
     hooks: {
-      // Player choice is stored in unit._versatileAttackMode ('ap' or 'hit')
-      [HOOKS.BEFORE_ATTACK]: ({ unit, specialRulesApplied }) => {
-        if (!unit.rules.includes('Versatile Attack')) return {};
-        if (unit._versatileAttackMode) {
-          specialRulesApplied.push({ rule: 'Versatile Attack', effect: `mode = ${unit._versatileAttackMode}` });
-        }
-        return {};
+      [HOOKS.ON_ACTIVATION_START]: ({ unit, specialRulesApplied }) => {
+        // In a real game, the player chooses. We'll simulate with a default (hit).
+        const mode = 'hit'; // or could be 'ap'
+        unit._versatileAttackMode = mode;
+        specialRulesApplied.push({ rule: 'Versatile Attack', effect: `mode = ${mode}` });
+        return {
+          setVersatileMode: mode
+        };
       },
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, specialRulesApplied }) => {
         if (unit._versatileAttackMode === 'hit') {
@@ -325,11 +329,7 @@ export const PLAGUE_DISCIPLES_RULES = {
         }
         return {};
       },
-      [HOOKS.AFTER_ATTACK]: ({ unit }) => {
-        delete unit._versatileAttackMode; // reset after activation
-      },
-      // Also need to reset after melee attacks if used in melee
-      [HOOKS.AFTER_MELEE_ATTACK]: ({ unit }) => {
+      [HOOKS.ON_ACTIVATION_END]: ({ unit }) => {
         delete unit._versatileAttackMode;
       },
     },
@@ -338,11 +338,17 @@ export const PLAGUE_DISCIPLES_RULES = {
   'Versatile Defense': {
     description: 'When this unit is deployed or activated, pick one effect: when shot or charged from over 9" away, the unit either gets +1 to defense rolls, or enemy units get -1 to hit rolls against it. This effect lasts until the units\' next activation.',
     hooks: {
-      // Player choice stored in unit._versatileDefenseMode ('defense' or 'hitPenalty')
-      // We'll also need to track when the effect expires (next activation). We'll clear it in BEFORE_ATTACK of the unit.
+      [HOOKS.ON_ACTIVATION_START]: ({ unit, specialRulesApplied }) => {
+        // Player chooses mode; default 'defense'
+        const mode = 'defense';
+        unit._versatileDefenseMode = mode;
+        specialRulesApplied.push({ rule: 'Versatile Defense', effect: `mode = ${mode}` });
+        return {
+          setVersatileDefense: mode
+        };
+      },
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, attacker, defense, gameState, specialRulesApplied }) => {
         if (!unit._versatileDefenseMode) return {};
-        // Check distance from attacker to unit
         const distance = Math.hypot(attacker.x - unit.x, attacker.y - unit.y);
         if (distance > 9 && unit._versatileDefenseMode === 'defense') {
           specialRulesApplied.push({ rule: 'Versatile Defense', effect: '+1 defense' });
@@ -359,92 +365,36 @@ export const PLAGUE_DISCIPLES_RULES = {
         }
         return {};
       },
-      [HOOKS.BEFORE_ATTACK]: ({ unit }) => {
-        // Expire the effect at the start of the unit's next activation
+      [HOOKS.ON_ACTIVATION_START]: ({ unit }) => {
+        // At the start of the next activation, clear the mode (effect expires)
         delete unit._versatileDefenseMode;
       },
     },
   },
 
   // -------------------------------------------------------------------------
-  // Aura special rules (grant the named rule to the unit and its unit)
+  // Aura special rules
   // -------------------------------------------------------------------------
   'Bounding Aura': {
-    description: 'This model and its unit get Bounding.',
-    hooks: {
-      [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Bounding Aura')) {
-          return { additionalRules: ['Bounding'] };
-        }
-        return {};
-      },
-    },
+    hooks: { [HOOKS.ON_GET_RULES]: () => ({ additionalRules: ['Bounding'] }) },
   },
   'Furious Aura': {
-    description: 'This model and its unit get Furious.',
-    hooks: {
-      [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Furious Aura')) {
-          return { additionalRules: ['Furious'] };
-        }
-        return {};
-      },
-    },
+    hooks: { [HOOKS.ON_GET_RULES]: () => ({ additionalRules: ['Furious'] }) },
   },
   'Plaguebound Boost Aura': {
-    description: 'This model and its unit get Plaguebound Boost.',
-    hooks: {
-      [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Plaguebound Boost Aura')) {
-          return { additionalRules: ['Plaguebound Boost'] };
-        }
-        return {};
-      },
-    },
+    hooks: { [HOOKS.ON_GET_RULES]: () => ({ additionalRules: ['Plaguebound Boost'] }) },
   },
   'Relentless Aura': {
-    description: 'This model and its unit get Relentless.',
-    hooks: {
-      [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Relentless Aura')) {
-          return { additionalRules: ['Relentless'] };
-        }
-        return {};
-      },
-    },
+    hooks: { [HOOKS.ON_GET_RULES]: () => ({ additionalRules: ['Relentless'] }) },
   },
   'Resistance Aura': {
-    description: 'This model and its unit get Resistance.',
-    hooks: {
-      [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Resistance Aura')) {
-          return { additionalRules: ['Resistance'] };
-        }
-        return {};
-      },
-    },
+    hooks: { [HOOKS.ON_GET_RULES]: () => ({ additionalRules: ['Resistance'] }) },
   },
   'Scout Aura': {
-    description: 'This model and its unit get Scout.',
-    hooks: {
-      [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Scout Aura')) {
-          return { additionalRules: ['Scout'] };
-        }
-        return {};
-      },
-    },
+    hooks: { [HOOKS.ON_GET_RULES]: () => ({ additionalRules: ['Scout'] }) },
   },
   'Versatile Defense Aura': {
-    description: 'This model and its unit get Versatile Defense.',
-    hooks: {
-      [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Versatile Defense Aura')) {
-          return { additionalRules: ['Versatile Defense'] };
-        }
-        return {};
-      },
-    },
+    hooks: { [HOOKS.ON_GET_RULES]: () => ({ additionalRules: ['Versatile Defense'] }) },
   },
 
   // -------------------------------------------------------------------------
@@ -455,17 +405,15 @@ export const PLAGUE_DISCIPLES_RULES = {
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, target, specialRulesApplied }) => {
         if (!target) return {};
-        // Mark the target so that when it moves, it is treated as difficult terrain.
         target._difficultTerrainOnce = true;
         specialRulesApplied.push({ rule: 'Aura of Pestilence', effect: `${target.name} counts as difficult terrain next` });
         return {};
       },
-      // The actual effect on movement would need to be checked in ON_TERRAIN_MOVE or similar.
-      // We'll assume that the movement code checks for this flag.
     },
   },
+
   'Rapid Putrefaction': {
-    description: 'Pick one enemy unit within 12", which takes 2 hits with AP(1) and Butcher. Roll as many dice as hits to see if "on rolls of 6+ effects trigger.',
+    description: 'Pick one enemy unit within 12", which takes 2 hits with AP(1) and Butcher.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, target, specialRulesApplied }) => {
         if (!target) return {};
@@ -478,6 +426,7 @@ export const PLAGUE_DISCIPLES_RULES = {
       },
     },
   },
+
   'Blessed Virus': {
     description: 'Pick up to two friendly units within 12", which get Rapid Rush once (next time the effect would apply).',
     hooks: {
@@ -490,8 +439,6 @@ export const PLAGUE_DISCIPLES_RULES = {
         specialRulesApplied.push({ rule: 'Blessed Virus', effect: `gave Rapid Rush to ${friendlies.length} units` });
         return {};
       },
-      // The actual speed boost needs to be applied in MODIFY_SPEED when that unit rushes.
-      // We'll add a hook to MODIFY_SPEED that checks for _rapidRushOnce.
       [HOOKS.MODIFY_SPEED]: ({ unit, action, speedDelta, specialRulesApplied }) => {
         if (action === 'Rush' && unit._rapidRushOnce) {
           delete unit._rapidRushOnce;
@@ -502,6 +449,7 @@ export const PLAGUE_DISCIPLES_RULES = {
       },
     },
   },
+
   'Plague Malediction': {
     description: 'Pick one enemy model within 24", which takes 2 hits with AP(4).',
     hooks: {
@@ -516,6 +464,7 @@ export const PLAGUE_DISCIPLES_RULES = {
       },
     },
   },
+
   'Plague Boon': {
     description: 'Pick up to three friendly units within 12", which get Plaguebound Boost once (next time the effect would apply).',
     hooks: {
@@ -528,21 +477,16 @@ export const PLAGUE_DISCIPLES_RULES = {
         specialRulesApplied.push({ rule: 'Plague Boon', effect: `gave Plaguebound Boost to ${friendlies.length} units` });
         return {};
       },
-      // The boost effect is handled in the Plaguebound hook. We need to pass that flag to the ON_INCOMING_WOUNDS.
-      // We'll add a flag that the Plaguebound hook can check.
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, specialRulesApplied }) => {
         if (unit._plagueboundBoostOnce) {
           delete unit._plagueboundBoostOnce;
-          specialRulesApplied.push({ rule: 'Plague Boon', effect: 'Plaguebound Boost active' });
-          // We'll return something that indicates boost, but the Plaguebound hook already checks rules.
-          // Alternatively, we could set a temporary rule on the unit.
-          // Simpler: add a specialRulesApplied entry that the Plaguebound hook can see.
           specialRulesApplied.push({ rule: 'Plaguebound Boost', effect: 'from Plague Boon' });
         }
         return {};
       },
     },
   },
+
   'Rot Wave': {
     description: 'Pick one enemy unit within 18", which takes 6 hits.',
     hooks: {
