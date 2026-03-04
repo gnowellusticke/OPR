@@ -153,7 +153,7 @@ export const RATMEN_CLANS_RULES = {
     description: 'When a unit where most models have this rule fails a morale test that causes it to be Shaken or Routed, the test counts as passed instead. Then, roll as many dice as the number of wounds it would take to fully destroy it, and for each result of 1-3 the unit takes one wound, which can\'t be ignored.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, passed, reason, specialRulesApplied }) => {
-        if (!unit.rules.includes('No Retreat')) return {};
+        if (!unit.special_rules.includes('No Retreat')) return {};
         if (!passed) {
           // Override to passed
           specialRulesApplied.push({ rule: 'No Retreat', effect: 'morale test passed instead' });
@@ -177,7 +177,7 @@ export const RATMEN_CLANS_RULES = {
     description: 'This model gets AP(+1) when charging.',
     hooks: {
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, specialRulesApplied }) => {
-        if (unit._charged && unit.rules.includes('Piercing Assault')) {
+        if (unit._charged && unit.special_rules.includes('Piercing Assault')) {
           unit._piercingAssault = true;
           specialRulesApplied.push({ rule: 'Piercing Assault', effect: 'AP+1 on charge' });
         }
@@ -197,7 +197,7 @@ export const RATMEN_CLANS_RULES = {
     description: 'This model ignores penalties from shooting after moving when using Indirect weapons.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, weaponRules, quality, specialRulesApplied }) => {
-        if (unit._moved && weaponRules.includes('Indirect') && unit.rules.includes('Quick Readjustment')) {
+        if (unit._moved && weaponRules.includes('Indirect') && unit.special_rules.includes('Quick Readjustment')) {
           specialRulesApplied.push({ rule: 'Quick Readjustment', effect: 'no move penalty' });
           // Assuming move penalty is a quality modifier; we just don't apply penalty.
           // The engine might have a separate penalty system; here we just note it.
@@ -235,7 +235,7 @@ export const RATMEN_CLANS_RULES = {
       [HOOKS.ON_MODEL_KILLED]: ({ unit, gameState, specialRulesApplied }) => {
         // This is complex because we need to delay the resurrection until next round.
         // We'll mark the unit for reinforcement and let the round-end handler process it.
-        if (unit.rules.includes('Reinforcement') && !unit._reinforcementMarked) {
+        if (unit.special_rules.includes('Reinforcement') && !unit._reinforcementMarked) {
           unit._reinforcementMarked = true;
           specialRulesApplied.push({ rule: 'Reinforcement', effect: 'will return next round' });
           // Store the unit data needed to respawn
@@ -268,7 +268,7 @@ export const RATMEN_CLANS_RULES = {
     description: 'If this model has Scurry, it moves +4" on Advance and +4" on Rush/Charge (instead of +2").',
     hooks: {
       [HOOKS.MODIFY_SPEED]: ({ unit, action, speedDelta, specialRulesApplied }) => {
-        if (!unit.rules.includes('Scurry') || !unit.rules.includes('Scurry Boost')) return {};
+        if (!unit.special_rules.includes('Scurry') || !unit.special_rules.includes('Scurry Boost')) return {};
         if (action === 'Advance') {
           specialRulesApplied.push({ rule: 'Scurry Boost', effect: '+4"' });
           return { speedDelta: (speedDelta ?? 0) + 4 };
@@ -286,7 +286,7 @@ export const RATMEN_CLANS_RULES = {
     description: 'If this model is killed in melee, the attacking unit takes X hits. If it survives melee, after both sides have finished attacking, it is immediately killed, and the enemy unit takes X hits.',
     hooks: {
       [HOOKS.ON_MODEL_KILLED]: ({ unit, killer, _ruleParamValue, specialRulesApplied, gameState }) => {
-        if (unit.rules.includes('Self-Destruct') && killer) {
+        if (unit.special_rules.includes('Self-Destruct') && killer) {
           const hits = _ruleParamValue || 1;
           specialRulesApplied.push({ rule: 'Self-Destruct', effect: `${hits} hits on killer` });
           // Apply hits to killer (simplified: wounds)
@@ -298,7 +298,7 @@ export const RATMEN_CLANS_RULES = {
       [HOOKS.AFTER_MELEE]: ({ attacker, defender, gameState, specialRulesApplied }) => {
         // Check if a unit with Self-Destruct survived
         [attacker, defender].forEach(unit => {
-          if (unit.rules.includes('Self-Destruct') && unit.current_models > 0) {
+          if (unit.special_rules.includes('Self-Destruct') && unit.current_models > 0) {
             const hits = unit._ruleParamValue || 1;
             const enemy = unit === attacker ? defender : attacker;
             specialRulesApplied.push({ rule: 'Self-Destruct', effect: `unit self-destructs, ${hits} hits on enemy` });
@@ -397,7 +397,7 @@ export const RATMEN_CLANS_RULES = {
     description: 'When in melee, roll one die and apply one effect to all models with this rule: on a 1‑3 they get AP(+1), and on a 4‑6 they get +1 to hit rolls instead.',
     hooks: {
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Unpredictable Fighter')) return {};
+        if (!unit.special_rules.includes('Unpredictable Fighter')) return {};
         const roll = dice.roll();
         const mode = roll <= 3 ? 'ap' : 'hit';
         unit._unpredictableFighterMode = mode;
@@ -444,7 +444,7 @@ export const RATMEN_CLANS_RULES = {
     hooks: {
       [HOOKS.ON_GET_RULES]: () => ({ additionalRules: ['Precision Shooter'] }),
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, isMelee, specialRulesApplied }) => {
-        if (!isMelee && unit.rules.includes('Precision Shooter')) {
+        if (!isMelee && unit.special_rules.includes('Precision Shooter')) {
           specialRulesApplied.push({ rule: 'Precision Shooter', effect: '+1 to hit' });
           return { quality: Math.max(2, quality - 1) };
         }
@@ -471,7 +471,7 @@ export const RATMEN_CLANS_RULES = {
         return {};
       },
       [HOOKS.MODIFY_SPEED]: ({ unit, action, speedDelta, specialRulesApplied }) => {
-        if (unit._tempScurryBoost && unit.rules.includes('Scurry')) {
+        if (unit._tempScurryBoost && unit.special_rules.includes('Scurry')) {
           delete unit._tempScurryBoost;
           if (action === 'Advance') {
             specialRulesApplied.push({ rule: 'Weapon Booster', effect: '+4"' });
