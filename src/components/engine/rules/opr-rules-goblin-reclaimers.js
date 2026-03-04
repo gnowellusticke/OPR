@@ -177,7 +177,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     description: 'When this model takes a wound in melee, attacker takes X hits.',
     hooks: {
       [HOOKS.ON_WOUND_ALLOCATION]: ({ unit, wounds, sourceUnit, specialRulesApplied }) => {
-        if (unit.rules.includes('Retaliate') && wounds > 0 && sourceUnit) {
+        if (unit.special_rules.includes('Retaliate') && wounds > 0 && sourceUnit) {
           const x = unit._ruleParamValue ?? 1;
           specialRulesApplied.push({ rule: 'Retaliate', effect: `${x} hits on attacker` });
           return { retaliateHits: { target: sourceUnit, hits: x * wounds } };
@@ -274,7 +274,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     description: '+1 to morale test rolls.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
-        if (unit.rules.includes('Courage Aura')) {
+        if (unit.special_rules.includes('Courage Aura')) {
           specialRulesApplied.push({ rule: 'Courage Aura', effect: '+1 to morale' });
           return { roll: roll + 1 };
         }
@@ -286,7 +286,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     description: 'This model and its unit get Melee Evasion.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Melee Evasion Aura')) {
+        if (unit.special_rules.includes('Melee Evasion Aura')) {
           return { additionalRules: ['Melee Evasion'] };
         }
         return {};
@@ -297,7 +297,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     description: 'This model and its unit get Mischievous Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Mischievous Boost Aura')) {
+        if (unit.special_rules.includes('Mischievous Boost Aura')) {
           return { additionalRules: ['Mischievous Boost'] };
         }
         return {};
@@ -308,7 +308,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     description: '+1 to hit in melee.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, isMelee, quality, specialRulesApplied }) => {
-        if (isMelee && unit.rules.includes('Precision Fighter Aura')) {
+        if (isMelee && unit.special_rules.includes('Precision Fighter Aura')) {
           specialRulesApplied.push({ rule: 'Precision Fighter Aura', effect: '+1 to hit' });
           return { quality: Math.max(2, quality - 1) };
         }
@@ -320,7 +320,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     description: 'This model and its unit get Quick Shot.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Quick Shot Aura')) {
+        if (unit.special_rules.includes('Quick Shot Aura')) {
           return { additionalRules: ['Quick Shot'] };
         }
         return {};
@@ -331,7 +331,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     description: 'This model and its unit get Regeneration.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Regeneration Aura')) {
+        if (unit.special_rules.includes('Regeneration Aura')) {
           return { additionalRules: ['Regeneration'] };
         }
         return {};
