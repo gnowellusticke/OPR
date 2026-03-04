@@ -642,10 +642,11 @@ export default function Battle() {
     // bubble up before passive holders.
     const agentRef = candidateAgent === 'agent_a' ? dmnARef.current : dmnBRef.current;
 
-    const scored = candidates.map(u => {
+const scored = candidates.map(u => {
       try {
-        const options = agentRef.evaluateActionOptions
-          ? agentRef.evaluateActionOptions(u, gs, candidateAgent)
+        const dmnEngine = agentRef.engine || agentRef;
+        const options = dmnEngine.evaluateActionOptions
+          ? dmnEngine.evaluateActionOptions(u, gs, candidateAgent)
           : [];
         const topScore = options[0]?.score ?? 0;
         return { unit: u, score: topScore };
