@@ -292,7 +292,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'When this unit is destroyed, place markers equal to its starting models. Friendlies get +X to hit when attacking that unit.',
     hooks: {
       [HOOKS.ON_MODEL_KILLED]: ({ unit, killer }) => {
-        if (unit.current_models <= 0 && unit.rules.includes('Vengeance') && killer) {
+        if (unit.current_models <= 0 && unit.special_rules.includes('Vengeance') && killer) {
           // Store vengeance markers on the killer unit
           const count = unit.models; // starting models
           killer.vengeance_markers = (killer.vengeance_markers || 0) + count;
@@ -341,7 +341,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'This model and its unit get Clan Warrior Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Clan Warrior Boost Aura')) {
+        if (unit.special_rules.includes('Clan Warrior Boost Aura')) {
           return { additionalRules: ['Clan Warrior Boost'] };
         }
         return {};
@@ -352,7 +352,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'This model and its unit get Counter-Attack.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Counter-Attack Aura')) {
+        if (unit.special_rules.includes('Counter-Attack Aura')) {
           return { additionalRules: ['Counter-Attack'] };
         }
         return {};
@@ -363,7 +363,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'This model and its unit get Fearless.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Fearless Aura')) {
+        if (unit.special_rules.includes('Fearless Aura')) {
           return { additionalRules: ['Fearless'] };
         }
         return {};
@@ -374,7 +374,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'This model and its unit get Ignores Cover when shooting.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Ignores Cover Aura')) {
+        if (unit.special_rules.includes('Ignores Cover Aura')) {
           return { additionalRules: ['Ignores Cover'] };
         }
         return {};
@@ -385,7 +385,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'This model and its unit get Melee Evasion.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Melee Evasion Aura')) {
+        if (unit.special_rules.includes('Melee Evasion Aura')) {
           return { additionalRules: ['Melee Evasion'] };
         }
         return {};
@@ -396,7 +396,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'This model and its unit get Piercing Hunter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Piercing Hunter Aura')) {
+        if (unit.special_rules.includes('Piercing Hunter Aura')) {
           return { additionalRules: ['Piercing Hunter'] };
         }
         return {};
@@ -418,7 +418,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'This model and its unit get Rapid Advance.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Rapid Advance Aura')) {
+        if (unit.special_rules.includes('Rapid Advance Aura')) {
           return { additionalRules: ['Rapid Advance'] };
         }
         return {};
@@ -429,7 +429,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'This model and its unit get +4" when charging.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Rapid Charge Aura')) {
+        if (unit.special_rules.includes('Rapid Charge Aura')) {
           return { additionalRules: ['Rapid Charge'] };
         }
         return {};
@@ -440,7 +440,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'This model and its unit get Stealth.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Stealth Aura')) {
+        if (unit.special_rules.includes('Stealth Aura')) {
           return { additionalRules: ['Stealth'] };
         }
         return {};
