@@ -331,7 +331,7 @@ export const MACHINE_CULT_RULES = {
     description: 'This model and its unit get Machine-Fog Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Machine-Fog Boost Aura')) {
+        if (unit.special_rules.includes('Machine-Fog Boost Aura')) {
           return { additionalRules: ['Machine-Fog Boost'] };
         }
         return {};
@@ -342,7 +342,7 @@ export const MACHINE_CULT_RULES = {
     description: 'This model and its unit get Melee Shrouding.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Melee Shrouding Aura')) {
+        if (unit.special_rules.includes('Melee Shrouding Aura')) {
           return { additionalRules: ['Melee Shrouding'] };
         }
         return {};
@@ -353,7 +353,7 @@ export const MACHINE_CULT_RULES = {
     description: 'This model and its unit get Rending when shooting.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Rending when Shooting Aura')) {
+        if (unit.special_rules.includes('Rending when Shooting Aura')) {
           return { additionalRules: ['Rending'] }; // Rending already defined in core rules
         }
         return {};
@@ -364,7 +364,7 @@ export const MACHINE_CULT_RULES = {
     description: 'This model and its unit get Teleport.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Teleport Aura')) {
+        if (unit.special_rules.includes('Teleport Aura')) {
           return { additionalRules: ['Teleport'] };
         }
         return {};
@@ -375,7 +375,7 @@ export const MACHINE_CULT_RULES = {
     description: 'This model and its unit get Unpredictable Fighter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Unpredictable Fighter Aura')) {
+        if (unit.special_rules.includes('Unpredictable Fighter Aura')) {
           return { additionalRules: ['Unpredictable Fighter'] };
         }
         return {};
