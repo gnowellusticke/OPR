@@ -139,7 +139,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     description: '+2 to morale instead of +1 if all models have Hold the Line.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
-        if (unit.rules.includes('Hold the Line') && unit.rules.includes('Hold the Line Boost')) {
+        if (unit.special_rules.includes('Hold the Line') && unit.special_rules.includes('Hold the Line Boost')) {
           specialRulesApplied.push({ rule: 'Hold the Line Boost', effect: '+2 to morale' });
           return { roll: roll + 2 };
         }
@@ -203,7 +203,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     description: 'On failed morale causing Shaken/Routed, pass instead, then roll wounds to destroy it; each 1-3 deals 1 wound.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, passed, dice, specialRulesApplied }) => {
-        if (passed || !unit.rules.includes('No Retreat')) return {};
+        if (passed || !unit.special_rules.includes('No Retreat')) return {};
         const woundsToKill = unit.current_models;
         let selfWounds = 0;
         for (let i = 0; i < woundsToKill; i++) {
@@ -367,7 +367,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     description: 'This model and its unit get Hold the Line Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Hold the Line Boost Aura')) {
+        if (unit.special_rules.includes('Hold the Line Boost Aura')) {
           return { additionalRules: ['Hold the Line Boost'] };
         }
         return {};
@@ -378,7 +378,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     description: 'This model and its unit get Regeneration.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Regeneration Aura')) {
+        if (unit.special_rules.includes('Regeneration Aura')) {
           return { additionalRules: ['Regeneration'] };
         }
         return {};
