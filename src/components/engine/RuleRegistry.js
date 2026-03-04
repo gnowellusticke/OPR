@@ -181,38 +181,60 @@ export class RuleRegistry {
 // Reference these constants in both rule definitions and the engine
 // so a typo in a string doesn't silently break things.
 export const HOOKS = {
-  // Shooting & Melee — hit phase
-  BEFORE_HIT_QUALITY:   'beforeHitQuality',   // modify quality before rolling
-  AFTER_HIT_ROLLS:      'afterHitRolls',       // generate extra hits after rolling
-
-  // Shooting & Melee — save phase
-  BEFORE_SAVE_DEFENSE:  'beforeSaveDefense',   // modify defense before rolling
-  ON_PER_HIT:           'onPerHit',            // per-hit processing (Rending, Bane)
-  ON_WOUND_CALC:        'onWoundCalc',         // wounds per unsaved hit (Deadly)
-
-  // Post-damage
-  ON_INCOMING_WOUNDS:   'onIncomingWounds',    // reduce incoming wounds (Regeneration)
+  // Activation
+  ON_ACTIVATION_START:   'onActivationStart',
+  ON_ACTIVATION_END:     'onActivationEnd',
 
   // Movement
-  GET_BASE_SPEED:       'getBaseSpeed',        // override base speed (Aircraft, Immobile)
-  MODIFY_SPEED:         'modifySpeed',         // add/subtract from speed (Fast, Slow)
-  ON_TERRAIN_MOVE:      'onTerrainMove',       // terrain speed penalties
-  ON_DANGEROUS_TERRAIN: 'onDangerousTerrain',  // roll for wounds in terrain
+  GET_BASE_SPEED:        'getBaseSpeed',
+  MODIFY_SPEED:          'modifySpeed',
+  ON_MOVE_PATH:          'onMovePath',
+  ON_TERRAIN_MOVE:       'onTerrainMove',
+  ON_MOVE_THROUGH_ENEMY: 'onMoveThroughEnemy',
+  ON_DANGEROUS_TERRAIN:  'onDangerousTerrain',
+
+  // Shooting & Melee — hit phase
+  BEFORE_ATTACK:         'beforeAttack',
+  AFTER_ATTACK:          'afterAttack',
+  BEFORE_HIT_QUALITY:    'beforeHitQuality',
+  AFTER_HIT_ROLLS:       'afterHitRolls',
+
+  // Shooting & Melee — save phase
+  BEFORE_SAVE_DEFENSE:   'beforeSaveDefense',
+  ON_PER_HIT:            'onPerHit',
+
+  // Damage
+  ON_WOUND_CALC:         'onWoundCalc',
+  ON_INCOMING_WOUNDS:    'onIncomingWounds',
+  ON_WOUND_ALLOCATION:   'onWoundAllocation',
+  ON_MODEL_KILLED:       'onModelKilled',
+
+  // Melee specific
+  BEFORE_MELEE_ATTACK:   'beforeMeleeAttack',
+  AFTER_MELEE_ATTACK:    'afterMeleeAttack',
+  ON_STRIKE_ORDER:       'onStrikeOrder',
+  ON_MELEE_RESOLUTION:   'onMeleeResolution',
+  AFTER_MELEE:           'afterMelee',
 
   // Morale
-  ON_MORALE_TEST:       'onMoraleTest',        // modify or override morale result
-
-  // Deployment & Special Entry
-  ON_DEPLOY:            'onDeploy',            // custom deployment logic
-  ON_RESERVE_ENTRY:     'onReserveEntry',      // Ambush, Teleport mid-game placement
-
-  // Transport
-  ON_TRANSPORT_DESTROY: 'onTransportDestroy',  // passengers when transport dies
-
-  // Objective / Turn
-  ON_OBJECTIVE_CHECK:   'onObjectiveCheck',    // can this unit claim an objective?
+  ON_MORALE_TEST:        'onMoraleTest',
 
   // Spell / Caster
-  ON_SPELL_CAST:        'onSpellCast',         // modify cast roll
-  ON_TOKEN_GAIN:        'onTokenGain',         // modify token gain
+  ON_SPELL_CAST:         'onSpellCast',
+  ON_TOKEN_GAIN:         'onTokenGain',
+
+  // Deployment & Special Entry
+  ON_DEPLOY:             'onDeploy',
+  ON_RESERVE_ENTRY:      'onReserveEntry',
+
+  // Transport
+  ON_TRANSPORT_DESTROY:  'onTransportDestroy',
+
+  // Objective / Turn
+  ON_OBJECTIVE_CHECK:    'onObjectiveCheck',
+  ON_ROUND_START:        'onRoundStart',
+  ON_ROUND_END:          'onRoundEnd',
+
+  // Rule Aggregation
+  ON_GET_RULES:          'onGetRules',
 };
