@@ -317,7 +317,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'This model and its unit get Bane in melee.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Bane in Melee Aura')) {
+        if (unit.special_rules.includes('Bane in Melee Aura')) {
           return { additionalRules: ['Bane'] };
         }
         return {};
@@ -328,7 +328,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'This model and its unit get Bane when shooting.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Bane when Shooting Aura')) {
+        if (unit.special_rules.includes('Bane when Shooting Aura')) {
           return { additionalRules: ['Bane'] };
         }
         return {};
@@ -339,7 +339,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: '+1 to morale test rolls.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
-        if (unit.rules.includes('Courage Aura')) {
+        if (unit.special_rules.includes('Courage Aura')) {
           specialRulesApplied.push({ rule: 'Courage Aura', effect: '+1 to morale' });
           return { roll: roll + 1 };
         }
@@ -351,7 +351,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'This model and its unit get Melee Shrouding.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Melee Shrouding Aura')) {
+        if (unit.special_rules.includes('Melee Shrouding Aura')) {
           return { additionalRules: ['Melee Shrouding'] };
         }
         return {};
@@ -362,7 +362,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'This model and its unit get Rapid Rush.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Rapid Rush Aura')) {
+        if (unit.special_rules.includes('Rapid Rush Aura')) {
           return { additionalRules: ['Rapid Rush'] };
         }
         return {};
@@ -373,7 +373,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'This model and its unit get Regeneration.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Regeneration Aura')) {
+        if (unit.special_rules.includes('Regeneration Aura')) {
           return { additionalRules: ['Regeneration'] };
         }
         return {};
@@ -384,7 +384,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'This model and its unit get Unpredictable Fighter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Unpredictable Fighter Aura')) {
+        if (unit.special_rules.includes('Unpredictable Fighter Aura')) {
           return { additionalRules: ['Unpredictable Fighter'] };
         }
         return {};
@@ -395,7 +395,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'This model and its unit get Versatile Reach.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Versatile Reach Aura')) {
+        if (unit.special_rules.includes('Versatile Reach Aura')) {
           return { additionalRules: ['Versatile Reach'] };
         }
         return {};
