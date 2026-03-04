@@ -15,7 +15,7 @@ export const TITAN_LORDS_RULES = {
     description: 'If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+ it stops being Shaken.',
     hooks: {
       [HOOKS.ON_ROUND_START]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Honor Code')) return {};
+        if (!unit.special_rules.includes('Honor Code')) return {};
         if (unit.status !== 'shaken') return {};
 
         const roll = dice.roll();
@@ -52,7 +52,7 @@ export const TITAN_LORDS_RULES = {
     description: 'Once per round, if your opponent has more units left to activate than you, then this model\'s unit may pass its turn instead of activating (may still be activated later).',
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
-        if (!unit.rules.includes('Delayed Action')) return {};
+        if (!unit.special_rules.includes('Delayed Action')) return {};
         if (unit._delayedActionUsedThisRound) return {};
 
         // Count remaining activations for both players
@@ -90,7 +90,7 @@ export const TITAN_LORDS_RULES = {
     description: 'Moves +1" when using Advance, and +3" when using Rush/Charge.',
     hooks: {
       [HOOKS.MODIFY_SPEED]: ({ unit, action, speedDelta, specialRulesApplied }) => {
-        if (!unit.rules.includes('Lustbound')) return {};
+        if (!unit.special_rules.includes('Lustbound')) return {};
         if (action === 'Advance') {
           specialRulesApplied.push({ rule: 'Lustbound', effect: '+1"' });
           return { speedDelta: (speedDelta ?? 0) + 1 };
@@ -108,7 +108,7 @@ export const TITAN_LORDS_RULES = {
     description: 'When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
-        if (!unit.rules.includes('Plaguebound')) return {};
+        if (!unit.special_rules.includes('Plaguebound')) return {};
         let ignored = 0;
         for (let i = 0; i < wounds; i++) {
           const roll = Dice.roll();
