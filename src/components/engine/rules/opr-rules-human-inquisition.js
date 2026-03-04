@@ -58,13 +58,13 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'Pick one model to have Caster(X) where X = total models with this rule. Transfer tokens on death.',
     hooks: {
       [HOOKS.ON_UNIT_CREATED]: ({ unit }) => {
-        if (unit.rules.includes('Caster Group')) {
+        if (unit.special_rules.includes('Caster Group')) {
           unit.casterModel = 0;
           unit.casterTokens = unit.currentModels;
         }
       },
       [HOOKS.ON_MODEL_KILLED]: ({ unit, modelIndex }) => {
-        if (unit.rules.includes('Caster Group') && modelIndex === unit.casterModel) {
+        if (unit.special_rules.includes('Caster Group') && modelIndex === unit.casterModel) {
           const newCaster = unit.models.findIndex((m, i) => i !== modelIndex);
           if (newCaster !== -1) {
             unit.casterModel = newCaster;
@@ -72,7 +72,7 @@ export const HUMAN_INQUISITION_RULES = {
         }
       },
       [HOOKS.ON_ROUND_END]: ({ unit }) => {
-        if (unit.rules.includes('Caster Group')) {
+        if (unit.special_rules.includes('Caster Group')) {
           unit.casterTokens = 0;
         }
       },
@@ -107,12 +107,12 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'Gain one marker each round on table; each gives +1 defense (max +2). Lose all if Shaken.',
     hooks: {
       [HOOKS.ON_ROUND_END]: ({ unit }) => {
-        if (unit.rules.includes('Defensive Growth') && !unit.reserve && unit.current_models > 0) {
+        if (unit.special_rules.includes('Defensive Growth') && !unit.reserve && unit.current_models > 0) {
           unit.defensive_growth_markers = Math.min(2, (unit.defensive_growth_markers || 0) + 1);
         }
       },
       [HOOKS.ON_MORALE_TEST]: ({ unit, passed }) => {
-        if (unit.rules.includes('Defensive Growth') && !passed) {
+        if (unit.special_rules.includes('Defensive Growth') && !passed) {
           unit.defensive_growth_markers = 0;
         }
       },
@@ -446,7 +446,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'This model and its unit get Bounding.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Bounding Aura')) {
+        if (unit.special_rules.includes('Bounding Aura')) {
           return { additionalRules: ['Bounding'] };
         }
         return {};
@@ -457,7 +457,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: '+1 to morale test rolls.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
-        if (unit.rules.includes('Courage Aura')) {
+        if (unit.special_rules.includes('Courage Aura')) {
           specialRulesApplied.push({ rule: 'Courage Aura', effect: '+1 to morale' });
           return { roll: roll + 1 };
         }
@@ -469,7 +469,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'This model and its unit get Defensive Growth.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Defensive Growth Aura')) {
+        if (unit.special_rules.includes('Defensive Growth Aura')) {
           return { additionalRules: ['Defensive Growth'] };
         }
         return {};
@@ -480,7 +480,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'This model and its unit get Furious.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Furious Aura')) {
+        if (unit.special_rules.includes('Furious Aura')) {
           return { additionalRules: ['Furious'] };
         }
         return {};
@@ -491,7 +491,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: '+1 to hit in melee.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, isMelee, quality, specialRulesApplied }) => {
-        if (isMelee && unit.rules.includes('Precision Fighter Aura')) {
+        if (isMelee && unit.special_rules.includes('Precision Fighter Aura')) {
           specialRulesApplied.push({ rule: 'Precision Fighter Aura', effect: '+1 to hit' });
           return { quality: Math.max(2, quality - 1) };
         }
@@ -503,7 +503,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: '+1 to hit when shooting.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, weapon, quality, isMelee, specialRulesApplied }) => {
-        if (!isMelee && (weapon?.range ?? 0) > 2 && unit.rules.includes('Precision Shooter Aura')) {
+        if (!isMelee && (weapon?.range ?? 0) > 2 && unit.special_rules.includes('Precision Shooter Aura')) {
           specialRulesApplied.push({ rule: 'Precision Shooter Aura', effect: '+1 to hit' });
           return { quality: Math.max(2, quality - 1) };
         }
@@ -515,7 +515,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'This model and its unit get Regeneration.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Regeneration Aura')) {
+        if (unit.special_rules.includes('Regeneration Aura')) {
           return { additionalRules: ['Regeneration'] };
         }
         return {};
@@ -526,7 +526,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'This model and its unit get Resistance.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Resistance Aura')) {
+        if (unit.special_rules.includes('Resistance Aura')) {
           return { additionalRules: ['Resistance'] };
         }
         return {};
@@ -537,7 +537,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'This model and its unit get Shred in melee.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Shred in Melee Aura')) {
+        if (unit.special_rules.includes('Shred in Melee Aura')) {
           return { additionalRules: ['Shred'] };
         }
         return {};
@@ -548,7 +548,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'This model and its unit get Stealth.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Stealth Aura')) {
+        if (unit.special_rules.includes('Stealth Aura')) {
           return { additionalRules: ['Stealth'] };
         }
         return {};
