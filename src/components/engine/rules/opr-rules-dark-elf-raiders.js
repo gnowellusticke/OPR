@@ -46,7 +46,7 @@ export const DARK_ELF_RAIDERS_RULES = {
     description: 'This model and its unit get Harassing Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Harassing Boost Aura')) {
+        if (unit.special_rules.includes('Harassing Boost Aura')) {
           return { additionalRules: ['Harassing Boost'] };
         }
         return {};
@@ -116,7 +116,7 @@ export const DARK_ELF_RAIDERS_RULES = {
     description: 'This model and its unit get Piercing Hunter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Piercing Hunter Aura')) {
+        if (unit.special_rules.includes('Piercing Hunter Aura')) {
           return { additionalRules: ['Piercing Hunter'] };
         }
         return {};
@@ -139,7 +139,7 @@ export const DARK_ELF_RAIDERS_RULES = {
     description: 'This model and its unit get Furious.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Furious Aura')) {
+        if (unit.special_rules.includes('Furious Aura')) {
           return { additionalRules: ['Furious'] };
         }
         return {};
@@ -232,12 +232,12 @@ export const DARK_ELF_RAIDERS_RULES = {
     description: 'Gain one marker each time a wound is ignored. In melee, one weapon gets +X attacks where X is marker count.',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, ignored }) => {
-        if (unit.rules.includes('Regenerative Strength') && ignored > 0) {
+        if (unit.special_rules.includes('Regenerative Strength') && ignored > 0) {
           unit.regenerative_strength_markers = (unit.regenerative_strength_markers || 0) + ignored;
         }
       },
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, specialRulesApplied }) => {
-        if (unit.rules.includes('Regenerative Strength') && unit.regenerative_strength_markers > 0) {
+        if (unit.special_rules.includes('Regenerative Strength') && unit.regenerative_strength_markers > 0) {
           const markers = unit.regenerative_strength_markers;
           // Apply extra attacks to the first melee weapon (simplified)
           specialRulesApplied.push({ rule: 'Regenerative Strength', value: markers, effect: `+${markers} attacks` });
