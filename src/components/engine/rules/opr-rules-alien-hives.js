@@ -52,13 +52,13 @@ export const ALIEN_HIVES_RULES = {
     description: 'Pick one model to have Caster(X) where X = total models with this rule. Transfer tokens on death.',
     hooks: {
       [HOOKS.ON_UNIT_CREATED]: ({ unit }) => {
-        if (unit.rules.includes('Caster Group')) {
+        if (unit.special_rules.includes('Caster Group')) {
           unit.casterModel = 0;
           unit.casterTokens = unit.currentModels;
         }
       },
       [HOOKS.ON_MODEL_KILLED]: ({ unit, modelIndex }) => {
-        if (unit.rules.includes('Caster Group') && modelIndex === unit.casterModel) {
+        if (unit.special_rules.includes('Caster Group') && modelIndex === unit.casterModel) {
           const newCaster = unit.models.findIndex((m, i) => i !== modelIndex);
           if (newCaster !== -1) {
             unit.casterModel = newCaster;
@@ -66,7 +66,7 @@ export const ALIEN_HIVES_RULES = {
         }
       },
       [HOOKS.ON_ROUND_END]: ({ unit }) => {
-        if (unit.rules.includes('Caster Group')) {
+        if (unit.special_rules.includes('Caster Group')) {
           unit.casterTokens = 0;
         }
       },
@@ -118,7 +118,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'Once per round, move up to 3" after melee.',
     hooks: {
       [HOOKS.AFTER_MELEE]: ({ unit, specialRulesApplied }) => {
-        if (!unit._hitAndRunUsed && unit.rules.includes('Hit & Run Fighter')) {
+        if (!unit._hitAndRunUsed && unit.special_rules.includes('Hit & Run Fighter')) {
           unit._hitAndRunUsed = true;
           specialRulesApplied.push({ rule: 'Hit & Run Fighter', effect: 'may move 3"' });
           return { hitAndRunMove: 3 };
@@ -132,7 +132,7 @@ export const ALIEN_HIVES_RULES = {
     description: '+2 to morale instead of +1 if all models have Hive Bond.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
-        if (unit.rules.includes('Hive Bond') && unit.rules.includes('Hive Bond Boost')) {
+        if (unit.special_rules.includes('Hive Bond') && unit.special_rules.includes('Hive Bond Boost')) {
           specialRulesApplied.push({ rule: 'Hive Bond Boost', effect: '+2 to morale' });
           return { roll: roll + 2 };
         }
@@ -145,7 +145,7 @@ export const ALIEN_HIVES_RULES = {
     description: '+6" range when shooting.',
     hooks: {
       [HOOKS.ON_RANGE_CHECK]: ({ unit, range, specialRulesApplied }) => {
-        if (unit.rules.includes('Increased Shooting Range')) {
+        if (unit.special_rules.includes('Increased Shooting Range')) {
           specialRulesApplied.push({ rule: 'Increased Shooting Range', effect: '+6"' });
           return { range: range + 6 };
         }
@@ -176,7 +176,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'On failed morale causing Shaken/Routed, pass instead, then roll wounds to destroy it; each 1-3 deals 1 wound.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, passed, dice, specialRulesApplied }) => {
-        if (passed || !unit.rules.includes('No Retreat')) return {};
+        if (passed || !unit.special_rules.includes('No Retreat')) return {};
         const woundsToKill = unit.current_models;
         let selfWounds = 0;
         for (let i = 0; i < woundsToKill; i++) {
@@ -194,12 +194,12 @@ export const ALIEN_HIVES_RULES = {
     description: 'Gain one marker each round on table; each gives AP+1 (max +2). Lose all if Shaken.',
     hooks: {
       [HOOKS.ON_ROUND_END]: ({ unit }) => {
-        if (unit.rules.includes('Piercing Growth') && !unit.reserve && unit.current_models > 0) {
+        if (unit.special_rules.includes('Piercing Growth') && !unit.reserve && unit.current_models > 0) {
           unit.piercing_growth_markers = Math.min(2, (unit.piercing_growth_markers || 0) + 1);
         }
       },
       [HOOKS.ON_MORALE_TEST]: ({ unit, passed }) => {
-        if (unit.rules.includes('Piercing Growth') && !passed) {
+        if (unit.special_rules.includes('Piercing Growth') && !passed) {
           unit.piercing_growth_markers = 0;
         }
       },
@@ -300,7 +300,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'This model and its unit get Rapid Charge.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Rapid Charge Aura')) {
+        if (unit.special_rules.includes('Rapid Charge Aura')) {
           return { additionalRules: ['Rapid Charge'] };
         }
         return {};
@@ -331,7 +331,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'When this model takes a wound in melee, attacker takes X hits.',
     hooks: {
       [HOOKS.ON_WOUND_ALLOCATION]: ({ unit, wounds, sourceUnit, specialRulesApplied }) => {
-        if (unit.rules.includes('Retaliate') && wounds > 0 && sourceUnit) {
+        if (unit.special_rules.includes('Retaliate') && wounds > 0 && sourceUnit) {
           const x = unit._ruleParamValue ?? 1;
           specialRulesApplied.push({ rule: 'Retaliate', effect: `${x} hits on attacker` });
           return { retaliateHits: { target: sourceUnit, hits: x * wounds } };
@@ -364,14 +364,14 @@ export const ALIEN_HIVES_RULES = {
     description: 'If killed in melee, attacker takes X hits. If it survives melee, it dies and attacker takes X hits.',
     hooks: {
       [HOOKS.ON_MODEL_KILLED]: ({ unit, killer, specialRulesApplied }) => {
-        if (unit.rules.includes('Self-Destruct') && killer) {
+        if (unit.special_rules.includes('Self-Destruct') && killer) {
           const x = unit._ruleParamValue ?? 1;
           specialRulesApplied.push({ rule: 'Self-Destruct', effect: `${x} hits on killer` });
           return { retaliateHits: { target: killer, hits: x } };
         }
       },
       [HOOKS.AFTER_MELEE]: ({ unit, enemyUnit, specialRulesApplied }) => {
-        if (unit.rules.includes('Self-Destruct') && unit.current_models > 0 && !unit._selfDestructTriggered) {
+        if (unit.special_rules.includes('Self-Destruct') && unit.current_models > 0 && !unit._selfDestructTriggered) {
           unit._selfDestructTriggered = true;
           const x = unit._ruleParamValue ?? 1;
           unit.current_models = 0;
@@ -398,7 +398,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'This model and its unit get Shielded.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Shielded Aura')) {
+        if (unit.special_rules.includes('Shielded Aura')) {
           return { additionalRules: ['Shielded'] };
         }
         return {};
@@ -631,7 +631,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'This model and its unit get Hive Bond Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Hive Bond Boost Aura')) {
+        if (unit.special_rules.includes('Hive Bond Boost Aura')) {
           return { additionalRules: ['Hive Bond Boost'] };
         }
         return {};
@@ -642,7 +642,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'This model and its unit get Furious.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Furious Aura')) {
+        if (unit.special_rules.includes('Furious Aura')) {
           return { additionalRules: ['Furious'] };
         }
         return {};
@@ -653,7 +653,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'This model and its unit get +6" range.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Increased Shooting Range Aura')) {
+        if (unit.special_rules.includes('Increased Shooting Range Aura')) {
           return { additionalRules: ['Increased Shooting Range'] };
         }
         return {};
