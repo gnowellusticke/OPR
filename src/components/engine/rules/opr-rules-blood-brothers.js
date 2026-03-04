@@ -41,25 +41,25 @@ export const BLOOD_BROTHERS_RULES = {
   },
 
   Mend: {
-    description: 'Once per activation, remove D3 wounds from a friendly Tough model within 3".',
-    hooks: {
-      [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
-        if (unit._mendUsed) return {};
-        const targets = gameState.units.filter(u => u.owner === unit.owner && u.distanceTo(unit) <= 3 && u.tough > 1 && u.current_models < u.total_models);
-        if (targets.length === 0 && unit.tough > 1 && unit.current_models < unit.total_models) {
-          targets.push(unit);
-        }
-        if (targets.length > 0) {
-          const target = targets[0];
-          const heal = dice.roll() % 3 + 1;
-          target.current_models = Math.min(target.total_models, target.current_models + heal);
-          unit._mendUsed = true;
-          specialRulesApplied.push({ rule: 'Mend', effect: `healed ${heal} wound(s) on ${target.name}` });
-        }
-        return {};
+      description: 'Once per activation, remove D3 wounds from a friendly Tough model within 3".',
+      hooks: {
+        [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
+          if (unit._mendUsed) return {};
+          const targets = gameState.units.filter(u => u.owner === unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 && (u.tough_per_model || 1) > 1 && u.current_models < u.total_models);
+          if (targets.length === 0 && (unit.tough_per_model || 1) > 1 && unit.current_models < unit.total_models) {
+            targets.push(unit);
+          }
+          if (targets.length > 0) {
+            const target = targets[0];
+            const heal = dice.roll() % 3 + 1;
+            target.current_models = Math.min(target.total_models, target.current_models + heal);
+            unit._mendUsed = true;
+            specialRulesApplied.push({ rule: 'Mend', effect: `healed ${heal} wound(s) on ${target.name}` });
+          }
+          return {};
+        },
       },
     },
-  },
 
   'Piercing Assault': {
     description: 'AP+1 when charging.',
@@ -85,11 +85,12 @@ export const BLOOD_BROTHERS_RULES = {
     },
   },
 
-  'Re-Deployment': {
+'Re-Deployment': {
     description: 'After all other units are deployed, you may remove up to two friendly units and deploy them again.',
     hooks: {
       [HOOKS.AFTER_DEPLOYMENT]: ({ gameState, specialRulesApplied }) => {
-        const eligibleUnits = gameState.units.filter(u => u.owner === gameState.currentPlayer && !u.is_in_reserve);
+        const currentPlayer = gameState.active_agent || gameState.currentPlayer;
+        const eligibleUnits = gameState.units.filter(u => u.owner === currentPlayer && !u.is_in_reserve);
         if (eligibleUnits.length > 0) {
           specialRulesApplied.push({ rule: 'Re-Deployment', effect: 'may redeploy up to 2 units' });
           return { redeployUnits: eligibleUnits.slice(0, 2) };
@@ -98,13 +99,13 @@ export const BLOOD_BROTHERS_RULES = {
       },
     },
   },
-
-  'Re-Position Artillery': {
+  
+'Re-Position Artillery': {
     description: 'Once per activation, pick one friendly Artillery model within 6" — it may immediately move up to 9".',
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._repositionUsed) return {};
-        const artillery = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 6 && u.rules.includes('Artillery'));
+        const artillery = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 6 && (u.special_rules || '').includes('Artillery'));
         if (artillery) {
           unit._repositionUsed = true;
           specialRulesApplied.push({ rule: 'Re-Position Artillery', effect: `${artillery.name} may move up to 9"` });
@@ -158,12 +159,12 @@ export const BLOOD_BROTHERS_RULES = {
     },
   },
 
-  'Unstoppable Shooting Mark': {
+'Unstoppable Shooting Mark': {
     description: 'Once per activation, mark an enemy; friendlies get Unstoppable when shooting against it.',
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._unstoppableMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.unstoppable_marked = true;
           unit._unstoppableMarkUsed = true;
@@ -171,16 +172,6 @@ export const BLOOD_BROTHERS_RULES = {
         }
         return {};
       },
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ target, ap, specialRulesApplied }) => {
-        if (target?.unstoppable_marked) {
-          delete target.unstoppable_marked;
-          specialRulesApplied.push({ rule: 'Unstoppable Shooting Mark', effect: 'AP ignored' });
-          return { ap: Math.max(0, ap ?? 0) };
-        }
-        return {};
-      },
-    },
-  },
 
   VersatileAttack: {
     description: 'When activated, choose AP+1 or +1 to hit.',
@@ -344,11 +335,11 @@ export const BLOOD_BROTHERS_RULES = {
       },
     },
   },
-  'Burst of Rage': {
+'Burst of Rage': {
     description: 'Pick up to two friendly units within 12" which get Furious once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempFurious = true);
         specialRulesApplied.push({ rule: 'Burst of Rage', effect: `gave Furious to ${friendlies.length} units` });
       },
@@ -365,11 +356,11 @@ export const BLOOD_BROTHERS_RULES = {
       },
     },
   },
-  'Blood Dome': {
+'Blood Dome': {
     description: 'Pick up to three friendly units within 12" which get Evasive once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempEvasive = true);
         specialRulesApplied.push({ rule: 'Blood Dome', effect: `gave Evasive to ${friendlies.length} units` });
       },
