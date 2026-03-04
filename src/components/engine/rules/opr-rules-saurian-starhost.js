@@ -15,13 +15,13 @@ export const SAURIAN_STARHOST_RULES = {
     description: 'For each unmodified roll of 6 to hit when attacking, this model may roll +1 attack with that weapon. This rule doesn\'t apply to newly generated attacks.',
     hooks: {
       [HOOKS.AFTER_HIT_ROLLS]: ({ unit, weapon, rolls, successes, weaponRules, specialRulesApplied }) => {
-        if (!unit.rules.includes('Primal')) return {};
+        if (!unit.special_rules.includes('Primal')) return {};
 
         // Count unmodified sixes that are not from auto-generated attacks
         const sixes = rolls.filter(r => r.value === 6 && !r.auto).length;
         if (sixes === 0) return {};
 
-        const hasBoost = unit.rules.includes('Primal Boost') ||
+        const hasBoost = unit.special_rules.includes('Primal Boost') ||
                          specialRulesApplied.includes('Primal Boost');
         const threshold = hasBoost ? 5 : 6;
         // But we already only have sixes; if boost is active, we also need to handle fives.
@@ -242,7 +242,7 @@ export const SAURIAN_STARHOST_RULES = {
     description: 'This model gets +1 to hit rolls when shooting.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, isMelee, specialRulesApplied }) => {
-        if (!isMelee && unit.rules.includes('Good Shot')) {
+        if (!isMelee && unit.special_rules.includes('Good Shot')) {
           specialRulesApplied.push({ rule: 'Good Shot', effect: '+1 to hit' });
           return { quality: Math.max(2, quality - 1) };
         }
@@ -272,7 +272,7 @@ export const SAURIAN_STARHOST_RULES = {
     description: 'Gets +1 to hit when attacking.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, specialRulesApplied }) => {
-        if (unit.rules.includes('Precise')) {
+        if (unit.special_rules.includes('Precise')) {
           specialRulesApplied.push({ rule: 'Precise', effect: '+1 to hit' });
           return { quality: Math.max(2, quality - 1) };
         }
@@ -348,7 +348,7 @@ export const SAURIAN_STARHOST_RULES = {
     description: 'Once per game, when this unit takes wounds and all its models have this rule, you may use this rule and roll one die per wound, and on a 4+ it is ignored.',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
-        if (!unit.rules.includes('Protection Feat') || unit._protectionFeatUsed) return {};
+        if (!unit.special_rules.includes('Protection Feat') || unit._protectionFeatUsed) return {};
         unit._protectionFeatUsed = true;
         let ignored = 0;
         for (let i = 0; i < wounds; i++) {
@@ -449,7 +449,7 @@ export const SAURIAN_STARHOST_RULES = {
     description: 'When in melee, roll one die and apply one effect to all models with this rule: on a 1-3 they get AP(+1), and on a 4-6 they get +1 to hit rolls instead.',
     hooks: {
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Unpredictable Fighter')) return {};
+        if (!unit.special_rules.includes('Unpredictable Fighter')) return {};
         const roll = dice.roll();
         const mode = roll <= 3 ? 'ap' : 'hit';
         unit._unpredictableFighterMode = mode;
@@ -490,7 +490,7 @@ export const SAURIAN_STARHOST_RULES = {
     // We need to implement Rapid Charge as a rule that modifies speed.
     hooks: {
       [HOOKS.MODIFY_SPEED]: ({ unit, action, speedDelta, specialRulesApplied }) => {
-        if (action === 'Charge' && unit.rules.includes('Rapid Charge')) {
+        if (action === 'Charge' && unit.special_rules.includes('Rapid Charge')) {
           specialRulesApplied.push({ rule: 'Rapid Charge', effect: '+4"' });
           return { speedDelta: (speedDelta ?? 0) + 4 };
         }
@@ -506,7 +506,7 @@ export const SAURIAN_STARHOST_RULES = {
     // We'll implement as a rule that modifies AP on 6s.
     hooks: {
       [HOOKS.ON_PER_HIT]: ({ unit, weaponRules, hitRoll, ap, isMelee, specialRulesApplied }) => {
-        if (!isMelee && unit.rules.includes('Rending when Shooting') && hitRoll.value === 6 && !hitRoll.auto) {
+        if (!isMelee && unit.special_rules.includes('Rending when Shooting') && hitRoll.value === 6 && !hitRoll.auto) {
           specialRulesApplied.push({ rule: 'Rending when Shooting', effect: 'AP+1' });
           return { apBonus: 1 };
         }
