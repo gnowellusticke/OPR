@@ -279,8 +279,8 @@ export class RulesEngine {
       if (r.rolls) hitRolls.push(...r.rolls);
     });
 
-    if (hits === 0) {
-      return { hits: 0, saves: 0, wounds: 0, hit_rolls, defense_rolls: [], specialRulesApplied };
+   if (hits === 0) {
+      return { hits: 0, saves: 0, wounds: 0, hit_rolls: hitRolls, defense_rolls: [], specialRulesApplied };
     }
 
     let unsavedHits = 0;
@@ -471,7 +471,7 @@ export class RulesEngine {
   // =========================================================================
 
   checkMorale(unit, reason) {
-    const roll = Dice.roll();
+    let roll = Dice.roll();
     let quality = unit.quality;
     const specialRulesApplied = [];
     const ctx = { unit, roll, quality, passed: roll >= quality, reason, dice: Dice, specialRulesApplied };
