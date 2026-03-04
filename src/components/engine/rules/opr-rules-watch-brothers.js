@@ -284,7 +284,7 @@ export const WATCH_BROTHERS_RULES = {
     // Bane: on 6+ to wound, +1 wound. We'll implement in ON_WOUND_CALC for melee.
     hooks: {
       [HOOKS.ON_WOUND_CALC]: ({ unit, isMelee, unsavedHit, toughPerModel, wounds, specialRulesApplied }) => {
-        if (isMelee && unit.rules.includes('Bane in Melee') && unsavedHit.value >= 6) {
+        if (isMelee && unit.special_rules.includes('Bane in Melee') && unsavedHit.value >= 6) {
           specialRulesApplied.push({ rule: 'Bane in Melee', effect: '+1 wound' });
           return { wounds: wounds + 1 };
         }
@@ -299,7 +299,7 @@ export const WATCH_BROTHERS_RULES = {
   'Bane when Shooting': {
     hooks: {
       [HOOKS.ON_WOUND_CALC]: ({ unit, isMelee, unsavedHit, toughPerModel, wounds, specialRulesApplied }) => {
-        if (!isMelee && unit.rules.includes('Bane when Shooting') && unsavedHit.value >= 6) {
+        if (!isMelee && unit.special_rules.includes('Bane when Shooting') && unsavedHit.value >= 6) {
           specialRulesApplied.push({ rule: 'Bane when Shooting', effect: '+1 wound' });
           return { wounds: wounds + 1 };
         }
@@ -317,7 +317,7 @@ export const WATCH_BROTHERS_RULES = {
   Courage: {
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
-        if (unit.rules.includes('Courage')) {
+        if (unit.special_rules.includes('Courage')) {
           specialRulesApplied.push({ rule: 'Courage', effect: '+1 morale' });
           return { roll: roll + 1 };
         }
@@ -340,7 +340,7 @@ export const WATCH_BROTHERS_RULES = {
   Regeneration: {
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
-        if (!unit.rules.includes('Regeneration')) return {};
+        if (!unit.special_rules.includes('Regeneration')) return {};
         let ignored = 0;
         for (let i = 0; i < wounds; i++) {
           const roll = Dice.roll();
@@ -358,7 +358,7 @@ export const WATCH_BROTHERS_RULES = {
   'Shred when Shooting': {
     hooks: {
       [HOOKS.ON_PER_HIT]: ({ unit, isMelee, saveRoll, specialRulesApplied }) => {
-        if (!isMelee && unit.rules.includes('Shred when Shooting') && saveRoll === 1) {
+        if (!isMelee && unit.special_rules.includes('Shred when Shooting') && saveRoll === 1) {
           specialRulesApplied.push({ rule: 'Shred when Shooting', effect: 'extra wound' });
           return { extraWounds: 1 };
         }
