@@ -34,7 +34,7 @@ export const DAO_UNION_RULES = {
     description: 'This model and its unit get Targeting Visor Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Targeting Visor Boost Aura')) {
+        if (unit.special_rules.includes('Targeting Visor Boost Aura')) {
           return { additionalRules: ['Targeting Visor Boost'] };
         }
         return {};
@@ -83,7 +83,7 @@ export const DAO_UNION_RULES = {
     description: 'This model and its unit get Fortified.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Fortified Aura')) {
+        if (unit.special_rules.includes('Fortified Aura')) {
           return { additionalRules: ['Fortified'] };
         }
         return {};
@@ -147,7 +147,7 @@ export const DAO_UNION_RULES = {
     description: 'This model and its unit get Ranged Slayer.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Ranged Slayer Aura')) {
+        if (unit.special_rules.includes('Ranged Slayer Aura')) {
           return { additionalRules: ['Ranged Slayer'] };
         }
         return {};
@@ -173,7 +173,7 @@ export const DAO_UNION_RULES = {
     description: 'This model and its unit get Counter-Attack.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Counter-Attack Aura')) {
+        if (unit.special_rules.includes('Counter-Attack Aura')) {
           return { additionalRules: ['Counter-Attack'] };
         }
         return {};
@@ -195,7 +195,7 @@ export const DAO_UNION_RULES = {
     description: 'This model and its unit get Melee Shrouding.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Melee Shrouding Aura')) {
+        if (unit.special_rules.includes('Melee Shrouding Aura')) {
           return { additionalRules: ['Melee Shrouding'] };
         }
         return {};
@@ -303,7 +303,7 @@ export const DAO_UNION_RULES = {
     description: 'This model and its unit get +6" range when shooting.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Increased Shooting Range Aura')) {
+        if (unit.special_rules.includes('Increased Shooting Range Aura')) {
           return { additionalRules: ['Increased Shooting Range'] };
         }
         return {};
