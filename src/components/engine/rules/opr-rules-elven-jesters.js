@@ -95,7 +95,7 @@ export const ELVEN_JESTERS_RULES = {
     description: 'If this model has Rapid Blink, it may be placed within 6" instead of 3".',
     hooks: {
       [HOOKS.BEFORE_ACTIVATION]: ({ unit, specialRulesApplied }) => {
-        if (unit.rules.includes('Rapid Blink') && !unit._rapidBlinkBoostUsed) {
+        if (unit.special_rules.includes('Rapid Blink') && !unit._rapidBlinkBoostUsed) {
           unit._rapidBlinkBoostUsed = true;
           specialRulesApplied.push({ rule: 'Rapid Blink Boost', effect: 'may reposition up to 6"' });
           return { rapidBlink: 6 };
@@ -264,7 +264,7 @@ export const ELVEN_JESTERS_RULES = {
     description: 'This model and its unit get Rapid Blink Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Rapid Blink Boost Aura')) {
+        if (unit.special_rules.includes('Rapid Blink Boost Aura')) {
           return { additionalRules: ['Rapid Blink Boost'] };
         }
         return {};
@@ -275,7 +275,7 @@ export const ELVEN_JESTERS_RULES = {
     description: 'This model and its unit get Shielded.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Shielded Aura')) {
+        if (unit.special_rules.includes('Shielded Aura')) {
           return { additionalRules: ['Shielded'] };
         }
         return {};
@@ -286,7 +286,7 @@ export const ELVEN_JESTERS_RULES = {
     description: 'This model and its unit get Shred when shooting.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Shred when Shooting Aura')) {
+        if (unit.special_rules.includes('Shred when Shooting Aura')) {
           return { additionalRules: ['Shred'] };
         }
         return {};
@@ -297,7 +297,7 @@ export const ELVEN_JESTERS_RULES = {
     description: 'This model and its unit get Teleport.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Teleport Aura')) {
+        if (unit.special_rules.includes('Teleport Aura')) {
           return { additionalRules: ['Teleport'] };
         }
         return {};
@@ -308,7 +308,7 @@ export const ELVEN_JESTERS_RULES = {
     description: 'This model and its unit get Unpredictable Fighter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Unpredictable Fighter Aura')) {
+        if (unit.special_rules.includes('Unpredictable Fighter Aura')) {
           return { additionalRules: ['Unpredictable Fighter'] };
         }
         return {};
