@@ -345,7 +345,7 @@ export const JACKALS_RULES = {
     description: '+1 to hit in melee.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, isMelee, quality, specialRulesApplied }) => {
-        if (isMelee && unit.rules.includes('Precision Fighter Aura')) {
+        if (isMelee && unit.special_rules.includes('Precision Fighter Aura')) {
           specialRulesApplied.push({ rule: 'Precision Fighter Aura', effect: '+1 to hit' });
           return { quality: Math.max(2, quality - 1) };
         }
@@ -357,7 +357,7 @@ export const JACKALS_RULES = {
     description: 'This model and its unit get Ranged Shrouding.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Ranged Shrouding Aura')) {
+        if (unit.special_rules.includes('Ranged Shrouding Aura')) {
           return { additionalRules: ['Ranged Shrouding'] };
         }
         return {};
@@ -368,7 +368,7 @@ export const JACKALS_RULES = {
     description: 'This model and its unit get Scout.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Scout Aura')) {
+        if (unit.special_rules.includes('Scout Aura')) {
           return { additionalRules: ['Scout'] };
         }
         return {};
@@ -389,7 +389,7 @@ export const JACKALS_RULES = {
     description: 'This model and its unit get Scrapper Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Scrapper Boost Aura')) {
+        if (unit.special_rules.includes('Scrapper Boost Aura')) {
           return { additionalRules: ['Scrapper Boost'] };
         }
         return {};
@@ -400,7 +400,7 @@ export const JACKALS_RULES = {
     description: 'This model and its unit get Unpredictable Shooter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Unpredictable Shooter Aura')) {
+        if (unit.special_rules.includes('Unpredictable Shooter Aura')) {
           return { additionalRules: ['Unpredictable Shooter'] };
         }
         return {};
