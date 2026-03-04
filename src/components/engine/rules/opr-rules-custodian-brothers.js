@@ -37,7 +37,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'This model and its unit get Guardian Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Guardian Boost Aura')) {
+        if (unit.special_rules.includes('Guardian Boost Aura')) {
           return { additionalRules: ['Guardian Boost'] };
         }
         return {};
@@ -79,7 +79,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'This model and its unit get Hit & Run Shooter.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Hit & Run Shooter Aura')) {
+        if (unit.special_rules.includes('Hit & Run Shooter Aura')) {
           return { additionalRules: ['Hit & Run Shooter'] };
         }
         return {};
@@ -129,7 +129,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'This model and its unit get Ranged Shrouding.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Ranged Shrouding Aura')) {
+        if (unit.special_rules.includes('Ranged Shrouding Aura')) {
           return { additionalRules: ['Ranged Shrouding'] };
         }
         return {};
@@ -189,7 +189,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'This model and its unit get Shred when shooting.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Shred when Shooting Aura')) {
+        if (unit.special_rules.includes('Shred when Shooting Aura')) {
           return { additionalRules: ['Shred'] }; // Shred already applies to all
         }
         return {};
@@ -218,7 +218,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'This model and its unit get Steadfast.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Steadfast Aura')) {
+        if (unit.special_rules.includes('Steadfast Aura')) {
           return { additionalRules: ['Steadfast'] };
         }
         return {};
@@ -263,7 +263,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'This model and its unit get Teleport.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Teleport Aura')) {
+        if (unit.special_rules.includes('Teleport Aura')) {
           return { additionalRules: ['Teleport'] };
         }
         return {};
@@ -307,7 +307,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'This model and its unit get Unstoppable in melee.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Unstoppable in Melee Aura')) {
+        if (unit.special_rules.includes('Unstoppable in Melee Aura')) {
           return { additionalRules: ['Unstoppable in Melee'] };
         }
         return {};
@@ -347,7 +347,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'This model and its unit get Regeneration.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Regeneration Aura')) {
+        if (unit.special_rules.includes('Regeneration Aura')) {
           return { additionalRules: ['Regeneration'] };
         }
         return {};
@@ -358,7 +358,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'This model and its unit get Stealth.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Stealth Aura')) {
+        if (unit.special_rules.includes('Stealth Aura')) {
           return { additionalRules: ['Stealth'] };
         }
         return {};
