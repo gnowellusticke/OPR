@@ -32,7 +32,7 @@ export const HIGH_ELF_FLEETS_RULES = {
     description: 'This model and its unit get Highborn Boost.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Highborn Boost Aura')) {
+        if (unit.special_rules.includes('Highborn Boost Aura')) {
           return { additionalRules: ['Highborn Boost'] };
         }
         return {};
@@ -76,7 +76,7 @@ export const HIGH_ELF_FLEETS_RULES = {
     description: 'This model and its unit get Resistance.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Resistance Aura')) {
+        if (unit.special_rules.includes('Resistance Aura')) {
           return { additionalRules: ['Resistance'] };
         }
         return {};
@@ -100,7 +100,7 @@ export const HIGH_ELF_FLEETS_RULES = {
     description: 'This model and its unit get Shred in melee.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Shred in Melee Aura')) {
+        if (unit.special_rules.includes('Shred in Melee Aura')) {
           return { additionalRules: ['Shred in Melee'] };
         }
         return {};
@@ -113,7 +113,7 @@ export const HIGH_ELF_FLEETS_RULES = {
     description: 'This model and its unit get Scout.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Scout Aura')) {
+        if (unit.special_rules.includes('Scout Aura')) {
           return { additionalRules: ['Scout'] };
         }
         return {};
@@ -245,14 +245,14 @@ export const HIGH_ELF_FLEETS_RULES = {
     description: 'Pick one model in the unit to have Caster(X) where X equals the total number of models with this rule. On death, transfer spell tokens to another model.',
     hooks: {
       [HOOKS.ON_UNIT_CREATED]: ({ unit }) => {
-        if (unit.rules.includes('Caster Group')) {
+        if (unit.special_rules.includes('Caster Group')) {
           // Set initial caster: first model
           unit.casterModel = 0;
           unit.casterTokens = unit.currentModels; // X = number of models
         }
       },
       [HOOKS.ON_MODEL_KILLED]: ({ unit, modelIndex }) => {
-        if (unit.rules.includes('Caster Group') && modelIndex === unit.casterModel) {
+        if (unit.special_rules.includes('Caster Group') && modelIndex === unit.casterModel) {
           // Transfer to another model
           const newCaster = unit.models.findIndex((m, i) => i !== modelIndex);
           if (newCaster !== -1) {
@@ -263,12 +263,12 @@ export const HIGH_ELF_FLEETS_RULES = {
         }
       },
       [HOOKS.ON_ROUND_END]: ({ unit }) => {
-        if (unit.rules.includes('Caster Group')) {
+        if (unit.special_rules.includes('Caster Group')) {
           unit.casterTokens = 0;
         }
       },
       [HOOKS.ON_TOKEN_GAIN]: ({ unit, currentTokens }) => {
-        if (unit.rules.includes('Caster Group')) {
+        if (unit.special_rules.includes('Caster Group')) {
           // Tokens are managed separately; we just need to ensure the caster model has tokens.
           // For now, we'll assume unit.spell_tokens is the total.
           return {};
