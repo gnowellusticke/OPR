@@ -1262,17 +1262,11 @@ const scored = candidates.map(u => {
     const roundA = gs.objectives.filter(o => o.controlled_by === 'agent_a').length;
     const roundB = gs.objectives.filter(o => o.controlled_by === 'agent_b').length;
 
-    let aScore, bScore;
+let aScore, bScore;
     if (isProgressiveScoring) {
-      aScore = 0; bScore = 0;
-      evRef.current.forEach(ev => {
-        if (ev.event_type === 'round_summary' && ev.score) {
-          aScore += ev.score.agent_a || 0;
-          bScore += ev.score.agent_b || 0;
-        }
-      });
-      aScore += roundA;
-      bScore += roundB;
+      const cumulative = gs.cumulative_score || { agent_a: 0, agent_b: 0 };
+      aScore = cumulative.agent_a + roundA;
+      bScore = cumulative.agent_b + roundB;
     } else {
       aScore = roundA;
       bScore = roundB;
