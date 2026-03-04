@@ -1,3 +1,4 @@
+// RuleRegistry.js
 /**
  * RuleRegistry — game-agnostic special rule plugin system.
  *
@@ -224,8 +225,9 @@ export const HOOKS = {
   ON_TOKEN_GAIN:         'onTokenGain',
 
   // Deployment & Special Entry
-  ON_DEPLOY:             'onDeploy',
-  ON_RESERVE_ENTRY:      'onReserveEntry',
+  ON_DEPLOY:             'onDeploy',              // initial placement of a unit
+  AFTER_DEPLOYMENT:      'afterDeployment',       // after all units are deployed
+  ON_RESERVE_ENTRY:      'onReserveEntry',        // Ambush, Teleport mid-game placement
 
   // Transport
   ON_TRANSPORT_DESTROY:  'onTransportDestroy',
@@ -234,6 +236,9 @@ export const HOOKS = {
   ON_OBJECTIVE_CHECK:    'onObjectiveCheck',
   ON_ROUND_START:        'onRoundStart',
   ON_ROUND_END:          'onRoundEnd',
+
+  // Shooting eligibility
+  CAN_SHOOT_AFTER_MOVE:  'canShootAfterMove',     // can unit shoot after moving?
 
   // Rule Aggregation
   ON_GET_RULES:          'onGetRules',
