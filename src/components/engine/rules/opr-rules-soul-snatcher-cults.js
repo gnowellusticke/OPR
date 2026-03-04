@@ -15,7 +15,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     description: 'After this model is deployed, it may be placed anywhere fully within 9" of its position.',
     hooks: {
       [HOOKS.ON_DEPLOY]: ({ unit, specialRulesApplied }) => {
-        if (!unit.rules.includes('Fanatic')) return {};
+        if (!unit.special_rules.includes('Fanatic')) return {};
         // This hook is called after initial deployment. Allow reposition.
         specialRulesApplied.push({ rule: 'Fanatic', effect: 'may redeploy within 9"' });
         return { fanaticRedeploy: { distance: 9 } };
@@ -46,7 +46,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     description: 'If a unit where all models have this rule has most of them within 1" of terrain, they get +1 to hit rolls when attacking.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, specialRulesApplied, gameState }) => {
-        if (!unit.rules.includes('Grounded Precision')) return {};
+        if (!unit.special_rules.includes('Grounded Precision')) return {};
         // Check if most models are within 1" of any terrain
         const modelsNearTerrain = unit.models.filter(m => 
           gameState.terrain.some(t => m.distanceTo(t) <= 1)
@@ -116,7 +116,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     description: 'This model\'s melee weapons get AP(+2) against units where most models have Tough(3) or higher.',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, target, ap, isMelee, specialRulesApplied }) => {
-        if (!isMelee || !unit.rules.includes('Melee Slayer')) return {};
+        if (!isMelee || !unit.special_rules.includes('Melee Slayer')) return {};
         if (target && target.tough >= 3) {
           specialRulesApplied.push({ rule: 'Melee Slayer', effect: 'AP+2' });
           return { ap: (ap ?? 0) + 2 };
@@ -202,7 +202,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
       // This rule modifies the normal restriction. We need a hook that checks if shooting is allowed.
       // Assuming the engine has a hook CAN_SHOOT_AFTER_MOVE.
       [HOOKS.CAN_SHOOT_AFTER_MOVE]: ({ unit, action, specialRulesApplied }) => {
-        if (unit.rules.includes('Quick Shot') && action === 'Rush') {
+        if (unit.special_rules.includes('Quick Shot') && action === 'Rush') {
           specialRulesApplied.push({ rule: 'Quick Shot', effect: 'may shoot after Rush' });
           return { canShoot: true };
         }
@@ -245,7 +245,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     description: 'When a unit where all models have this rule is Shaken or fully destroyed, you may remove it and place a new copy at the beginning of the next round after Ambushes.',
     hooks: {
       [HOOKS.ON_MODEL_KILLED]: ({ unit, gameState, specialRulesApplied }) => {
-        if (unit.rules.includes('Reinforcement') && !unit._reinforcementMarked) {
+        if (unit.special_rules.includes('Reinforcement') && !unit._reinforcementMarked) {
           unit._reinforcementMarked = true;
           specialRulesApplied.push({ rule: 'Reinforcement', effect: 'will return next round' });
           gameState._reinforcementQueue = gameState._reinforcementQueue || [];
@@ -296,7 +296,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     description: 'This model\'s weapons get AP(+2) against units where most models have Tough(3) or higher.',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, target, ap, specialRulesApplied }) => {
-        if (!unit.rules.includes('Slayer')) return {};
+        if (!unit.special_rules.includes('Slayer')) return {};
         if (target && target.tough >= 3) {
           specialRulesApplied.push({ rule: 'Slayer', effect: 'AP+2' });
           return { ap: (ap ?? 0) + 2 };
@@ -435,7 +435,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     // Basic Regeneration rule (if not already defined elsewhere)
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
-        if (!unit.rules.includes('Regeneration')) return {};
+        if (!unit.special_rules.includes('Regeneration')) return {};
         let ignored = 0;
         for (let i = 0; i < wounds; i++) {
           const roll = Dice.roll();
