@@ -15,9 +15,9 @@ export const PLAGUE_DISCIPLES_RULES = {
     description: 'When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored. (Improved to 5+ with Plaguebound Boost.)',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
-        if (!unit.rules.includes('Plaguebound')) return {};
+        if (!unit.special_rules.includes('Plaguebound')) return {};
 
-        const hasBoost = unit.rules.includes('Plaguebound Boost') ||
+        const hasBoost = unit.special_rules.includes('Plaguebound Boost') ||
                          specialRulesApplied.includes('Plaguebound Boost');
         const threshold = hasBoost ? 5 : 6;
 
@@ -129,7 +129,7 @@ export const PLAGUE_DISCIPLES_RULES = {
     description: 'When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored.',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
-        if (!unit.rules.includes('Protected')) return {};
+        if (!unit.special_rules.includes('Protected')) return {};
 
         let ignored = 0;
         for (let i = 0; i < wounds; i++) {
@@ -159,7 +159,7 @@ export const PLAGUE_DISCIPLES_RULES = {
     description: 'When a unit where all models have this rule takes wounds, roll one die for each. On a 6+ it is ignored. If the wounds were from a spell, then they are ignored on a 2+ instead.',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied, fromSpell }) => {
-        if (!unit.rules.includes('Resistance')) return {};
+        if (!unit.special_rules.includes('Resistance')) return {};
 
         const threshold = fromSpell ? 2 : 6;
         let ignored = 0;
@@ -196,7 +196,7 @@ export const PLAGUE_DISCIPLES_RULES = {
     description: 'If a unit where all models have this rule is Shaken at the beginning of the round, roll one die. On a 4+ it stops being Shaken.',
     hooks: {
       [HOOKS.ON_ROUND_START]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Steadfast')) return {};
+        if (!unit.special_rules.includes('Steadfast')) return {};
         if (unit.status !== 'shaken') return {};
 
         const roll = dice.roll();
@@ -245,7 +245,7 @@ export const PLAGUE_DISCIPLES_RULES = {
     description: 'When attacking, roll one die and apply one effect to all models with this rule: on a 1‑3 they get AP(+1) and on a 4‑6 they get +1 to hit rolls instead.',
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Unpredictable')) return {};
+        if (!unit.special_rules.includes('Unpredictable')) return {};
         const roll = dice.roll();
         const mode = roll <= 3 ? 'ap' : 'hit';
         unit._unpredictableMode = mode;
@@ -276,7 +276,7 @@ export const PLAGUE_DISCIPLES_RULES = {
     description: 'When in melee, roll one die and apply one effect to all models with this rule: on a 1‑3 they get AP(+1) and on a 4‑6 they get +1 to hit rolls instead.',
     hooks: {
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.rules.includes('Unpredictable Fighter')) return {};
+        if (!unit.special_rules.includes('Unpredictable Fighter')) return {};
         const roll = dice.roll();
         const mode = roll <= 3 ? 'ap' : 'hit';
         unit._unpredictableFighterMode = mode;
