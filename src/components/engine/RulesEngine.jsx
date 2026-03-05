@@ -188,7 +188,7 @@ endActivation(unit, gameState) {
       this._lineIntersectsUnit(startX, startY, finalX, finalY, u)
     );
     for (const enemy of enemiesPassed) {
-      const throughCtx = { unit, enemyUnit: enemy, gameState, dice: Dice, specialRulesApplied };
+      const throughCtx = { unit, enemyUnit: enemy, gameState, dice: Dice, specialRulesApplied, weapon: unit.weapons?.[0] ?? null };
       const throughResults = this.registry.applyHook(HOOKS.ON_MOVE_THROUGH_ENEMY, throughCtx, unit.special_rules);
       this._processStrafing(throughResults, unit, gameState);
     }
@@ -224,7 +224,7 @@ endActivation(unit, gameState) {
    * @param {Object} gameState
    * @returns {Object} { hits, saves, wounds, hit_rolls, defense_rolls, specialRulesApplied }
    */
-  resolveShooting(attacker, defender, weapon, gameState) {
+  resolveShooting(attacker, defender, weapon, gameState, isMelee = false) {
     const specialRulesApplied = [];
     const ctx = {
       unit: attacker,
@@ -233,7 +233,7 @@ endActivation(unit, gameState) {
       gameState,
       dice: Dice,
       specialRulesApplied,
-      isMelee: false,
+      isMelee,
       weaponRules: weapon.rules || [],
       weaponParams: weapon.ruleParams || {}
     };
@@ -429,7 +429,7 @@ endActivation(unit, gameState) {
   _resolveMeleeAttacks(attacker, defender, gameState, extraWoundsFromHooks = 0) {
     let totalWounds = 0;
     for (const weapon of attacker.weapons.filter(w => w.range <= 2)) {
-      const shootingResult = this.resolveShooting(attacker, defender, weapon, gameState);
+      const shootingResult = this.resolveShooting(attacker, defender, weapon, gameState, true);
       totalWounds += shootingResult.wounds;
     }
     totalWounds += extraWoundsFromHooks;
@@ -594,7 +594,7 @@ endActivation(unit, gameState) {
   // =========================================================================
 
   getActiveRules(unit, gameState) {
-    const rules = new Set(unit.rules || []);
+    const rules = new Set(typeof unit.special_rules === 'string' ? unit.special_rules.split(' ') : (unit.special_rules || []));
     const ctx = { unit, gameState };
     const results = this.registry.applyHook(HOOKS.ON_GET_RULES, ctx);
     results.forEach(r => {

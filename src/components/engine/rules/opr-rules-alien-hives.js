@@ -352,7 +352,7 @@ export const ALIEN_HIVES_RULES = {
         return {};
       },
       [HOOKS.ON_INCOMING_WOUNDS]: ({ weapon, specialRulesApplied }) => {
-        if (weapon?.rules.includes('Rupture')) {
+        if ((weapon?.special_rules || '').includes('Rupture')) {
           return { suppressRegeneration: true };
         }
         return {};
