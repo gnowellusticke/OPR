@@ -58,7 +58,7 @@ export const KNIGHT_BROTHERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._mendUsed) return {};
-        const targets = gameState.units.filter(u => u.owner === unit.owner && u.distanceTo(unit) <= 3 && u.tough > 1 && u.current_models < u.total_models);
+        const targets = gameState.units.filter(u => u.owner === unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 && u.tough > 1 && u.current_models < u.total_models);
         if (targets.length === 0 && unit.tough > 1 && unit.current_models < unit.total_models) {
           targets.push(unit);
         }
@@ -125,7 +125,7 @@ export const KNIGHT_BROTHERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._repositionUsed) return {};
-        const artillery = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 6 && u.rules.includes('Artillery'));
+        const artillery = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 6 && (u.special_rules || '').includes('Artillery'));
         if (artillery) {
           unit._repositionUsed = true;
           specialRulesApplied.push({ rule: 'Re-Position Artillery', effect: `${artillery.name} may move up to 9"` });
@@ -245,7 +245,7 @@ export const KNIGHT_BROTHERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._unstoppableMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.unstoppable_marked = true;
           unit._unstoppableMarkUsed = true;
@@ -430,7 +430,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'Pick up to two enemy units within 18" which get -1 to defense rolls once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         enemies.forEach(u => u._defenseDebuff = true);
         specialRulesApplied.push({ rule: 'Banishing Sigil', effect: `gave -1 defense to ${enemies.length} units` });
       },
@@ -459,7 +459,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'Pick up to three friendly units within 12" which get Evasive once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempEvasive = true);
         specialRulesApplied.push({ rule: 'Knight Dome', effect: `gave Evasive to ${friendlies.length} units` });
       },
@@ -477,7 +477,7 @@ export const KNIGHT_BROTHERS_RULES = {
     description: 'Pick up to two enemy units within 12" which take 3 hits with AP(2) each.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         const extraHits = enemies.map(e => ({ target: e, count: 3, ap: 2 }));
         specialRulesApplied.push({ rule: 'Purge the Impure', effect: `3 hits AP2 on ${enemies.length} units` });
         return { extraHits };

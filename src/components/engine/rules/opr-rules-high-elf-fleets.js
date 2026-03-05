@@ -159,7 +159,7 @@ export const HIGH_ELF_FLEETS_RULES = {
     description: 'Strikes last when charging.',
     hooks: {
       [HOOKS.ON_STRIKE_ORDER]: ({ attacker, specialRulesApplied }) => {
-        if (attacker.rules.includes('Unwieldy')) {
+        if ((attacker.special_rules || '').includes('Unwieldy')) {
           specialRulesApplied.push({ rule: 'Unwieldy', effect: 'attacker strikes last' });
           return { attackerFirst: false };
         }
@@ -173,7 +173,7 @@ export const HIGH_ELF_FLEETS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._unwieldyDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.unwieldy_debuff = true;
           unit._unwieldyDebuffUsed = true;
@@ -282,7 +282,7 @@ export const HIGH_ELF_FLEETS_RULES = {
     description: 'Friendly casters within 12" may cast as if from this model\'s position and get +1 to casting rolls.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, spell, target, gameState, specialRulesApplied }) => {
-        const conduit = gameState.units.find(u => u.owner === caster.owner && u.rules.includes('Spell Conduit') && u.distanceTo(caster) <= 12);
+        const conduit = gameState.units.find(u => u.owner === caster.owner && (u.special_rules || '').includes('Spell Conduit') && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12);
         if (conduit) {
           specialRulesApplied.push({ rule: 'Spell Conduit', effect: 'cast from conduit position, +1 to roll' });
           return { castModifier: 1, castPosition: conduit };

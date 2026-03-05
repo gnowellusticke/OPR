@@ -211,7 +211,7 @@ export const ORC_MARAUDERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._rendingMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target._rendingMarked = true;
           unit._rendingMarkUsed = true;
@@ -237,7 +237,7 @@ export const ORC_MARAUDERS_RULES = {
         // This hook is called for the enemy unit. We need to check if any unit with Repel Ambushers is nearby.
         // This is tricky because the hook is called on the unit being deployed.
         // We'll assume the engine passes all units in gameState.
-        const repellors = gameState.units.filter(u => u.rules.includes('Repel Ambushers') && u.owner !== unit.owner);
+        const repellors = gameState.units.filter(u => (u.special_rules || '').includes('Repel Ambushers') && u.owner !== unit.owner);
         for (let rep of repellors) {
           // We need to ensure the deployment point is >12" from rep.
           // This hook returns { x, y } for the deployment. We can modify it.
@@ -502,7 +502,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'Two friendlies get Ferocious Boost once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempFerociousBoost = true);
         specialRulesApplied.push({ rule: 'Path of War', effect: `gave Ferocious Boost to ${friendlies.length} units` });
       },
@@ -523,7 +523,7 @@ export const ORC_MARAUDERS_RULES = {
     description: 'Up to three enemies get Rending in melee mark.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 3);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 3);
         enemies.forEach(u => u._rendingMarked = true);
         specialRulesApplied.push({ rule: 'Head Bang', effect: `marked ${enemies.length} units` });
       },

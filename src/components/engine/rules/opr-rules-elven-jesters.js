@@ -55,7 +55,7 @@ export const ELVEN_JESTERS_RULES = {
     description: 'Strikes first when charged.',
     hooks: {
       [HOOKS.ON_STRIKE_ORDER]: ({ defender, specialRulesApplied }) => {
-        if (defender.rules.includes('Counter-Attack')) {
+        if ((defender.special_rules || '').includes('Counter-Attack')) {
           specialRulesApplied.push({ rule: 'Counter-Attack', effect: 'defender strikes first' });
           return { attackerFirst: false };
         }
@@ -150,7 +150,7 @@ export const ELVEN_JESTERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._slayerMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.slayer_marked = true;
           unit._slayerMarkUsed = true;
@@ -174,7 +174,7 @@ export const ELVEN_JESTERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._takedownStrikeUsed) return {};
-        const enemy = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 1);
+        const enemy = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 1);
         if (enemy) {
           unit._takedownStrikeUsed = true;
           specialRulesApplied.push({ rule: 'Takedown Strike', effect: `attack on ${enemy.name}` });
@@ -343,7 +343,7 @@ export const ELVEN_JESTERS_RULES = {
     description: 'Pick up to two friendly units within 12" which get Rapid Blink Boost once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempRapidBlinkBoost = true);
         specialRulesApplied.push({ rule: 'Shadow Dance', effect: `gave Rapid Blink Boost to ${friendlies.length} units` });
       },
@@ -364,7 +364,7 @@ export const ELVEN_JESTERS_RULES = {
     description: 'Pick up to three enemy units within 18" which get Slayer mark once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 3);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 3);
         enemies.forEach(u => u.slayer_marked = true);
         specialRulesApplied.push({ rule: 'Veil of Madness', effect: `marked ${enemies.length} units` });
       },

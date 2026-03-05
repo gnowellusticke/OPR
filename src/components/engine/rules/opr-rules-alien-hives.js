@@ -35,7 +35,7 @@ export const ALIEN_HIVES_RULES = {
         if (unit._breathAttackUsed) return {};
         const roll = dice.roll();
         if (roll >= 2) {
-          const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 6 && this._hasLineOfSight?.(unit, u));
+          const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 6 && this._hasLineOfSight?.(unit, u));
           if (target) {
             unit._breathAttackUsed = true;
             specialRulesApplied.push({ rule: 'Breath Attack', effect: `hits ${target.name}` });
@@ -77,7 +77,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'Hits count as AP(-1), min AP(0).',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ defender, ap, specialRulesApplied }) => {
-        if (defender.rules.includes('Fortified') && ap > 0) {
+        if ((defender.special_rules || '').includes('Fortified') && ap > 0) {
           const newAp = Math.max(0, ap - 1);
           specialRulesApplied.push({ rule: 'Fortified', effect: `AP ${ap}→${newAp}` });
           return { ap: newAp };
@@ -92,7 +92,7 @@ export const ALIEN_HIVES_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._furiousBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempFurious = true;
           unit._furiousBuffUsed = true;
@@ -218,7 +218,7 @@ export const ALIEN_HIVES_RULES = {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._piercingTagUsed) return {};
         const x = unit._ruleParamValue ?? 1;
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 36);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 36);
         if (target) {
           target.piercing_tag_markers = (target.piercing_tag_markers || 0) + x;
           unit._piercingTagUsed = true;
@@ -251,7 +251,7 @@ export const ALIEN_HIVES_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._precisionDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.precision_debuffed = true;
           unit._precisionDebuffUsed = true;
@@ -345,7 +345,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'Ignores Regeneration. Unmodified 6 to hit that aren\'t blocked deal +1 wound.',
     hooks: {
       [HOOKS.ON_WOUND_CALC]: ({ weapon, unsavedHit, wounds, specialRulesApplied }) => {
-        if (weapon.rules.includes('Rupture') && unsavedHit.value === 6 && unsavedHit.success && !unsavedHit.auto) {
+        if ((weapon.special_rules || '').includes('Rupture') && unsavedHit.value === 6 && unsavedHit.success && !unsavedHit.auto) {
           specialRulesApplied.push({ rule: 'Rupture', effect: '+1 wound' });
           return { wounds: wounds + 1 };
         }
@@ -437,7 +437,7 @@ export const ALIEN_HIVES_RULES = {
     description: 'Friendly casters within 12" may cast as if from this model\'s position and get +1.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, spell, target, gameState, specialRulesApplied }) => {
-        const conduit = gameState.units.find(u => u.owner === caster.owner && u.rules.includes('Spell Conduit') && u.distanceTo(caster) <= 12);
+        const conduit = gameState.units.find(u => u.owner === caster.owner && (u.special_rules || '').includes('Spell Conduit') && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12);
         if (conduit) {
           specialRulesApplied.push({ rule: 'Spell Conduit', effect: 'cast from conduit, +1' });
           return { castModifier: 1, castPosition: conduit };
@@ -452,7 +452,7 @@ export const ALIEN_HIVES_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._stealthBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempStealth = true;
           unit._stealthBuffUsed = true;
@@ -508,7 +508,7 @@ export const ALIEN_HIVES_RULES = {
           if (dice.roll() >= 4) hits++;
         }
         if (hits > 0) {
-          const nearby = gameState.units.filter(u => u.owner !== unit.owner && u.distanceTo(unit) <= 3);
+          const nearby = gameState.units.filter(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3);
           if (nearby.length > 0) {
             const target = nearby[0];
             specialRulesApplied.push({ rule: 'Surprise Attack', effect: `2 hits on ${target.name}` });
@@ -525,7 +525,7 @@ export const ALIEN_HIVES_RULES = {
     hooks: {
       [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._takedownStrikeUsed) return {};
-        const enemy = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 1);
+        const enemy = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 1);
         if (enemy) {
           unit._takedownStrikeUsed = true;
           specialRulesApplied.push({ rule: 'Takedown Strike', effect: `attack on ${enemy.name}` });
@@ -601,7 +601,7 @@ export const ALIEN_HIVES_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._unpredictableMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.unpredictable_marked = true;
           unit._unpredictableMarkUsed = true;

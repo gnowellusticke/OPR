@@ -56,7 +56,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'Hits count as AP(-1), min AP(0).',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ defender, ap, specialRulesApplied }) => {
-        if (defender.rules.includes('Fortified') && ap > 0) {
+        if ((defender.special_rules || '').includes('Fortified') && ap > 0) {
           const newAp = Math.max(0, ap - 1);
           specialRulesApplied.push({ rule: 'Fortified', effect: `AP ${ap}→${newAp}` });
           return { ap: newAp };
@@ -96,7 +96,7 @@ export const INFECTED_COLONIES_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._precisionDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.precision_debuffed = true;
           unit._precisionDebuffUsed = true;
@@ -313,7 +313,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'Pick up to two enemy units within 18" which get -1 to hit once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         enemies.forEach(u => u.precision_debuffed = true);
         specialRulesApplied.push({ rule: 'Brain Infestation', effect: `gave -1 to hit to ${enemies.length} units` });
       },
@@ -334,7 +334,7 @@ export const INFECTED_COLONIES_RULES = {
     description: 'Pick up to three friendly units within 12" which get Regeneration once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempRegeneration = true);
         specialRulesApplied.push({ rule: 'Rapid Mutation', effect: `gave Regeneration to ${friendlies.length} units` });
       },

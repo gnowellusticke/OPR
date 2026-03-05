@@ -60,7 +60,7 @@ export const MACHINE_CULT_RULES = {
         if (!target?.rules?.includes('Grounded Stealth')) return {};
         // Simplified: assume unit is near terrain if any terrain piece within 1"
         // In a full implementation, we'd need to check each model's distance to terrain.
-        const nearTerrain = terrain.some(t => target.distanceTo(t) <= 1);
+        const nearTerrain = terrain.some(t => Math.hypot(target.x - t.x, target.y - t.y) <= 1);
         if (nearTerrain) {
           specialRulesApplied.push({ rule: 'Grounded Stealth', effect: '-1 to hit' });
           return { quality: Math.min(6, quality + 1) };
@@ -129,7 +129,7 @@ export const MACHINE_CULT_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._mendUsed) return {};
-        const targets = gameState.units.filter(u => u.owner === unit.owner && u.distanceTo(unit) <= 3 && u.tough > 1 && u.current_models < u.total_models);
+        const targets = gameState.units.filter(u => u.owner === unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 && u.tough > 1 && u.current_models < u.total_models);
         if (targets.length === 0 && unit.tough > 1 && unit.current_models < unit.total_models) {
           targets.push(unit);
         }
@@ -150,7 +150,7 @@ export const MACHINE_CULT_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._piercingShootingDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.piercing_shooting_debuff = true;
           unit._piercingShootingDebuffUsed = true;
@@ -418,7 +418,7 @@ export const MACHINE_CULT_RULES = {
     description: 'Pick up to two friendly units within 12" which get Machine-Fog Boost once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempMachineFogBoost = true);
         specialRulesApplied.push({ rule: 'Shrouding Incense', effect: `gave Machine-Fog Boost to ${friendlies.length} units` });
       },
@@ -447,7 +447,7 @@ export const MACHINE_CULT_RULES = {
     description: 'Pick up to three enemy units within 18" which lose AP(+1) when shooting once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 3);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 3);
         enemies.forEach(u => u.piercing_shooting_debuff = true);
         specialRulesApplied.push({ rule: 'Corrode Weapons', effect: `gave -AP to ${enemies.length} units` });
       },

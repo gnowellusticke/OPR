@@ -51,7 +51,7 @@ export const REBEL_GUERRILLAS_RULES = {
     description: 'Strikes first when charged.',
     hooks: {
       [HOOKS.ON_STRIKE_ORDER]: ({ attacker, defender, gameState, specialRulesApplied }) => {
-        if (defender.rules.includes('Counter-Attack') && defender._charged) {
+        if ((defender.special_rules || '').includes('Counter-Attack') && defender._charged) {
           specialRulesApplied.push({ rule: 'Counter-Attack', effect: 'defender strikes first' });
           return { attackerFirst: false };
         }
@@ -68,7 +68,7 @@ export const REBEL_GUERRILLAS_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 12
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 12
         );
         if (target) {
           target._courageBuff = true;
@@ -110,7 +110,7 @@ export const REBEL_GUERRILLAS_RULES = {
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._furiousMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target._furiousMarked = true;
           unit._furiousMarkUsed = true;
@@ -145,7 +145,7 @@ export const REBEL_GUERRILLAS_RULES = {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, _ruleParamValue, specialRulesApplied }) => {
         if (unit._piercingTagUsed) return {};
         const markers = _ruleParamValue || 1;
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 36);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 36);
         if (target) {
           target._piercingMarkers = (target._piercingMarkers || 0) + markers;
           unit._piercingTagUsed = true;
@@ -335,7 +335,7 @@ export const REBEL_GUERRILLAS_RULES = {
     description: 'Pick one friendly unit within 12" which gets +1 to morale test rolls once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const target = gameState.units.find(u => u.owner === caster.owner && u.distanceTo(caster) <= 12);
+        const target = gameState.units.find(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12);
         if (target) {
           target._courageBuff = true;
           specialRulesApplied.push({ rule: 'Aura of Peace', effect: `gave +1 morale to ${target.name}` });
@@ -363,7 +363,7 @@ export const REBEL_GUERRILLAS_RULES = {
     description: 'Pick up to two enemy units within 18", which friendly units gets Furious against once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         enemies.forEach(e => e._furiousMarked = true);
         specialRulesApplied.push({ rule: 'Bad Omen', effect: `marked ${enemies.length} units` });
         return {};
@@ -389,7 +389,7 @@ export const REBEL_GUERRILLAS_RULES = {
     description: 'Pick up to three friendly units within 12", which get +1 to hit rolls when shooting once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._deepMeditation = true);
         specialRulesApplied.push({ rule: 'Deep Meditation', effect: `gave +1 to hit to ${friendlies.length} units` });
         return {};

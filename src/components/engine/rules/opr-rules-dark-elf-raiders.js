@@ -158,7 +158,7 @@ export const DARK_ELF_RAIDERS_RULES = {
         // Check if unit has already activated this round
         if (!gameState.units_activated.includes(unit.id)) return {};
         // Check global counter
-        const totalWithRule = gameState.units.filter(u => u.owner === unit.owner && u.rules.includes('Martial Prowess')).length;
+        const totalWithRule = gameState.units.filter(u => u.owner === unit.owner && (u.special_rules || '').includes('Martial Prowess')).length;
         const usedThisRound = gameState._martialProwessCount || 0;
         if (usedThisRound >= Math.floor(totalWithRule / 2)) return {};
         // Allow reactivation
@@ -177,7 +177,7 @@ export const DARK_ELF_RAIDERS_RULES = {
     description: 'Gain one marker when fully destroying an enemy unit. Each marker gives +1 to hit and +1 defense (max +2).',
     hooks: {
       [HOOKS.ON_MODEL_KILLED]: ({ unit, killer, gameState }) => {
-        if (killer && killer.rules.includes('Ruinous Frenzy')) {
+        if (killer && (killer.special_rules || '').includes('Ruinous Frenzy')) {
           killer.ruinous_frenzy_markers = Math.min(2, (killer.ruinous_frenzy_markers || 0) + 1);
         }
       },
@@ -203,7 +203,7 @@ export const DARK_ELF_RAIDERS_RULES = {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._regenerationBuffUsed) return {};
         // Find a friendly unit (simplest: the nearest)
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempRegeneration = true;
           unit._regenerationBuffUsed = true;
@@ -254,7 +254,7 @@ export const DARK_ELF_RAIDERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._precisionFightingMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.precision_fighting_marked = true;
           unit._precisionFightingMarkUsed = true;

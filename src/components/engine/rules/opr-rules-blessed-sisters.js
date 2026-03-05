@@ -54,7 +54,7 @@ export const BLESSED_SISTERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._guardedBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempGuarded = true;
           unit._guardedBuffUsed = true;
@@ -136,7 +136,7 @@ export const BLESSED_SISTERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._castingDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.rules.some(r => r.includes('Caster')) && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && u.rules.some(r => r.includes('Caster')) && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.casting_debuff = (target.casting_debuff || 0) + 1;
           unit._castingDebuffUsed = true;
@@ -160,7 +160,7 @@ export const BLESSED_SISTERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._courageBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._courageBuff = true;
           unit._courageBuffUsed = true;
@@ -197,7 +197,7 @@ export const BLESSED_SISTERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._precisionShooterBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._precisionShooterBuff = true;
           unit._precisionShooterBuffUsed = true;
@@ -222,7 +222,7 @@ export const BLESSED_SISTERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._precisionFighterBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._precisionFighterBuff = true;
           unit._precisionFighterBuffUsed = true;
@@ -248,7 +248,7 @@ export const BLESSED_SISTERS_RULES = {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._precisionTargetUsed) return {};
         const x = unit._ruleParamValue ?? 1;
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 36);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 36);
         if (target) {
           target.precision_target_markers = (target.precision_target_markers || 0) + x;
           unit._precisionTargetUsed = true;

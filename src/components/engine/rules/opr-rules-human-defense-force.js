@@ -22,7 +22,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._baneMeleeBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempBaneMelee = true;
           unit._baneMeleeBuffUsed = true;
@@ -47,7 +47,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     hooks: {
       [HOOKS.AFTER_ACTIVATION]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._activatedByCoordinate) return {};
-        const eligible = gameState.units.filter(u => u.owner === unit.owner && !u.hasActivated && u.distanceTo(unit) <= 12);
+        const eligible = gameState.units.filter(u => u.owner === unit.owner && !u.hasActivated && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (eligible.length > 0) {
           specialRulesApplied.push({ rule: 'Coordinate', effect: 'may activate another unit' });
           return { coordinate: eligible[0] }; // Engine should handle immediate activation
@@ -62,7 +62,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._entrenchedBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._entrenched = true;
           unit._entrenchedBuffUsed = true;
@@ -97,7 +97,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     description: 'Hits count as AP(-1), min AP(0).',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ defender, ap, specialRulesApplied }) => {
-        if (defender.rules.includes('Fortified') && ap > 0) {
+        if ((defender.special_rules || '').includes('Fortified') && ap > 0) {
           const newAp = Math.max(0, ap - 1);
           specialRulesApplied.push({ rule: 'Fortified', effect: `AP ${ap}→${newAp}` });
           return { ap: newAp };
@@ -163,7 +163,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
       },
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, target, quality, specialRulesApplied, calculateDistance }) => {
         // When an enemy shoots at this unit, we need to check if this unit has not moved and is >9" away.
-        if (target && target.rules.includes('Mobile Artillery') && !target.hasMoved) {
+        if (target && (target.special_rules || '').includes('Mobile Artillery') && !target.hasMoved) {
           const dist = calculateDistance(unit, target);
           if (dist > 9) {
             specialRulesApplied.push({ rule: 'Mobile Artillery', effect: '-2 to hit' });
@@ -180,7 +180,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._moraleDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.morale_debuff = true;
           unit._moraleDebuffUsed = true;
@@ -222,7 +222,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._noRetreatBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempNoRetreat = true;
           unit._noRetreatBuffUsed = true;
@@ -253,7 +253,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._precisionShooterBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempPrecisionShooter = true;
           unit._precisionShooterBuffUsed = true;
@@ -290,7 +290,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._rapidAdvanceBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempRapidAdvance = true;
           unit._rapidAdvanceBuffUsed = true;
@@ -314,7 +314,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._relentlessMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.relentless_marked = true;
           unit._relentlessMarkUsed = true;
@@ -342,7 +342,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     description: 'Enemy Ambush must be >12" from this unit.',
     hooks: {
       [HOOKS.ON_RESERVE_ENTRY]: ({ unit, gameState }) => {
-        const repellors = gameState.units.filter(u => u.owner !== unit.owner && u.rules.includes('Repel Ambushers'));
+        const repellors = gameState.units.filter(u => u.owner !== unit.owner && (u.special_rules || '').includes('Repel Ambushers'));
         if (repellors.length > 0) {
           return { minDistance: 12 };
         }
@@ -413,7 +413,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     description: 'Pick up to two enemy units within 18" which get Relentless mark once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         enemies.forEach(u => u.relentless_marked = true);
         specialRulesApplied.push({ rule: 'Calculated Foresight', effect: `marked ${enemies.length} units` });
       },
@@ -434,7 +434,7 @@ export const HUMAN_DEFENSE_FORCE_RULES = {
     description: 'Pick up to three friendly units within 12" which get +2" Advance and +4" Rush/Charge once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => {
           u._tempAdvanceBonus = 2;
           u._tempRushChargeBonus = 4;

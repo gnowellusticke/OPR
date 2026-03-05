@@ -23,7 +23,7 @@ export const LUST_DISCIPLES_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._dangerousDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           unit._dangerousDebuffUsed = true;
           specialRulesApplied.push({ rule: 'Dangerous Terrain Debuff', effect: `forcing test on ${target.name}` });
@@ -63,7 +63,7 @@ export const LUST_DISCIPLES_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._mendUsed) return {};
-        const targets = gameState.units.filter(u => u.owner === unit.owner && u.distanceTo(unit) <= 3 && u.tough > 1 && u.current_models < u.total_models);
+        const targets = gameState.units.filter(u => u.owner === unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 && u.tough > 1 && u.current_models < u.total_models);
         if (targets.length === 0 && unit.tough > 1 && unit.current_models < unit.total_models) {
           targets.push(unit);
         }
@@ -184,7 +184,7 @@ export const LUST_DISCIPLES_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._steadfastBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempSteadfast = true;
           unit._steadfastBuffUsed = true;
@@ -421,7 +421,7 @@ export const LUST_DISCIPLES_RULES = {
     description: 'Pick up to two friendly units within 12" which get Melee Evasion once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempMeleeEvasion = true);
         specialRulesApplied.push({ rule: 'Blissful Dance', effect: `gave Melee Evasion to ${friendlies.length} units` });
       },
@@ -450,7 +450,7 @@ export const LUST_DISCIPLES_RULES = {
     description: 'Pick up to three friendly units within 12" which get Lustbound Boost once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempLustboundBoost = true);
         specialRulesApplied.push({ rule: 'Lust Boon', effect: `gave Lustbound Boost to ${friendlies.length} units` });
       },

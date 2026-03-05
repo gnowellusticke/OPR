@@ -160,7 +160,7 @@ export const DAO_UNION_RULES = {
     description: 'Strikes first when charged.',
     hooks: {
       [HOOKS.ON_STRIKE_ORDER]: ({ defender, specialRulesApplied }) => {
-        if (defender.rules.includes('Counter-Attack')) {
+        if ((defender.special_rules || '').includes('Counter-Attack')) {
           specialRulesApplied.push({ rule: 'Counter-Attack', effect: 'defender strikes first' });
           return { attackerFirst: false };
         }
@@ -251,7 +251,7 @@ export const DAO_UNION_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._piercingShootingMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.piercing_shooting_mark = true;
           unit._piercingShootingMarkUsed = true;
@@ -279,7 +279,7 @@ export const DAO_UNION_RULES = {
         // As a workaround, we'll add a flag to the unit that indicates it can deploy closer.
         // The engine should check for this rule when enforcing the 9" distance.
         // We'll return a flag.
-        const beacons = gameState.units.filter(u => u.owner === unit.owner && u.rules.includes('Ambush Beacon') && u.distanceTo(unit) <= 6);
+        const beacons = gameState.units.filter(u => u.owner === unit.owner && (u.special_rules || '').includes('Ambush Beacon') && Math.hypot(u.x - unit.x, u.y - unit.y) <= 6);
         if (beacons.length > 0) {
           return { ignoreDistanceRestriction: true };
         }

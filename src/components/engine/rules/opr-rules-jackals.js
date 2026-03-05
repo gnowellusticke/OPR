@@ -91,7 +91,7 @@ export const JACKALS_RULES = {
     description: 'Hits count as AP(-1), min AP(0).',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ defender, ap, specialRulesApplied }) => {
-        if (defender.rules.includes('Fortified') && ap > 0) {
+        if ((defender.special_rules || '').includes('Fortified') && ap > 0) {
           const newAp = Math.max(0, ap - 1);
           specialRulesApplied.push({ rule: 'Fortified', effect: `AP ${ap}→${newAp}` });
           return { ap: newAp };
@@ -119,7 +119,7 @@ export const JACKALS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._moraleDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.morale_debuff = true;
           unit._moraleDebuffUsed = true;
@@ -154,7 +154,7 @@ export const JACKALS_RULES = {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._precisionTagUsed) return {};
         const x = unit._ruleParamValue ?? 2; // default? from unit data
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 36);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 36);
         if (target) {
           target.precision_tag_markers = (target.precision_tag_markers || 0) + x;
           unit._precisionTagUsed = true;
@@ -189,7 +189,7 @@ export const JACKALS_RULES = {
     description: 'Enemy Ambush must be >12" from this unit.',
     hooks: {
       [HOOKS.ON_RESERVE_ENTRY]: ({ unit, gameState }) => {
-        const repellors = gameState.units.filter(u => u.owner !== unit.owner && u.rules.includes('Repel Ambushers'));
+        const repellors = gameState.units.filter(u => u.owner !== unit.owner && (u.special_rules || '').includes('Repel Ambushers'));
         if (repellors.length > 0) {
           return { minDistance: 12 };
         }
@@ -427,7 +427,7 @@ export const JACKALS_RULES = {
     description: 'Pick up to two enemy units within 12" which take 1 hit with AP(2) each.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         const extraHits = enemies.map(e => ({ target: e, count: 1, ap: 2 }));
         specialRulesApplied.push({ rule: 'Power Maw', effect: `1 hit AP2 on ${enemies.length} units` });
         return { extraHits };
@@ -438,7 +438,7 @@ export const JACKALS_RULES = {
     description: 'Pick up to two enemy units within 18" which get -1 to morale once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         enemies.forEach(u => u.morale_debuff = true);
         specialRulesApplied.push({ rule: 'Mind Shaper', effect: `gave -1 morale to ${enemies.length} units` });
       },
@@ -459,7 +459,7 @@ export const JACKALS_RULES = {
     description: 'Pick up to three friendly units within 12" which get Shielded once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempShielded = true);
         specialRulesApplied.push({ rule: 'Power Field', effect: `gave Shielded to ${friendlies.length} units` });
       },

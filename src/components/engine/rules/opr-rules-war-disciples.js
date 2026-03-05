@@ -15,9 +15,9 @@ export const WAR_DISCIPLES_RULES = {
     description: 'Enemies that roll to block hits from this model\'s weapons take 1 extra wound for each unmodified result of 1 that they roll.',
     hooks: {
       [HOOKS.ON_PER_HIT]: ({ weapon, saveRoll, specialRulesApplied }) => {
-        if (!weapon.rules.includes('Warbound')) return {};
+        if (!(weapon.special_rules || '').includes('Warbound')) return {};
 
-        const hasBoost = weapon.rules.includes('Warbound Boost') ||
+        const hasBoost = (weapon.special_rules || '').includes('Warbound Boost') ||
                          specialRulesApplied.includes('Warbound Boost');
         const thresholdMin = hasBoost ? 1 : 1; // For boost, it's 1-2, but we only get one saveRoll at a time.
         // Actually we need to handle the range. Since we have one saveRoll, we check if it's 1 or if boost and it's 1 or 2.
@@ -57,7 +57,7 @@ export const WAR_DISCIPLES_RULES = {
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._dangerUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && unit.distanceTo(u) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(unit.x - u.x, unit.y - u.y) <= 18);
         if (target) {
           unit._dangerUsed = true;
           specialRulesApplied.push({ rule: 'Dangerous Terrain Debuff', effect: `${target.name} must test` });
@@ -91,7 +91,7 @@ export const WAR_DISCIPLES_RULES = {
         if (unit._mendUsed) return {};
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
-          u.distanceTo(unit) <= 3 &&
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 &&
           u.tough > 1 &&
           u.current_models < u.total_models
         );
@@ -193,7 +193,7 @@ export const WAR_DISCIPLES_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 12
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 12
         );
         if (target) {
           target._tempSteadfast = true;
@@ -405,7 +405,7 @@ export const WAR_DISCIPLES_RULES = {
     description: 'Pick up to two friendly units within 12" which get Melee Evasion once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempMeleeEvasion = true);
         specialRulesApplied.push({ rule: 'Fiery Protection', effect: `gave Melee Evasion to ${friendlies.length}` });
         return {};
@@ -436,7 +436,7 @@ export const WAR_DISCIPLES_RULES = {
     description: 'Pick up to three friendly units within 12" which get Warbound Boost once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempWarboundBoost = true);
         specialRulesApplied.push({ rule: 'War Boon', effect: `gave Warbound Boost to ${friendlies.length}` });
         return {};
@@ -454,7 +454,7 @@ export const WAR_DISCIPLES_RULES = {
     description: 'Pick up to two enemy units within 12" which take 3 hits with AP(2) each.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         const extraHits = enemies.map(e => ({ target: e, count: 3, ap: 2 }));
         specialRulesApplied.push({ rule: 'Headtaker Strike', effect: `3 hits (AP2) on ${enemies.length} units` });
         return { extraHits };

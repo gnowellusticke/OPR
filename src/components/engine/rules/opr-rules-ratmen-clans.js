@@ -57,7 +57,7 @@ export const RATMEN_CLANS_RULES = {
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._defenseDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && unit.distanceTo(u) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(unit.x - u.x, unit.y - u.y) <= 18);
         if (target) {
           target._defenseDebuff = true;
           unit._defenseDebuffUsed = true;
@@ -463,7 +463,7 @@ export const RATMEN_CLANS_RULES = {
     description: 'Pick one friendly unit within 12", which gets Scurry Boost once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const target = gameState.units.find(u => u.owner === caster.owner && u.distanceTo(caster) <= 12);
+        const target = gameState.units.find(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12);
         if (target) {
           target._tempScurryBoost = true;
           specialRulesApplied.push({ rule: 'Weapon Booster', effect: `gave Scurry Boost to ${target.name}` });
@@ -504,7 +504,7 @@ export const RATMEN_CLANS_RULES = {
     description: 'Pick up to two enemy units within 18", which get -1 to defense rolls once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         enemies.forEach(e => e._defenseDebuff = true);
         specialRulesApplied.push({ rule: 'Tech-Sickness', effect: `-1 defense on ${enemies.length} units` });
         return {};
@@ -530,7 +530,7 @@ export const RATMEN_CLANS_RULES = {
     description: 'Pick up to three friendly units within 12", which get Regeneration once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempRegeneration = true);
         specialRulesApplied.push({ rule: 'Enhance Serum', effect: `gave Regeneration to ${friendlies.length} units` });
         return {};

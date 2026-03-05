@@ -137,7 +137,7 @@ export const TITAN_LORDS_RULES = {
     description: 'Enemies that roll to block hits from this model\'s weapons take 1 extra wound for each unmodified result of 1 that they roll.',
     hooks: {
       [HOOKS.ON_PER_HIT]: ({ weapon, saveRoll, specialRulesApplied }) => {
-        if (!weapon.rules.includes('Warbound')) return {};
+        if (!(weapon.special_rules || '').includes('Warbound')) return {};
         if (saveRoll === 1) {
           specialRulesApplied.push({ rule: 'Warbound', effect: 'extra wound from save roll 1' });
           return { extraWounds: 1 };
@@ -154,7 +154,7 @@ export const TITAN_LORDS_RULES = {
     description: 'Pick one friendly unit within 12" which gets +1 to morale test rolls once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const target = gameState.units.find(u => u.owner === caster.owner && u.distanceTo(caster) <= 12);
+        const target = gameState.units.find(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12);
         if (target) {
           target._psyCourage = true;
           specialRulesApplied.push({ rule: 'Psy-Injected Courage', effect: `+1 morale for ${target.name}` });
@@ -189,7 +189,7 @@ export const TITAN_LORDS_RULES = {
     description: 'Pick up to two enemy units within 18", which friendly units gets Relentless against once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         enemies.forEach(e => e._calculatedForesight = true);
         specialRulesApplied.push({ rule: 'Calculated Foresight', effect: `marked ${enemies.length} units` });
         return {};
@@ -236,7 +236,7 @@ export const TITAN_LORDS_RULES = {
     description: 'Pick up to three friendly units within 12" which moves +2" on Advance and +4" on Rush/Charge once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._shockSpeed = true);
         specialRulesApplied.push({ rule: 'Shock Speed', effect: `speed buff for ${friendlies.length} units` });
         return {};

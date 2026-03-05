@@ -139,7 +139,7 @@ export const DWARF_GUILDS_RULES = {
     description: 'Gain one marker when fully destroying an enemy unit. Each marker gives AP(+1) and +1 defense (max +2).',
     hooks: {
       [HOOKS.ON_MODEL_KILLED]: ({ unit, killer, gameState }) => {
-        if (killer && killer.rules.includes('Devastating Frenzy')) {
+        if (killer && (killer.special_rules || '').includes('Devastating Frenzy')) {
           killer.devastating_frenzy_markers = Math.min(2, (killer.devastating_frenzy_markers || 0) + 1);
         }
       },

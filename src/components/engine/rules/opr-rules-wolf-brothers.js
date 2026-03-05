@@ -33,7 +33,7 @@ export const WOLF_BROTHERS_RULES = {
     description: 'Strikes first when charged.',
     hooks: {
       [HOOKS.ON_STRIKE_ORDER]: ({ attacker, defender, gameState, specialRulesApplied }) => {
-        if (defender.rules.includes('Counter-Attack') && defender._charged) {
+        if ((defender.special_rules || '').includes('Counter-Attack') && defender._charged) {
           specialRulesApplied.push({ rule: 'Counter-Attack', effect: 'defender strikes first' });
           return { attackerFirst: false };
         }
@@ -89,7 +89,7 @@ export const WOLF_BROTHERS_RULES = {
         if (unit._mendUsed) return {};
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
-          u.distanceTo(unit) <= 3 &&
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 &&
           u.tough > 1 &&
           u.current_models < u.total_models
         );
@@ -162,8 +162,8 @@ export const WOLF_BROTHERS_RULES = {
         const artillery = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 6 &&
-          u.rules.includes('Artillery')
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 6 &&
+          (u.special_rules || '').includes('Artillery')
         );
         if (artillery) {
           unit._repositionUsed = true;
@@ -229,7 +229,7 @@ export const WOLF_BROTHERS_RULES = {
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._unstoppableMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target._unstoppableMarked = true;
           unit._unstoppableMarkUsed = true;
@@ -423,7 +423,7 @@ export const WOLF_BROTHERS_RULES = {
     description: 'Pick up to two friendly units within 12", which get Piercing Assault once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempPiercingAssault = true);
         specialRulesApplied.push({ rule: 'Righteous Fury', effect: `gave Piercing Assault to ${friendlies.length}` });
         return {};
@@ -454,7 +454,7 @@ export const WOLF_BROTHERS_RULES = {
     description: 'Pick up to three friendly units within 12", which get Evasive once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempEvasive = true);
         specialRulesApplied.push({ rule: 'Wolf Dome', effect: `gave Evasive to ${friendlies.length}` });
         return {};

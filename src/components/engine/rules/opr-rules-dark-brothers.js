@@ -10,14 +10,14 @@ export const DARK_BROTHERS_RULES = {
     description: '+3" range when shooting and +3" when charging.',
     hooks: {
       [HOOKS.ON_RANGE_CHECK]: ({ unit, range, specialRulesApplied }) => {
-        if (unit.rules.includes('Darkborn')) {
+        if ((unit.special_rules || '').includes('Darkborn')) {
           specialRulesApplied.push({ rule: 'Darkborn', effect: '+3" range' });
           return { range: range + 3 };
         }
         return {};
       },
       [HOOKS.MODIFY_SPEED]: ({ unit, action, speedDelta, specialRulesApplied }) => {
-        if (action === 'Charge' && unit.rules.includes('Darkborn')) {
+        if (action === 'Charge' && (unit.special_rules || '').includes('Darkborn')) {
           specialRulesApplied.push({ rule: 'Darkborn', effect: '+3" charge' });
           return { speedDelta: (speedDelta ?? 0) + 3 };
         }
@@ -64,7 +64,7 @@ export const DARK_BROTHERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._mendUsed) return {};
-        const targets = gameState.units.filter(u => u.owner === unit.owner && u.distanceTo(unit) <= 3 && u.tough > 1 && u.current_models < u.total_models);
+        const targets = gameState.units.filter(u => u.owner === unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 && u.tough > 1 && u.current_models < u.total_models);
         if (targets.length === 0 && unit.tough > 1 && unit.current_models < unit.total_models) {
           targets.push(unit);
         }
@@ -131,7 +131,7 @@ export const DARK_BROTHERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._repositionUsed) return {};
-        const artillery = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 6 && u.rules.includes('Artillery'));
+        const artillery = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 6 && (u.special_rules || '').includes('Artillery'));
         if (artillery) {
           unit._repositionUsed = true;
           specialRulesApplied.push({ rule: 'Re-Position Artillery', effect: `${artillery.name} may move up to 9"` });
@@ -190,7 +190,7 @@ export const DARK_BROTHERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._stealthBuffUsed) return {};
-        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.distanceTo(unit) <= 12);
+        const friendly = gameState.units.find(u => u.owner === unit.owner && u !== unit && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (friendly) {
           friendly._tempStealth = true;
           unit._stealthBuffUsed = true;
@@ -226,7 +226,7 @@ export const DARK_BROTHERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._unstoppableMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.unstoppable_marked = true;
           unit._unstoppableMarkUsed = true;
@@ -302,7 +302,7 @@ export const DARK_BROTHERS_RULES = {
     description: 'This model and its unit get Bane in melee.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Bane in Melee Aura')) {
+        if ((unit.special_rules || '').includes('Bane in Melee Aura')) {
           return { additionalRules: ['Bane'] };
         }
         return {};
@@ -313,7 +313,7 @@ export const DARK_BROTHERS_RULES = {
     description: 'This model and its unit get Bane when shooting.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Bane when Shooting Aura')) {
+        if ((unit.special_rules || '').includes('Bane when Shooting Aura')) {
           return { additionalRules: ['Bane'] };
         }
         return {};
@@ -324,7 +324,7 @@ export const DARK_BROTHERS_RULES = {
     description: '+1 to morale test rolls.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ unit, roll, specialRulesApplied }) => {
-        if (unit.rules.includes('Courage Aura')) {
+        if ((unit.special_rules || '').includes('Courage Aura')) {
           specialRulesApplied.push({ rule: 'Courage Aura', effect: '+1 to morale' });
           return { roll: roll + 1 };
         }
@@ -336,7 +336,7 @@ export const DARK_BROTHERS_RULES = {
     description: 'This model and its unit get Melee Shrouding.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Melee Shrouding Aura')) {
+        if ((unit.special_rules || '').includes('Melee Shrouding Aura')) {
           return { additionalRules: ['Melee Shrouding'] };
         }
         return {};
@@ -347,7 +347,7 @@ export const DARK_BROTHERS_RULES = {
     description: 'This model and its unit get Rapid Rush.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Rapid Rush Aura')) {
+        if ((unit.special_rules || '').includes('Rapid Rush Aura')) {
           return { additionalRules: ['Rapid Rush'] };
         }
         return {};
@@ -358,7 +358,7 @@ export const DARK_BROTHERS_RULES = {
     description: 'This model and its unit get Regeneration.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Regeneration Aura')) {
+        if ((unit.special_rules || '').includes('Regeneration Aura')) {
           return { additionalRules: ['Regeneration'] };
         }
         return {};
@@ -369,7 +369,7 @@ export const DARK_BROTHERS_RULES = {
     description: 'This model and its unit get Versatile Reach.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
-        if (unit.rules.includes('Versatile Reach Aura')) {
+        if ((unit.special_rules || '').includes('Versatile Reach Aura')) {
           return { additionalRules: ['Versatile Reach'] };
         }
         return {};
@@ -404,7 +404,7 @@ export const DARK_BROTHERS_RULES = {
     description: 'Pick up to two friendly units within 12" which get Shred when shooting once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempShredShooting = true);
         specialRulesApplied.push({ rule: 'Blessed Ammo', effect: `gave Shred to ${friendlies.length} units` });
       },
@@ -414,7 +414,7 @@ export const DARK_BROTHERS_RULES = {
     description: 'Pick up to two enemy units within 9" which take 4 hits each.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 9).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 9).slice(0, 2);
         const extraHits = enemies.map(e => ({ target: e, count: 4, ap: 0 }));
         specialRulesApplied.push({ rule: 'Lightning Fog', effect: `4 hits on ${enemies.length} units` });
         return { extraHits };
@@ -425,7 +425,7 @@ export const DARK_BROTHERS_RULES = {
     description: 'Pick up to three friendly units within 12" which get Evasive once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempEvasive = true);
         specialRulesApplied.push({ rule: 'Dark Dome', effect: `gave Evasive to ${friendlies.length} units` });
       },

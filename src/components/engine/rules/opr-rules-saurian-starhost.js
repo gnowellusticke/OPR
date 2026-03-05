@@ -79,7 +79,7 @@ export const SAURIAN_STARHOST_RULES = {
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._baneMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target._baneMarked = true;
           unit._baneMarkUsed = true;
@@ -127,7 +127,7 @@ export const SAURIAN_STARHOST_RULES = {
         const roll = dice.roll();
         if (roll >= 2) {
           // Find a target within 6" in line of sight (simplified: pick first eligible)
-          const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 6);
+          const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 6);
           if (target) {
             unit._breathUsed = true;
             specialRulesApplied.push({ rule: 'Breath Attack', effect: `1 hit (Blast3, AP1) on ${target.name}` });
@@ -154,7 +154,7 @@ export const SAURIAN_STARHOST_RULES = {
     hooks: {
       [HOOKS.ON_STRIKE_ORDER]: ({ attacker, defender, gameState, specialRulesApplied }) => {
         // If defender has Counter-Attack and is being charged, defender strikes first.
-        if (defender.rules.includes('Counter-Attack') && defender._charged) {
+        if ((defender.special_rules || '').includes('Counter-Attack') && defender._charged) {
           specialRulesApplied.push({ rule: 'Counter-Attack', effect: 'defender strikes first' });
           return { attackerFirst: false };
         }
@@ -288,7 +288,7 @@ export const SAURIAN_STARHOST_RULES = {
         if (unit._precisionTargetUsed) return {};
         const markers = _ruleParamValue || 1;
         // Pick first eligible enemy within 36" and LOS (simplified)
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 36);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 36);
         if (target) {
           target._precisionMarkers = (target._precisionMarkers || 0) + markers;
           unit._precisionTargetUsed = true;
@@ -327,8 +327,8 @@ export const SAURIAN_STARHOST_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 12 &&
-          u.rules.includes('Primal')
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 12 &&
+          (u.special_rules || '').includes('Primal')
         );
         if (target) {
           target._tempPrimalBoost = true;
@@ -415,8 +415,8 @@ export const SAURIAN_STARHOST_RULES = {
         const conduit = gameState.units.find(u =>
           u.owner === caster.owner &&
           u !== caster &&
-          u.rules.includes('Spell Conduit') &&
-          u.distanceTo(caster) <= 12
+          (u.special_rules || '').includes('Spell Conduit') &&
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 12
         );
         if (conduit) {
           specialRulesApplied.push({ rule: 'Spell Conduit', effect: 'casting from conduit, +1' });
@@ -553,7 +553,7 @@ export const SAURIAN_STARHOST_RULES = {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
         const friendlies = gameState.units.filter(u =>
           u.owner === caster.owner &&
-          u.distanceTo(caster) <= 12
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 12
         ).slice(0, 2);
         friendlies.forEach(u => u._tempFurious = true);
         specialRulesApplied.push({ rule: 'Fateful Guidance', effect: `gave Furious to ${friendlies.length}` });
@@ -578,7 +578,7 @@ export const SAURIAN_STARHOST_RULES = {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
         const enemies = gameState.units.filter(u =>
           u.owner !== caster.owner &&
-          u.distanceTo(caster) <= 9
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 9
         ).slice(0, 2);
         const extraHits = enemies.map(e => ({ target: e, count: 4, ap: 0 }));
         specialRulesApplied.push({ rule: 'Piranha Curse', effect: `4 hits on ${enemies.length} units` });
@@ -593,8 +593,8 @@ export const SAURIAN_STARHOST_RULES = {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
         const friendlies = gameState.units.filter(u =>
           u.owner === caster.owner &&
-          u.distanceTo(caster) <= 12 &&
-          u.rules.includes('Primal')
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 12 &&
+          (u.special_rules || '').includes('Primal')
         ).slice(0, 3);
         friendlies.forEach(u => u._tempPrimalBoost = true);
         specialRulesApplied.push({ rule: 'Celestial Roar', effect: `gave Primal Boost to ${friendlies.length}` });

@@ -57,7 +57,7 @@ export const PLAGUE_DISCIPLES_RULES = {
     description: 'Ignores Regeneration, and on unmodified results of 6 to hit, this weapon deals 1 extra hit (only the original hit counts as a 6 for special rules).',
     hooks: {
       [HOOKS.AFTER_HIT_ROLLS]: ({ weapon, rolls, successes, specialRulesApplied }) => {
-        if (!weapon.rules.includes('Butcher')) return {};
+        if (!(weapon.special_rules || '').includes('Butcher')) return {};
 
         const sixes = rolls.filter(r => r.value === 6 && !r.auto).length;
         const extraHits = sixes;
@@ -74,7 +74,7 @@ export const PLAGUE_DISCIPLES_RULES = {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._dangerUsed) return {};
         // In practice, player chooses a target. For demo, pick first eligible enemy.
-        const target = gameState.units.find(u => u.owner !== unit.owner && unit.distanceTo(u) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(unit.x - u.x, unit.y - u.y) <= 18);
         if (target) {
           unit._dangerUsed = true;
           specialRulesApplied.push({ rule: 'Dangerous Terrain Debuff', effect: `${target.name} must take dangerous terrain test` });
@@ -97,7 +97,7 @@ export const PLAGUE_DISCIPLES_RULES = {
         if (unit._mendUsed) return {};
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
-          u.distanceTo(unit) <= 3 &&
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 &&
           u.tough > 1 &&
           u.current_models < u.total_models
         );
@@ -177,12 +177,12 @@ export const PLAGUE_DISCIPLES_RULES = {
     description: 'Ignores Cover, and on unmodified results of 1 to block hits, this weapon deals 1 extra wound.',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ weapon, specialRulesApplied }) => {
-        if (!weapon.rules.includes('Slam')) return {};
+        if (!(weapon.special_rules || '').includes('Slam')) return {};
         specialRulesApplied.push({ rule: 'Slam', effect: 'ignores cover' });
         return { ignoresCover: true };
       },
       [HOOKS.ON_PER_HIT]: ({ weapon, saveRoll, specialRulesApplied }) => {
-        if (!weapon.rules.includes('Slam')) return {};
+        if (!(weapon.special_rules || '').includes('Slam')) return {};
         if (saveRoll === 1) {
           specialRulesApplied.push({ rule: 'Slam', effect: 'extra wound from save roll 1' });
           return { extraWounds: 1 };
@@ -219,7 +219,7 @@ export const PLAGUE_DISCIPLES_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 12
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 12
         );
         if (target) {
           target._tempSteadfast = true;
@@ -433,7 +433,7 @@ export const PLAGUE_DISCIPLES_RULES = {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
         const friendlies = gameState.units.filter(u =>
           u.owner === caster.owner &&
-          u.distanceTo(caster) <= 12
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 12
         ).slice(0, 2);
         friendlies.forEach(u => u._rapidRushOnce = true);
         specialRulesApplied.push({ rule: 'Blessed Virus', effect: `gave Rapid Rush to ${friendlies.length} units` });
@@ -471,7 +471,7 @@ export const PLAGUE_DISCIPLES_RULES = {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
         const friendlies = gameState.units.filter(u =>
           u.owner === caster.owner &&
-          u.distanceTo(caster) <= 12
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 12
         ).slice(0, 3);
         friendlies.forEach(u => u._plagueboundBoostOnce = true);
         specialRulesApplied.push({ rule: 'Plague Boon', effect: `gave Plaguebound Boost to ${friendlies.length} units` });

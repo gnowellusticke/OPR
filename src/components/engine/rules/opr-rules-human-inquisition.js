@@ -12,7 +12,7 @@ export const HUMAN_INQUISITION_RULES = {
       // This rule requires tracking at game level. We'll handle it in BEFORE_ATTACK.
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._inquisitorialAgentUsed) return {};
-        const totalWithRule = gameState.units.filter(u => u.owner === unit.owner && u.rules.includes('Inquisitorial Agent')).length;
+        const totalWithRule = gameState.units.filter(u => u.owner === unit.owner && (u.special_rules || '').includes('Inquisitorial Agent')).length;
         const usedCount = gameState._inquisitorialAgentCount || 0;
         if (usedCount >= Math.ceil(totalWithRule / 2)) return {};
         // Check if unit has already activated this round
@@ -84,7 +84,7 @@ export const HUMAN_INQUISITION_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._castingDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.rules.some(r => r.includes('Caster')) && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && u.rules.some(r => r.includes('Caster')) && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.casting_debuff = (target.casting_debuff || 0) + 1;
           unit._castingDebuffUsed = true;
@@ -159,7 +159,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'Hits count as AP(-1), min AP(0).',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ defender, ap, specialRulesApplied }) => {
-        if (defender.rules.includes('Fortified') && ap > 0) {
+        if ((defender.special_rules || '').includes('Fortified') && ap > 0) {
           const newAp = Math.max(0, ap - 1);
           specialRulesApplied.push({ rule: 'Fortified', effect: `AP ${ap}→${newAp}` });
           return { ap: newAp };
@@ -211,7 +211,7 @@ export const HUMAN_INQUISITION_RULES = {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._piercingTagUsed) return {};
         const x = unit._ruleParamValue ?? 1;
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 36);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 36);
         if (target) {
           target.piercing_tag_markers = (target.piercing_tag_markers || 0) + x;
           unit._piercingTagUsed = true;
@@ -266,7 +266,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'Enemy Ambush must be >12" from this unit.',
     hooks: {
       [HOOKS.ON_RESERVE_ENTRY]: ({ unit, gameState }) => {
-        const repellors = gameState.units.filter(u => u.owner !== unit.owner && u.rules.includes('Repel Ambushes'));
+        const repellors = gameState.units.filter(u => u.owner !== unit.owner && (u.special_rules || '').includes('Repel Ambushes'));
         if (repellors.length > 0) {
           return { minDistance: 12 };
         }
@@ -318,7 +318,7 @@ export const HUMAN_INQUISITION_RULES = {
       // Friendly casters can spend these tokens; we need to modify spell casting.
       // We'll handle in ON_SPELL_CAST by checking for nearby Accumulators.
       [HOOKS.ON_SPELL_CAST]: ({ caster, spell, gameState, specialRulesApplied }) => {
-        const accumulators = gameState.units.filter(u => u.owner === caster.owner && u.rules.includes('Spell Accumulator') && u.distanceTo(caster) <= 12 && u.spell_tokens > 0);
+        const accumulators = gameState.units.filter(u => u.owner === caster.owner && (u.special_rules || '').includes('Spell Accumulator') && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12 && u.spell_tokens > 0);
         if (accumulators.length > 0) {
           // Use tokens from accumulator instead of caster's own? Actually they can spend accumulator tokens.
           // We'll allow caster to use accumulator tokens. For simplicity, we'll use the first accumulator.
@@ -338,7 +338,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'Friendly casters within 12" may cast as if from this model\'s position and get +1.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, spell, target, gameState, specialRulesApplied }) => {
-        const conduit = gameState.units.find(u => u.owner === caster.owner && u.rules.includes('Spell Conduit') && u.distanceTo(caster) <= 12);
+        const conduit = gameState.units.find(u => u.owner === caster.owner && (u.special_rules || '').includes('Spell Conduit') && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12);
         if (conduit) {
           specialRulesApplied.push({ rule: 'Spell Conduit', effect: 'cast from conduit, +1' });
           return { castModifier: 1, castPosition: conduit };
@@ -385,7 +385,7 @@ export const HUMAN_INQUISITION_RULES = {
           if (dice.roll() >= 4) hits++;
         }
         if (hits > 0) {
-          const nearby = gameState.units.filter(u => u.owner !== unit.owner && u.distanceTo(unit) <= 3);
+          const nearby = gameState.units.filter(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3);
           if (nearby.length > 0) {
             const target = nearby[0];
             specialRulesApplied.push({ rule: 'Surprise Attack', effect: `2 hits on ${target.name}` });
@@ -592,7 +592,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'Pick up to two enemy units within 18" which get Relentless mark once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         enemies.forEach(u => u.relentless_marked = true);
         specialRulesApplied.push({ rule: 'Calculated Foresight', effect: `marked ${enemies.length} units` });
       },
@@ -613,7 +613,7 @@ export const HUMAN_INQUISITION_RULES = {
     description: 'Pick up to three friendly units within 12" which get +2" Advance and +4" Rush/Charge once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => {
           u._tempAdvanceBonus = 2;
           u._tempRushChargeBonus = 4;

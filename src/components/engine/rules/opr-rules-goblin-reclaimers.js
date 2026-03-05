@@ -39,7 +39,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._dangerousDebuffUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           unit._dangerousDebuffUsed = true;
           specialRulesApplied.push({ rule: 'Dangerous Terrain Debuff', effect: `forcing test on ${target.name}` });
@@ -116,7 +116,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._piercingShootingMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.piercing_shooting_mark = true;
           unit._piercingShootingMarkUsed = true;
@@ -374,7 +374,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     description: 'Pick up to two enemy units within 18" which get AP(1) when shooting against them once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         enemies.forEach(u => u._tempMobFrenzy = true);
         specialRulesApplied.push({ rule: 'Mob Frenzy', effect: `marked ${enemies.length} units` });
       },
@@ -403,7 +403,7 @@ export const GOBLIN_RECLAIMERS_RULES = {
     description: 'Pick up to three friendly units within 12" which get +1 to defense rolls once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempDefenseBonus = true);
         specialRulesApplied.push({ rule: 'Shroud Field', effect: `gave +1 defense to ${friendlies.length} units` });
       },

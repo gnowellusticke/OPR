@@ -49,7 +49,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
         if (!unit.special_rules.includes('Grounded Precision')) return {};
         // Check if most models are within 1" of any terrain
         const modelsNearTerrain = unit.models.filter(m => 
-          gameState.terrain.some(t => m.distanceTo(t) <= 1)
+          gameState.terrain.some(t => Math.hypot(m.x - t.x, m.y - t.y) <= 1)
         ).length;
         if (modelsNearTerrain > unit.models.length / 2) {
           specialRulesApplied.push({ rule: 'Grounded Precision', effect: '+1 to hit' });
@@ -66,7 +66,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ target, defense, specialRulesApplied, gameState }) => {
         if (!target?.rules?.includes('Grounded Reinforcement')) return {};
         const modelsNearTerrain = target.models.filter(m => 
-          gameState.terrain.some(t => m.distanceTo(t) <= 1)
+          gameState.terrain.some(t => Math.hypot(m.x - t.x, m.y - t.y) <= 1)
         ).length;
         if (modelsNearTerrain > target.models.length / 2) {
           specialRulesApplied.push({ rule: 'Grounded Reinforcement', effect: '+1 defense' });
@@ -85,7 +85,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 12
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 12
         );
         if (target) {
           target._tempRangeBonus = 6;
@@ -131,7 +131,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._mindControlUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           // Perform morale test (use unit's quality as morale? In OPR, morale is based on quality)
           const moraleRoll = dice.roll();
@@ -161,7 +161,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._precisionMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target._precisionMarked = true;
           unit._precisionMarkUsed = true;
@@ -278,11 +278,11 @@ export const SOUL_SNATCHER_CULTS_RULES = {
       [HOOKS.ON_RESERVE_ENTRY]: ({ unit, gameState, specialRulesApplied }) => {
         const repellers = gameState.units.filter(u =>
           u.owner !== unit.owner &&
-          u.rules.includes('Repel Ambushes') &&
+          (u.special_rules || '').includes('Repel Ambushes') &&
           u.current_models > 0
         );
         for (const repeller of repellers) {
-          if (unit.distanceTo(repeller) <= 12) {
+          if (Math.hypot(unit.x - repeller.x, unit.y - repeller.y) <= 12) {
             specialRulesApplied.push({ rule: 'Repel Ambushes', effect: 'cannot deploy within 12"' });
             return { minDistance: 12, source: repeller };
           }
@@ -314,7 +314,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 12
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 12
         );
         if (target) {
           target._speedBuff = true;
@@ -350,8 +350,8 @@ export const SOUL_SNATCHER_CULTS_RULES = {
         const conduit = gameState.units.find(u =>
           u.owner === caster.owner &&
           u !== caster &&
-          u.rules.includes('Spell Conduit') &&
-          u.distanceTo(caster) <= 12
+          (u.special_rules || '').includes('Spell Conduit') &&
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 12
         );
         if (conduit) {
           specialRulesApplied.push({ rule: 'Spell Conduit', effect: 'casting from conduit, +1' });
@@ -454,7 +454,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     description: 'Pick one friendly unit within 12" which gets Grounded Reinforcement once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const target = gameState.units.find(u => u.owner === caster.owner && u.distanceTo(caster) <= 12);
+        const target = gameState.units.find(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12);
         if (target) {
           target._tempGroundedReinforcement = true;
           specialRulesApplied.push({ rule: 'Insidious Protection', effect: `gave Grounded Reinforcement to ${target.name}` });
@@ -490,7 +490,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     description: 'Pick up to two enemy units within 18" which must take a morale test. If failed you may move it by up to 6" in a straight line.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, dice, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 2);
         const moves = [];
         enemies.forEach(target => {
           const moraleRoll = dice.roll();
@@ -525,7 +525,7 @@ export const SOUL_SNATCHER_CULTS_RULES = {
     description: 'Pick up to three friendly units within 12" which get Teleport once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempTeleport = true);
         specialRulesApplied.push({ rule: 'Bio-Displacer', effect: `gave Teleport to ${friendlies.length} units` });
         return {};

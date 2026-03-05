@@ -23,7 +23,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'Friendly Ambush units may ignore distance restrictions if deployed within 6" of this model.',
     hooks: {
       [HOOKS.ON_RESERVE_ENTRY]: ({ unit, gameState }) => {
-        const beacons = gameState.units.filter(u => u.owner === unit.owner && u.rules.includes('Ambush Beacon') && u.distanceTo(unit) <= 6);
+        const beacons = gameState.units.filter(u => u.owner === unit.owner && (u.special_rules || '').includes('Ambush Beacon') && Math.hypot(u.x - unit.x, u.y - unit.y) <= 6);
         if (beacons.length > 0) {
           return { ignoreDistanceRestriction: true };
         }
@@ -50,7 +50,7 @@ export const ETERNAL_DYNASTY_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._castingBuffUsed) return {};
-        const caster = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.rules.some(r => r.includes('Caster')) && u.distanceTo(unit) <= 12);
+        const caster = gameState.units.find(u => u.owner === unit.owner && u !== unit && u.rules.some(r => r.includes('Caster')) && Math.hypot(u.x - unit.x, u.y - unit.y) <= 12);
         if (caster) {
           caster._castingBuff = true;
           unit._castingBuffUsed = true;
@@ -84,7 +84,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'Strikes first when charged.',
     hooks: {
       [HOOKS.ON_STRIKE_ORDER]: ({ defender, specialRulesApplied }) => {
-        if (defender.rules.includes('Counter-Attack')) {
+        if ((defender.special_rules || '').includes('Counter-Attack')) {
           specialRulesApplied.push({ rule: 'Counter-Attack', effect: 'defender strikes first' });
           return { attackerFirst: false };
         }
@@ -97,7 +97,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'Hits count as AP(-1), min AP(0).',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ defender, ap, specialRulesApplied }) => {
-        if (defender.rules.includes('Fortified') && ap > 0) {
+        if ((defender.special_rules || '').includes('Fortified') && ap > 0) {
           const newAp = Math.max(0, ap - 1);
           specialRulesApplied.push({ rule: 'Fortified', effect: `AP ${ap}→${newAp}` });
           return { ap: newAp };
@@ -112,7 +112,7 @@ export const ETERNAL_DYNASTY_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._rangeMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.range_marked = true;
           unit._rangeMarkUsed = true;
@@ -198,7 +198,7 @@ export const ETERNAL_DYNASTY_RULES = {
         // Called when an enemy unit is being deployed. Check if any unit with Repel Ambushes is nearby.
         // We need to know the deployment point to enforce distance. This is tricky.
         // We'll return a flag that the engine should use when checking deployment distance.
-        const repellors = gameState.units.filter(u => u.owner !== unit.owner && u.rules.includes('Repel Ambushes'));
+        const repellors = gameState.units.filter(u => u.owner !== unit.owner && (u.special_rules || '').includes('Repel Ambushes'));
         if (repellors.length > 0) {
           // The engine should check distance to these units and reject if <12".
           return { minDistance: 12 };
@@ -482,7 +482,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'Pick up to two friendly units within 12" which get Clan Warrior Boost once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempClanWarriorBoost = true);
         specialRulesApplied.push({ rule: 'Spirit Resolve', effect: `gave Clan Warrior Boost to ${friendlies.length} units` });
       },
@@ -492,7 +492,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'Pick up to two enemy units within 12" which take 2 hits with AP(2) each.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         const extraHits = enemies.map(e => ({ target: e, count: 2, ap: 2 }));
         specialRulesApplied.push({ rule: 'Mind Vortex', effect: `2 hits AP2 on ${enemies.length} units` });
         return { extraHits };
@@ -503,7 +503,7 @@ export const ETERNAL_DYNASTY_RULES = {
     description: 'Pick up to three enemy units within 18" which get +6" range mark once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const enemies = gameState.units.filter(u => u.owner !== caster.owner && u.distanceTo(caster) <= 18).slice(0, 3);
+        const enemies = gameState.units.filter(u => u.owner !== caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 18).slice(0, 3);
         enemies.forEach(u => u.range_marked = true);
         specialRulesApplied.push({ rule: 'Eternal Guidance', effect: `marked ${enemies.length} units for +6" range` });
       },

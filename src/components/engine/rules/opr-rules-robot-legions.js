@@ -43,8 +43,8 @@ export const ROBOT_LEGIONS_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 12 &&
-          u.rules.includes('Caster')
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 12 &&
+          (u.special_rules || '').includes('Caster')
         );
         if (target) {
           target._castingBuff = true;
@@ -86,7 +86,7 @@ export const ROBOT_LEGIONS_RULES = {
     hooks: {
       [HOOKS.ON_ACTIVATION_START]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._indirectMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target._indirectMarked = true;
           unit._indirectMarkUsed = true;
@@ -128,7 +128,7 @@ export const ROBOT_LEGIONS_RULES = {
         if (unit._mendUsed) return {};
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
-          u.distanceTo(unit) <= 3 &&
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 &&
           u.tough > 1 &&
           u.current_models < u.total_models
         );
@@ -152,7 +152,7 @@ export const ROBOT_LEGIONS_RULES = {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, target, quality, isMelee, specialRulesApplied }) => {
         if (isMelee) return {};
         // Offensive part: if unit used Hold action (we need a flag) and target >9" away
-        if (unit._usedHold && unit.distanceTo(target) > 9) {
+        if (unit._usedHold && Math.hypot(unit.x - target.x, unit.y - target.y) > 9) {
           specialRulesApplied.push({ rule: 'Mobile Artillery', effect: '+1 to hit' });
           return { quality: Math.max(2, quality - 1) };
         }
@@ -161,7 +161,7 @@ export const ROBOT_LEGIONS_RULES = {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit: attacker, target: defender, quality, isMelee, specialRulesApplied }) => {
         if (isMelee) return {};
         // Defensive part: if defender has Mobile Artillery, hasn't moved this round, and range >9"
-        if (defender?.rules?.includes('Mobile Artillery') && !defender._hasMoved && defender.distanceTo(attacker) > 9) {
+        if (defender?.rules?.includes('Mobile Artillery') && !defender._hasMoved && Math.hypot(defender.x - attacker.x, defender.y - attacker.y) > 9) {
           specialRulesApplied.push({ rule: 'Mobile Artillery', effect: 'attacker -2 to hit' });
           return { quality: Math.min(6, quality + 2) };
         }
@@ -276,11 +276,11 @@ export const ROBOT_LEGIONS_RULES = {
         // Check if any enemy unit with Repel Ambushes is on the board.
         const repellers = gameState.units.filter(u =>
           u.owner !== unit.owner &&
-          u.rules.includes('Repel Ambushes') &&
+          (u.special_rules || '').includes('Repel Ambushes') &&
           u.current_models > 0
         );
         for (const repeller of repellers) {
-          if (unit.distanceTo(repeller) <= 12) {
+          if (Math.hypot(unit.x - repeller.x, unit.y - repeller.y) <= 12) {
             // Disallow placement within 12". The engine should enforce this.
             specialRulesApplied.push({ rule: 'Repel Ambushes', effect: 'cannot deploy within 12"' });
             return { minDistance: 12, source: repeller };
@@ -307,8 +307,8 @@ export const ROBOT_LEGIONS_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 12 &&
-          u.rules.includes('Self-Repair')
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 12 &&
+          (u.special_rules || '').includes('Self-Repair')
         );
         if (target) {
           target._tempSelfRepairBoost = true;
@@ -435,7 +435,7 @@ export const ROBOT_LEGIONS_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           u !== unit &&
-          u.distanceTo(unit) <= 12
+          Math.hypot(u.x - unit.x, u.y - unit.y) <= 12
         );
         if (target) {
           target._tempSwift = true;
@@ -513,7 +513,7 @@ export const ROBOT_LEGIONS_RULES = {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
         const friendlies = gameState.units.filter(u =>
           u.owner === caster.owner &&
-          u.distanceTo(caster) <= 12
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 12
         ).slice(0, 2);
         friendlies.forEach(u => u._tempRapidAdvance = true);
         specialRulesApplied.push({ rule: 'Inspiring Bots', effect: `gave Rapid Advance to ${friendlies.length}` });
@@ -536,7 +536,7 @@ export const ROBOT_LEGIONS_RULES = {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
         const enemies = gameState.units.filter(u =>
           u.owner !== caster.owner &&
-          u.distanceTo(caster) <= 9
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 9
         ).slice(0, 2);
         const extraHits = enemies.map(e => ({ target: e, count: 4, ap: 0 }));
         specialRulesApplied.push({ rule: 'Flame Bots', effect: `4 hits on ${enemies.length} units` });
@@ -551,8 +551,8 @@ export const ROBOT_LEGIONS_RULES = {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
         const friendlies = gameState.units.filter(u =>
           u.owner === caster.owner &&
-          u.distanceTo(caster) <= 12 &&
-          u.rules.includes('Self-Repair')
+          Math.hypot(u.x - caster.x, u.y - caster.y) <= 12 &&
+          (u.special_rules || '').includes('Self-Repair')
         ).slice(0, 3);
         friendlies.forEach(u => u._tempSelfRepairBoost = true);
         specialRulesApplied.push({ rule: 'Mending Bots', effect: `gave Self-Repair Boost to ${friendlies.length}` });

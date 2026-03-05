@@ -166,7 +166,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, specialRulesApplied }) => {
         if (unit._shredMarkUsed) return {};
-        const target = gameState.units.find(u => u.owner !== unit.owner && u.distanceTo(unit) <= 18);
+        const target = gameState.units.find(u => u.owner !== unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 18);
         if (target) {
           target.shred_marked = true;
           unit._shredMarkUsed = true;
@@ -393,7 +393,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'Pick up to two friendly units within 12" which get Unpredictable Fighter once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 2);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 2);
         friendlies.forEach(u => u._tempUnpredictableFighter = true);
         specialRulesApplied.push({ rule: 'Focused Defender', effect: `gave Unpredictable Fighter to ${friendlies.length} units` });
       },
@@ -414,7 +414,7 @@ export const CUSTODIAN_BROTHERS_RULES = {
     description: 'Pick up to three friendly units within 12" which get Guardian Boost once.',
     hooks: {
       [HOOKS.ON_SPELL_CAST]: ({ caster, gameState, specialRulesApplied }) => {
-        const friendlies = gameState.units.filter(u => u.owner === caster.owner && u.distanceTo(caster) <= 12).slice(0, 3);
+        const friendlies = gameState.units.filter(u => u.owner === caster.owner && Math.hypot(u.x - caster.x, u.y - caster.y) <= 12).slice(0, 3);
         friendlies.forEach(u => u._tempGuardianBoost = true);
         specialRulesApplied.push({ rule: 'Guardian Protection', effect: `gave Guardian Boost to ${friendlies.length} units` });
       },
