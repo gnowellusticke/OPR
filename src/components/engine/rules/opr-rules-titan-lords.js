@@ -5,7 +5,7 @@
  */
 
 import { HOOKS } from '../RuleRegistry.js';
-import { Dice } from './Dice.js';
+import { Dice } from '../Dice.js';
 
 export const TITAN_LORDS_RULES = {
   // -------------------------------------------------------------------------

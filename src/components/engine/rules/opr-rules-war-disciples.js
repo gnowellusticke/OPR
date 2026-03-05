@@ -5,7 +5,7 @@
  */
 
 import { HOOKS } from '../RuleRegistry.js';
-import { Dice } from './Dice.js';
+import { Dice } from '../Dice.js';
 
 export const WAR_DISCIPLES_RULES = {
   // -------------------------------------------------------------------------
@@ -92,7 +92,7 @@ export const WAR_DISCIPLES_RULES = {
         const target = gameState.units.find(u =>
           u.owner === unit.owner &&
           Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 &&
-          u.tough > 1 &&
+          (u.tough_per_model || 1) > 1 &&
           u.current_models < u.total_models
         );
         if (target) {

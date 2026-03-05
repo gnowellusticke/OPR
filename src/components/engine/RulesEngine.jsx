@@ -1,6 +1,6 @@
 // RulesEngine.js
 import { HOOKS } from './RuleRegistry.js';
-import { Dice } from './Dice.js';
+import { Dice } from '../Dice.js';
 
 /**
  * RulesEngine – core game mechanics, using hooks for all special rules.
@@ -89,7 +89,7 @@ export class RulesEngine {
   startActivation(unit, gameState) {
     const specialRulesApplied = [];
     const ctx = { unit, gameState, dice: Dice, specialRulesApplied };
-    const results = const results = this.registry.applyHook(HOOKS.ON_ACTIVATION_START, ctx, unit.special_rules);;
+    const results = this.registry.applyHook(HOOKS.ON_ACTIVATION_START, ctx, unit.special_rules);
     this._processActivationStartResults(results, unit, gameState, specialRulesApplied);
     return { specialRulesApplied };
   }
@@ -234,7 +234,7 @@ endActivation(unit, gameState) {
       dice: Dice,
       specialRulesApplied,
       isMelee,
-      weaponRules: weapon.rules || [],
+      weaponRules: weapon.special_rules || [],
       weaponParams: weapon.ruleParams || {}
     };
 
@@ -248,7 +248,7 @@ endActivation(unit, gameState) {
     }
     
     // BEFORE_ATTACK
-    const beforeAttackResults = this.registry.applyHook(HOOKS.BEFORE_ATTACK, ctx);
+    const beforeAttackResults = this.registry.applyHook(HOOKS.BEFORE_ATTACK, ctx, `${attacker.special_rules || ''} ${weapon.special_rules || ''}`);
     if (beforeAttackResults.some(r => r.preventAttack)) {
       return { hits: 0, saves: 0, wounds: 0, hit_rolls: [], defense_rolls: [], specialRulesApplied };
     }
@@ -272,7 +272,7 @@ endActivation(unit, gameState) {
 
 // AFTER_HIT_ROLLS
     const afterHitCtx = { ...ctx, rolls: hitRolls, successes: hits };
-    const afterHitResults = this.registry.applyHook(HOOKS.AFTER_HIT_ROLLS, afterHitCtx);
+    const afterHitResults = this.registry.applyHook(HOOKS.AFTER_HIT_ROLLS, afterHitCtx, `${attacker.special_rules || ''} ${weapon.special_rules || ''}`);
     afterHitResults.forEach(r => {
       if (r.successes !== undefined) hits = r.successes;
       if (r.rolls) hitRolls.push(...r.rolls);
@@ -323,7 +323,7 @@ endActivation(unit, gameState) {
 
       // ON_PER_HIT (post‑save)
       const postSaveCtx = { ...ctx, hitRoll, hitIndex: i, ap, defense: defender.defense, saveRoll, modifiedDefense };
-      const postSaveResults = this.registry.applyHook(HOOKS.ON_PER_HIT, postSaveCtx);
+      const postSaveResults = this.registry.applyHook(HOOKS.ON_PER_HIT, postSaveCtx, `${attacker.special_rules || ''} ${weapon.special_rules || ''}`);
       postSaveResults.forEach(r => {
         if (r.rerollResult !== undefined) {
           saveRoll = r.rerollResult;
@@ -786,7 +786,7 @@ endActivation(unit, gameState) {
 
   _applyWounds(target, wounds, sourceUnit, gameState) {
     const ctx = { unit: target, wounds, sourceUnit, gameState };
-    this.registry.applyHook(HOOKS.ON_MODEL_KILLED, killCtx, target.special_rules);
+    const results = this.registry.applyHook(HOOKS.ON_WOUND_ALLOCATION, ctx, target.special_rules);
     let woundsToApply = wounds;
     results.forEach(r => { if (r.wounds !== undefined) woundsToApply = r.wounds; });
 
@@ -797,7 +797,7 @@ endActivation(unit, gameState) {
     const modelsLost = oldModels - target.current_models;
     for (let i = 0; i < modelsLost; i++) {
       const killCtx = { unit: target, modelIndex: i, killer: sourceUnit, gameState };
-      this.registry.applyHook(HOOKS.ON_MODEL_KILLED, killCtx);
+      this.registry.applyHook(HOOKS.ON_MODEL_KILLED, killCtx, target.special_rules);
     }
   }
 }

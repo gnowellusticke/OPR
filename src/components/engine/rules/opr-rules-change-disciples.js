@@ -53,7 +53,7 @@ export const CHANGE_DISCIPLES_RULES = {
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ unit, gameState, dice, specialRulesApplied }) => {
         if (unit._mendUsed) return {};
-        const targets = gameState.units.filter(u => u.owner === unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 && u.tough > 1 && u.current_models < u.total_models);
+        const targets = gameState.units.filter(u => u.owner === unit.owner && Math.hypot(u.x - unit.x, u.y - unit.y) <= 3 && (u.tough_per_model || 1) > 1 && u.current_models < u.total_models);
         if (targets.length === 0 && unit.tough > 1 && unit.current_models < unit.total_models) {
           targets.push(unit);
         }
