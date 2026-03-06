@@ -1,14 +1,14 @@
 /**
  * rules/opr-rules.js
  *
- * OPR Grimdark Future special rules — full hook implementations.
- * Updated with all rules from Custodian Brothers v3.5.2.
+ * OPR Grimdark Future special rules — hook implementations.
+ * Contains ONLY the rules listed in the OPR Special Rules Reference (PDF pp.13-15).
  *
- * New rules added:
- *   Guardian, Guardian Boost, Shielded, Shred, Tear, Steadfast,
- *   Versatile Attack, Unpredictable Fighter, Hit & Run, Hit & Run Shooter,
- *   Ranged Shrouding, Piercing Target, Shred Mark, Scout, Teleport (in-game)
- *   — plus all Aura variants.
+ * Rules: Aircraft, Ambush, AP(X), Artillery, Bane, Blast(X), Caster(X),
+ *        Counter, Deadly(X), Fast, Fear(X), Fearless, Flying, Furious,
+ *        Hero, Immobile, Impact(X), Indirect, Limited, Regeneration,
+ *        Relentless, Reliable, Rending, Scout, Slow, Stealth, Strider,
+ *        Surge, Takedown, Thrust, Tough(X), Transport(X), Unstoppable
  */
 
 import { HOOKS } from '../RuleRegistry.js';
@@ -28,7 +28,7 @@ export const OPR_RULES = {
   },
 
   Indirect: {
-    description: 'Ignores LOS but hits on a worse quality.',
+    description: 'Gets -1 to hit rolls when shooting after moving. May target enemies not in LOS, ignores cover from sight obstructions.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ quality, specialRulesApplied }) => {
         specialRulesApplied.push({ rule: 'Indirect', value: null, effect: 'quality +1 (indirect fire penalty)' });
@@ -38,7 +38,7 @@ export const OPR_RULES = {
   },
 
   Artillery: {
-    description: 'Hits on better quality at 9"+ range.',
+    description: 'May only use Hold actions. Gets +1 to hit at 9"+ range; enemies get -2 to hit from 9"+ range.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, target, quality, specialRulesApplied, calculateDistance }) => {
         if (!target || !calculateDistance) return {};
@@ -53,7 +53,7 @@ export const OPR_RULES = {
   },
 
   Thrust: {
-    description: 'On a charge, hits on better quality and gains AP(+1).',
+    description: 'When charging, gets +1 to hit rolls and AP(+1) in melee.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, specialRulesApplied }) => {
         if (!unit.just_charged) return {};
@@ -64,7 +64,7 @@ export const OPR_RULES = {
   },
 
   Stealth: {
-    description: 'Ranged attacks against this unit hit on a worse quality.',
+    description: 'When shot from over 9" away, enemy units get -1 to hit rolls.',
     hooks: {
       [HOOKS.BEFORE_HIT_QUALITY]: ({ weapon, quality, specialRulesApplied }) => {
         if ((weapon?.range ?? 0) <= 2) return {};
@@ -74,13 +74,10 @@ export const OPR_RULES = {
     },
   },
 
-
-
-
   // ── Extra Hit Generators ──────────────────────────────────────────────────
 
   Blast: {
-    description: 'Blast(X): X automatic hits, no quality roll.',
+    description: 'Blast(X): ignores cover; each hit multiplied by X (up to model count in target unit).',
     hooks: {
       [HOOKS.AFTER_HIT_ROLLS]: ({ _ruleParamValue, target, specialRulesApplied }) => {
         const blastCount = _ruleParamValue ?? 1;
@@ -95,7 +92,7 @@ export const OPR_RULES = {
   },
 
   Furious: {
-    description: 'Unmodified 6s to hit generate one extra hit.',
+    description: 'When charging, unmodified 6s to hit in melee deal 1 extra hit.',
     hooks: {
       [HOOKS.AFTER_HIT_ROLLS]: ({ rolls, successes, specialRulesApplied }) => {
         const naturalSixes = rolls.filter(r => r.value === 6 && r.success && !r.auto).length;
@@ -107,7 +104,7 @@ export const OPR_RULES = {
   },
 
   Surge: {
-    description: 'Unmodified 6s to hit generate one extra hit.',
+    description: 'On unmodified results of 6 to hit, deals 1 extra hit.',
     hooks: {
       [HOOKS.AFTER_HIT_ROLLS]: ({ rolls, successes, specialRulesApplied }) => {
         const naturalSixes = rolls.filter(r => r.value === 6 && r.success && !r.auto).length;
@@ -118,9 +115,8 @@ export const OPR_RULES = {
     },
   },
 
-
   Relentless: {
-    description: 'Unmodified 6s to hit at 9"+ range generate one extra hit.',
+    description: 'When shooting at enemies over 9" away, unmodified 6s to hit generate one extra hit.',
     hooks: {
       [HOOKS.AFTER_HIT_ROLLS]: ({ unit, target, rolls, successes, specialRulesApplied, calculateDistance }) => {
         if (!target || !calculateDistance) return {};
@@ -137,7 +133,7 @@ export const OPR_RULES = {
   // ── Defense Modifiers ─────────────────────────────────────────────────────
 
   AP: {
-    description: 'AP(X): reduce defender save by X.',
+    description: 'AP(X): targets get -X to Defense rolls when blocking hits.',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ _ruleParamValue, ap, specialRulesApplied }) => {
         const apValue = _ruleParamValue ?? ap ?? 0;
@@ -149,7 +145,7 @@ export const OPR_RULES = {
   },
 
   Unstoppable: {
-    description: 'Negative AP modifiers do not apply against this weapon.',
+    description: 'Ignores Regeneration, and ignores all negative modifiers to this weapon.',
     hooks: {
       [HOOKS.BEFORE_SAVE_DEFENSE]: ({ ap, specialRulesApplied }) => {
         if ((ap ?? 0) >= 0) return {};
@@ -159,38 +155,10 @@ export const OPR_RULES = {
     },
   },
 
-  'Unstoppable in Melee': {
-    description: 'Negative AP modifiers do not apply in melee.',
-    hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ ap, isMelee, specialRulesApplied }) => {
-        if (!isMelee || (ap ?? 0) >= 0) return {};
-        specialRulesApplied.push({ rule: 'Unstoppable in Melee', value: null, effect: 'ignores negative AP in melee' });
-        return { ap: 0 };
-      },
-    },
-  },
-
-  'Unstoppable in Melee Aura': {
-    description: 'This model and its unit get Unstoppable in Melee.',
-    hooks: {},
-  },
-
-  Shielded: {
-    description: '+1 to defense rolls against non-spell hits.',
-    hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ defense, isSpell, specialRulesApplied }) => {
-        if (isSpell) return {};
-        // defense is a target number (e.g. 2 means 2+), so subtract 1 to make it easier
-        specialRulesApplied.push({ rule: 'Shielded', value: null, effect: 'defense +1 vs non-spell hits' });
-        return { defense: Math.max(2, (defense ?? 6) - 1) };
-      },
-    },
-  },
-
   // ── Per-Hit Processors ────────────────────────────────────────────────────
 
   Rending: {
-    description: 'Natural 6s to hit gain AP(+4) for that hit.',
+    description: 'Ignores Regeneration. Unmodified 6s to hit get AP(+4).',
     hooks: {
       [HOOKS.ON_PER_HIT]: ({ hitRoll, specialRulesApplied }) => {
         if (!hitRoll || hitRoll.value !== 6 || !hitRoll.success || hitRoll.auto) return {};
@@ -201,7 +169,7 @@ export const OPR_RULES = {
   },
 
   Bane: {
-    description: 'Defender must re-roll unmodified 6s on save rolls.',
+    description: 'Ignores Regeneration. Defender must re-roll unmodified Defense results of 6.',
     hooks: {
       [HOOKS.ON_PER_HIT]: ({ saveRoll, dice, modifiedDefense, specialRulesApplied }) => {
         if (saveRoll !== 6) return {};
@@ -212,42 +180,10 @@ export const OPR_RULES = {
     },
   },
 
-  Shred: {
-    description: 'On unmodified 1s to block hits, this weapon deals 1 extra wound.',
-    hooks: {
-      [HOOKS.ON_PER_HIT]: ({ saveRoll, specialRulesApplied }) => {
-        if (saveRoll !== 1) return {};
-        specialRulesApplied.push({ rule: 'Shred', value: null, effect: 'unmodified 1 to save — +1 extra wound' });
-        return { extraWounds: 1 };
-      },
-    },
-  },
-
-  Tear: {
-    description: 'Against units where most models have Tough(3) to Tough(9), gains AP(+4).',
-    hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ target, ap, specialRulesApplied }) => {
-        if (!target) return {};
-        const sr = Array.isArray(target.special_rules)
-          ? target.special_rules.join(' ')
-          : (target.special_rules || '');
-        const m = sr.match(/Tough\((\d+)\)/);
-        if (!m) return {};
-        const toughVal = parseInt(m[1]);
-        if (toughVal >= 3 && toughVal <= 9) {
-          const newAp = (ap ?? 0) + 4;
-          specialRulesApplied.push({ rule: 'Tear', value: null, effect: `+AP(4) vs Tough(${toughVal}) target → AP(${newAp})` });
-          return { ap: newAp };
-        }
-        return {};
-      },
-    },
-  },
-
   // ── Wound Calculation ─────────────────────────────────────────────────────
 
   Deadly: {
-    description: 'Deadly(X): each unsaved hit deals min(X, toughPerModel) wounds.',
+    description: 'Deadly(X): assign each wound to one model and multiply by X. Wounds don\'t carry over.',
     hooks: {
       [HOOKS.ON_WOUND_CALC]: ({ _ruleParamValue, toughPerModel, specialRulesApplied }) => {
         const x = _ruleParamValue ?? 1;
@@ -261,7 +197,7 @@ export const OPR_RULES = {
   // ── Post-Damage ───────────────────────────────────────────────────────────
 
   Regeneration: {
-    description: 'Roll one die per incoming wound; each 5+ ignores that wound.',
+    description: 'When the unit takes wounds, roll one die per wound — on 5+ it is ignored.',
     hooks: {
       [HOOKS.ON_INCOMING_WOUNDS]: ({ wounds, suppressedByBane, dice, specialRulesApplied }) => {
         if (suppressedByBane || wounds <= 0) return {};
@@ -280,26 +216,10 @@ export const OPR_RULES = {
     },
   },
 
-
-  'Self-Repair': {
-    description: 'Alias for Regeneration.',
-    hooks: {
-      [HOOKS.ON_INCOMING_WOUNDS]: ({ wounds, suppressedByBane, dice, specialRulesApplied }) => {
-        if (suppressedByBane || wounds <= 0) return {};
-        let ignored = 0;
-        for (let i = 0; i < wounds; i++) {
-          if (dice.roll() >= 5) ignored++;
-        }
-        if (ignored > 0) specialRulesApplied.push({ rule: 'Self-Repair', value: null, effect: `${ignored}/${wounds} wounds ignored` });
-        return { wounds: Math.max(0, wounds - ignored) };
-      },
-    },
-  },
-
   // ── Movement ──────────────────────────────────────────────────────────────
 
   Fast: {
-    description: 'Gains +2" on Advance, +4" on Rush/Charge.',
+    description: 'Models move +2" when using Advance and +4" when using Rush/Charge.',
     hooks: {
       [HOOKS.MODIFY_SPEED]: ({ action, specialRulesApplied }) => {
         const delta = action === 'Advance' ? 2 : 4;
@@ -310,7 +230,7 @@ export const OPR_RULES = {
   },
 
   Slow: {
-    description: 'Loses 2" on Advance, 4" on Rush/Charge.',
+    description: 'Models move -2" when using Advance, and -4" when using Rush/Charge.',
     hooks: {
       [HOOKS.MODIFY_SPEED]: ({ action, specialRulesApplied }) => {
         const delta = action === 'Advance' ? -2 : -4;
@@ -321,14 +241,14 @@ export const OPR_RULES = {
   },
 
   Flying: {
-    description: 'Ignores terrain movement penalties.',
+    description: 'May move through units and terrain, and ignores terrain effects whilst moving.',
     hooks: {
       [HOOKS.ON_TERRAIN_MOVE]: () => ({ ignoreTerrain: true }),
     },
   },
 
   Strider: {
-    description: 'Ignores difficult terrain movement penalties.',
+    description: 'May ignore the effects of difficult terrain when moving.',
     hooks: {
       [HOOKS.ON_TERRAIN_MOVE]: ({ terrain }) => {
         if (terrain?.difficult) return { ignoreDifficult: true };
@@ -338,7 +258,7 @@ export const OPR_RULES = {
   },
 
   Immobile: {
-    description: 'Cannot move except to Hold.',
+    description: 'Models may only use Hold actions.',
     hooks: {
       [HOOKS.GET_BASE_SPEED]: ({ action }) => {
         if (action !== 'Hold') return { speed: 0, overrideSpeed: true };
@@ -348,7 +268,7 @@ export const OPR_RULES = {
   },
 
   Aircraft: {
-    description: 'Must Advance 36" each activation.',
+    description: 'May only use Advance actions, moving in a straight line adding 30" to its total move.',
     hooks: {
       [HOOKS.GET_BASE_SPEED]: ({ action }) => {
         if (action === 'Advance') return { speed: 36, overrideSpeed: true };
@@ -358,111 +278,16 @@ export const OPR_RULES = {
   },
 
   Scout: {
-    description: 'May move up to 12" before the first round.',
+    description: 'May be set aside before deployment. After all other units deploy, may deploy anywhere fully within 12" of their deployment zone.',
     hooks: {
       [HOOKS.ON_DEPLOY]: () => ({ scoutMove: 12 }),
     },
   },
 
-  'Hit & Run': {
-    description: 'Once per round, may move up to 3" after shooting or being in melee.',
-    hooks: {
-      [HOOKS.AFTER_COMBAT]: ({ unit, specialRulesApplied }) => {
-        if (unit._hitAndRunUsed) return {};
-        specialRulesApplied.push({ rule: 'Hit & Run', value: null, effect: 'may move up to 3" (once per round)' });
-        return { hitAndRunMove: 3 };
-      },
-    },
-  },
-
-  'Hit & Run Shooter': {
-    description: 'Once per round, may move up to 3" after shooting.',
-    hooks: {
-      [HOOKS.AFTER_SHOOTING]: ({ unit, specialRulesApplied }) => {
-        if (unit._hitAndRunShooterUsed) return {};
-        specialRulesApplied.push({ rule: 'Hit & Run Shooter', value: null, effect: 'may move up to 3" after shooting (once per round)' });
-        return { hitAndRunMove: 3 };
-      },
-    },
-  },
-
-  'Hit & Run Shooter Aura': {
-    description: 'This model and its unit get Hit & Run Shooter.',
-    hooks: {},
-  },
-
-  'Ranged Shrouding': {
-    description: 'Enemies get -6" effective range when shooting this unit.',
-    hooks: {
-      [HOOKS.BEFORE_RANGE_CHECK]: ({ specialRulesApplied }) => {
-        specialRulesApplied.push({ rule: 'Ranged Shrouding', value: null, effect: 'enemy range -6" to shoot this unit' });
-        return { effectiveRangeReduction: 6 };
-      },
-    },
-  },
-
-  'Ranged Shrouding Aura': {
-    description: 'This model and its unit get Ranged Shrouding.',
-    hooks: {},
-  },
-
-  // ── Activation Special Rules ──────────────────────────────────────────────
-
-  'Versatile Attack': {
-    description: 'When activated, choose: AP(+1) when attacking OR +1 to hit rolls.',
-    hooks: {
-      // Engine sets unit._versatileMode = 'ap' | 'quality' at activation start.
-      // DMN AI should choose based on situation (shooting vs melee, enemy defense etc).
-      [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, specialRulesApplied }) => {
-        if (unit._versatileMode !== 'quality') return {};
-        specialRulesApplied.push({ rule: 'Versatile Attack', value: null, effect: '+1 to hit rolls' });
-        return { quality: Math.max(2, quality - 1) };
-      },
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, ap, specialRulesApplied }) => {
-        if (unit._versatileMode !== 'ap') return {};
-        specialRulesApplied.push({ rule: 'Versatile Attack', value: null, effect: 'AP+1 when attacking' });
-        return { ap: (ap ?? 0) + 1 };
-      },
-    },
-  },
-
-  'Unpredictable Fighter': {
-    description: 'In melee, roll one die: 1-3 get AP(+1), 4-6 get +1 to hit.',
-    hooks: {
-      // Engine rolls once at melee start and sets unit._unpredictableRoll.
-      [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, quality, specialRulesApplied }) => {
-        const roll = unit._unpredictableRoll;
-        if (roll == null || roll < 4) return {};
-        specialRulesApplied.push({ rule: 'Unpredictable Fighter', value: null, effect: `rolled ${roll}: +1 to hit` });
-        return { quality: Math.max(2, quality - 1) };
-      },
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, ap, specialRulesApplied }) => {
-        const roll = unit._unpredictableRoll;
-        if (roll == null || roll >= 4) return {};
-        specialRulesApplied.push({ rule: 'Unpredictable Fighter', value: null, effect: `rolled ${roll}: AP+1` });
-        return { ap: (ap ?? 0) + 1 };
-      },
-    },
-  },
-
-  Teleport: {
-    description: 'Once per activation, before attacking, place this model anywhere within 6".',
-    hooks: {
-      [HOOKS.BEFORE_ATTACK]: ({ unit, specialRulesApplied }) => {
-        if (unit._teleportUsedThisActivation) return {};
-        unit._teleportUsedThisActivation = true;
-        specialRulesApplied.push({ rule: 'Teleport', value: null, effect: 'repositioned up to 6" before attacking' });
-        return { teleportMove: 6 };
-      },
-    },
-  },
-
-
-
   // ── Morale ────────────────────────────────────────────────────────────────
 
   Fearless: {
-    description: 'May re-roll failed morale tests on a 4+.',
+    description: 'When a unit where all models have this rule fails a morale test, roll one die — on 4+ it counts as passed.',
     hooks: {
       [HOOKS.ON_MORALE_TEST]: ({ passed, dice, specialRulesApplied }) => {
         if (passed) return {};
@@ -474,24 +299,10 @@ export const OPR_RULES = {
     },
   },
 
-  Steadfast: {
-    description: 'If Shaken at the start of a round, roll one die — on 4+ stop being Shaken.',
-    hooks: {
-      [HOOKS.ON_ROUND_START]: ({ unit, dice, specialRulesApplied }) => {
-        if (unit.status !== 'shaken') return {};
-        const roll = dice.roll();
-        specialRulesApplied.push({ rule: 'Steadfast', value: null, effect: `Shaken recovery: rolled ${roll} (needs 4+)` });
-        if (roll >= 4) return { clearShaken: true };
-        return {};
-      },
-    },
-  },
-
-
   // ── Deployment / Reserve ──────────────────────────────────────────────────
 
   Ambush: {
-    description: 'Deploys to reserve. Enters mid-game at least 9" from all enemies.',
+    description: 'May be set aside before deployment. At the start of any round after the first, may deploy anywhere over 9" from enemy units.',
     hooks: {
       [HOOKS.ON_DEPLOY]: () => ({ isReserve: true, reserveType: 'Ambush' }),
       [HOOKS.ON_RESERVE_ENTRY]: ({ unit, gameState }) => {
@@ -506,44 +317,149 @@ export const OPR_RULES = {
     },
   },
 
-  Infiltrate: {
-    description: 'Deploys to reserve. Enters via any board edge.',
-    hooks: {
-      [HOOKS.ON_DEPLOY]: () => ({ isReserve: true, reserveType: 'Infiltrate' }),
-    },
-  },
+  // ── Misc Unit Properties ──────────────────────────────────────────────────
 
-  // ── Targeting / Buff Rules ────────────────────────────────────────────────
-
-  'Piercing Target': {
-    description: 'Piercing Target(X): once per game, mark one enemy — friendlies get +AP(X) against it.',
+  Fear: {
+    description: 'Fear(X): this model counts as having dealt +X wounds when checking who won melee.',
     parameterised: true,
     hooks: {
-      // Engine sets target.piercing_ap_bonus = X when this ability is used.
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ target, ap, specialRulesApplied }) => {
-        const bonus = target?.piercing_ap_bonus ?? 0;
-        if (bonus <= 0) return {};
-        specialRulesApplied.push({ rule: 'Piercing Target', value: bonus, effect: `+AP(${bonus}) from marker` });
-        return { ap: (ap ?? 0) + bonus };
+      [HOOKS.ON_MELEE_WOUND_COMPARE]: ({ unit, woundsDealt, specialRulesApplied }) => {
+        const x = unit._ruleParamValue ?? 1;
+        specialRulesApplied.push({ rule: 'Fear', value: x, effect: `+${x} virtual wound(s) in melee comparison` });
+        return { woundsDealt: woundsDealt + x };
       },
     },
   },
 
-
-  'Shred when Shooting': {
-    description: 'This unit has Shred on ranged attacks.',
+  Counter: {
+    description: 'Strikes first when charged. Charging unit gets -1 total Impact rolls per model with Counter.',
     hooks: {
-      [HOOKS.ON_PER_HIT]: ({ saveRoll, isMelee, specialRulesApplied }) => {
-        if (isMelee || saveRoll !== 1) return {};
-        specialRulesApplied.push({ rule: 'Shred when Shooting', value: null, effect: 'unmodified 1 to save — +1 extra wound' });
-        return { extraWounds: 1 };
+      // Defender with Counter strikes before the charging attacker.
+      [HOOKS.ON_MELEE_STRIKE_ORDER]: ({ isDefender, specialRulesApplied }) => {
+        if (!isDefender) return {};
+        specialRulesApplied.push({ rule: 'Counter', value: null, effect: 'defender strikes first' });
+        return { defenderFirst: true };
+      },
+      // Reduce the charging attacker's Impact roll count by the number of Counter models.
+      [HOOKS.ON_IMPACT_ROLLS]: ({ counterModelCount, rollCount, specialRulesApplied }) => {
+        const reduction = counterModelCount ?? 1;
+        const reduced = Math.max(0, rollCount - reduction);
+        specialRulesApplied.push({ rule: 'Counter', value: reduction, effect: `-${reduction} Impact roll(s) from Counter` });
+        return { rollCount: reduced };
       },
     },
   },
 
+  Limited: {
+    description: 'This weapon may only be used once per game.',
+    hooks: {
+      [HOOKS.BEFORE_ATTACK]: ({ weapon, specialRulesApplied }) => {
+        if (weapon._limitedUsed) {
+          specialRulesApplied.push({ rule: 'Limited', value: null, effect: 'weapon already expended — attack cancelled' });
+          return { cancelAttack: true };
+        }
+        weapon._limitedUsed = true;
+        specialRulesApplied.push({ rule: 'Limited', value: null, effect: 'weapon expended (once per game)' });
+        return {};
+      },
+    },
+  },
+
+  Hero: {
+    description: 'May deploy as part of one multi-model unit. Takes morale tests on behalf of the unit. Uses unit Defense until all other models are killed.',
+    hooks: {
+      // Hero takes the morale test on behalf of its unit.
+      [HOOKS.ON_MORALE_TEST]: ({ unit, isHero, specialRulesApplied }) => {
+        if (!isHero) return {};
+        specialRulesApplied.push({ rule: 'Hero', value: null, effect: 'hero takes morale test on behalf of unit' });
+        return { useHeroForMorale: true };
+      },
+      // Hero uses the unit's Defense stat while non-hero models remain.
+      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, defense, specialRulesApplied }) => {
+        const unitMatesAlive = (unit.non_hero_models_remaining ?? 0) > 0;
+        if (!unitMatesAlive) return {};
+        const unitDefense = unit.unit_defense ?? defense;
+        if (unitDefense === defense) return {};
+        specialRulesApplied.push({ rule: 'Hero', value: null, effect: `using unit Defense (${unitDefense}+) while unit-mates remain` });
+        return { defense: unitDefense };
+      },
+      // Hero is assigned wounds last — engine should target non-hero models first.
+      [HOOKS.ON_WOUND_ASSIGN]: ({ unit, specialRulesApplied }) => {
+        specialRulesApplied.push({ rule: 'Hero', value: null, effect: 'wounds assigned to hero last' });
+        return { assignLast: true };
+      },
+    },
+  },
+
+  Transport: {
+    description: 'Transport(X): may carry up to X transport points of friendly units. When destroyed, embarked units take a dangerous terrain test, are Shaken, and must be placed within 6".',
+    parameterised: true,
+    hooks: {
+      // Validate that a unit can board (capacity check).
+      [HOOKS.ON_TRANSPORT_EMBARK]: ({ transport, unit, currentLoad, specialRulesApplied }) => {
+        const capacity = transport._ruleParamValue ?? 0;
+        const cost = (unit.tough_per_model ?? 1) >= 3 ? 3 : 1;
+        if (currentLoad + cost > capacity) {
+          specialRulesApplied.push({ rule: 'Transport', value: capacity, effect: `no capacity (${currentLoad}/${capacity} used, unit costs ${cost})` });
+          return { canEmbark: false };
+        }
+        specialRulesApplied.push({ rule: 'Transport', value: capacity, effect: `unit embarked (${currentLoad + cost}/${capacity} used)` });
+        return { canEmbark: true, newLoad: currentLoad + cost };
+      },
+      // When transport is destroyed, apply effects to embarked units.
+      [HOOKS.ON_TRANSPORT_DESTROYED]: ({ embarkedUnits, specialRulesApplied }) => {
+        specialRulesApplied.push({ rule: 'Transport', value: null, effect: 'transport destroyed — embarked units take dangerous terrain test and are Shaken' });
+        return { applyDangerousTerrainTest: true, applyShaken: true, disembarkRadius: 6 };
+      },
+    },
+  },
+
+  Tough: {
+    description: 'Tough(X): this model must take X wounds before being killed. Wounds accumulate; model is only removed when the total reaches X.',
+    parameterised: true,
+    hooks: {
+      [HOOKS.ON_INCOMING_WOUNDS]: ({ wounds, unit, specialRulesApplied }) => {
+        const toughValue = unit._ruleParamValue ?? 1;
+        const currentWounds = unit.wounds_taken ?? 0;
+        const newTotal = currentWounds + wounds;
+
+        if (newTotal < toughValue) {
+          unit.wounds_taken = newTotal;
+          specialRulesApplied.push({ rule: 'Tough', value: toughValue, effect: `${newTotal}/${toughValue} wounds accumulated — survives` });
+          return { wounds: 0, woundsAccumulated: wounds };
+        }
+
+        // Model dies; excess wounds are discarded (don't carry over).
+        unit.wounds_taken = toughValue;
+        specialRulesApplied.push({ rule: 'Tough', value: toughValue, effect: `${toughValue}/${toughValue} wounds reached — model killed (overflow discarded)` });
+        return { wounds: toughValue, modelKilled: true };
+      },
+    },
+  },
+
+  Impact: {
+    description: 'Impact(X): roll X dice when attacking after charging (unless fatigued). Each 2+ deals one hit on the target.',
+    parameterised: true,
+    hooks: {
+      [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, dice, specialRulesApplied }) => {
+        if (!unit.just_charged || unit.fatigued) return {};
+        const x = unit._ruleParamValue ?? 0;
+        if (x <= 0) return {};
+        let hits = 0;
+        const rolls = [];
+        for (let i = 0; i < x; i++) {
+          const r = dice.roll();
+          rolls.push(r);
+          if (r >= 2) hits++;
+        }
+        specialRulesApplied.push({ rule: 'Impact', value: x, effect: `Impact(${x}): rolled [${rolls.join(',')}] → ${hits} hit(s)` });
+        return { impactHits: hits };
+      },
+    },
+  },
 
   Caster: {
-    description: 'Caster(X): gains X spell tokens per round (max 6).',
+    description: 'Caster(X): gets X spell tokens at the start of each round (max 6).',
     parameterised: true,
     hooks: {
       [HOOKS.ON_TOKEN_GAIN]: ({ _ruleParamValue, currentTokens, specialRulesApplied }) => {
@@ -556,178 +472,7 @@ export const OPR_RULES = {
   },
 
   Takedown: {
-    description: 'Special melee weapon rule.',
+    description: 'This model may pick any model in the target unit as its individual target, resolved as if it was a unit of [1].',
     hooks: {},
   },
-
-
-  // ── Good Shot ─────────────────────────────────────────────────────────────
-
-  'Good Shot': {
-    description: 'This model gets +1 to hit rolls when shooting.',
-    hooks: {
-      [HOOKS.BEFORE_HIT_QUALITY]: ({ weapon, quality, specialRulesApplied }) => {
-        if ((weapon?.range ?? 0) <= 2) return {};
-        specialRulesApplied.push({ rule: 'Good Shot', value: null, effect: '+1 to hit when shooting' });
-        return { quality: Math.max(2, quality - 1) };
-      },
-    },
-  },
-
-  // ── Evasive ───────────────────────────────────────────────────────────────
-
-  Evasive: {
-    description: 'Enemies get -1 to hit rolls when attacking this unit.',
-    hooks: {
-      [HOOKS.BEFORE_HIT_QUALITY]: ({ quality, specialRulesApplied }) => {
-        specialRulesApplied.push({ rule: 'Evasive', value: null, effect: 'enemy -1 to hit (quality +1)' });
-        return { quality: Math.min(6, quality + 1) };
-      },
-    },
-  },
-
-  // ── Fortified ─────────────────────────────────────────────────────────────
-
-  Fortified: {
-    description: 'Hits against this unit count as AP(-1), min AP(0).',
-    hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ ap, specialRulesApplied }) => {
-        const currentAp = ap ?? 0;
-        if (currentAp <= 0) return {};
-        const reducedAp = Math.max(0, currentAp - 1);
-        specialRulesApplied.push({ rule: 'Fortified', value: null, effect: `AP ${currentAp}→${reducedAp}` });
-        return { ap: reducedAp };
-      },
-    },
-  },
-
-
-  // ── Decimate ──────────────────────────────────────────────────────────────
-
-  Decimate: {
-    description: 'Ignores cover. Against Defense 2+-3+ targets, gains AP(+2).',
-    hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ target, ap, specialRulesApplied }) => {
-        if (!target) return {};
-        const defense = target.defense ?? 4;
-        // Defense 2+ = value 2, Defense 3+ = value 3
-        if (defense <= 3) {
-          const newAp = (ap ?? 0) + 2;
-          specialRulesApplied.push({ rule: 'Decimate', value: null, effect: `+AP(2) vs Defense ${defense}+ target → AP(${newAp})` });
-          return { ap: newAp, ignoresCover: true };
-        }
-        return { ignoresCover: true };
-      },
-    },
-  },
-
-  // ── Slayer variants ───────────────────────────────────────────────────────
-
-  Slayer: {
-    description: 'This model\'s weapons get AP(+2) against units where most models have Tough(3) or higher.',
-    hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ target, ap, specialRulesApplied }) => {
-        if (!target) return {};
-        const sr = Array.isArray(target.special_rules)
-          ? target.special_rules.join(' ')
-          : (target.special_rules || '');
-        const m = sr.match(/Tough\((\d+)\)/);
-        if (!m || parseInt(m[1]) < 3) return {};
-        const newAp = (ap ?? 0) + 2;
-        specialRulesApplied.push({ rule: 'Slayer', value: null, effect: `+AP(2) vs Tough(${m[1]}) target → AP(${newAp})` });
-        return { ap: newAp };
-      },
-    },
-  },
-
-  'Ranged Slayer': {
-    description: 'This model\'s ranged weapons get AP(+2) against units where most models have Tough(3) or higher.',
-    hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ target, ap, isMelee, specialRulesApplied }) => {
-        if (isMelee || !target) return {};
-        const sr = Array.isArray(target.special_rules)
-          ? target.special_rules.join(' ')
-          : (target.special_rules || '');
-        const m = sr.match(/Tough\((\d+)\)/);
-        if (!m || parseInt(m[1]) < 3) return {};
-        const newAp = (ap ?? 0) + 2;
-        specialRulesApplied.push({ rule: 'Ranged Slayer', value: null, effect: `+AP(2) vs Tough(${m[1]}) target (ranged) → AP(${newAp})` });
-        return { ap: newAp };
-      },
-    },
-  },
-
-
-  // ── Precision Spotter ─────────────────────────────────────────────────────
-
-  'Precision Spotter': {
-    description: 'Once per activation, pick one enemy within 36" LOS and roll one die — on 4+ place a marker. Friendlies remove markers before rolling to hit for +X to hit.',
-    hooks: {
-      // Engine sets target.precision_markers += 1 on a 4+ roll.
-      // BEFORE_HIT_QUALITY hook for the shooter reads unit._precisionTarget and applies bonus.
-      [HOOKS.BEFORE_HIT_QUALITY]: ({ unit, target, quality, specialRulesApplied }) => {
-        if (!target || !unit._precisionTarget) return {};
-        const markers = target.precision_markers ?? 0;
-        if (markers <= 0 || unit._precisionTarget !== target.id) return {};
-        // Consume markers
-        target.precision_markers = 0;
-        specialRulesApplied.push({ rule: 'Precision Spotter', value: markers, effect: `removed ${markers} marker(s) → quality -${markers}` });
-        return { quality: Math.max(2, quality - markers) };
-      },
-    },
-  },
-
-  // ── Piercing Shooting Mark ────────────────────────────────────────────────
-
-  'Piercing Shooting Mark': {
-    description: 'Once per activation, pick one enemy within 18" — friendlies get AP(+1) when shooting against it.',
-    hooks: {
-      // Engine sets target.piercing_shooting_ap_bonus = 1.
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ target, ap, isMelee, specialRulesApplied }) => {
-        if (isMelee || !target) return {};
-        const bonus = target?.piercing_shooting_ap_bonus ?? 0;
-        if (bonus <= 0) return {};
-        const newAp = (ap ?? 0) + bonus;
-        specialRulesApplied.push({ rule: 'Piercing Shooting Mark', value: bonus, effect: `+AP(${bonus}) from mark (shooting) → AP(${newAp})` });
-        return { ap: newAp };
-      },
-    },
-  },
-
-
-  // ── Increased Shooting Range ──────────────────────────────────────────────
-
-  'Increased Shooting Range': {
-    description: '+6" to weapon range when shooting.',
-    hooks: {
-      [HOOKS.BEFORE_RANGE_CHECK]: ({ specialRulesApplied }) => {
-        specialRulesApplied.push({ rule: 'Increased Shooting Range', value: 6, effect: '+6" weapon range' });
-        return { effectiveRangeBonus: 6 };
-      },
-    },
-  },
-
-  'Increased Shooting Range Aura': {
-    description: 'This model and its unit get +6" range when shooting.',
-    hooks: {},
-  },
-  
-  // ── Ignores Cover ─────────────────────────────────────────────────────────
-
-  'Ignores Cover when Shooting': {
-    description: 'Ranged attacks ignore cover bonuses.',
-    hooks: {
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ isMelee, specialRulesApplied }) => {
-        if (isMelee) return {};
-        specialRulesApplied.push({ rule: 'Ignores Cover when Shooting', value: null, effect: 'cover ignored' });
-        return { ignoresCover: true };
-      },
-    },
-  },
-
-  'Ignores Cover when Shooting Aura': {
-    description: 'This model and its unit get Ignores Cover when shooting.',
-    hooks: {},
-  },
-
-
+};
