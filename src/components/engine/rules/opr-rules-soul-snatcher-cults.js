@@ -5,7 +5,7 @@
  */
 
 import { HOOKS } from '../RuleRegistry.js';
-import { Dice } from '../Dice.js';
+import { Dice } from '../../Dice.js';
 
 export const SOUL_SNATCHER_CULTS_RULES = {
   // -------------------------------------------------------------------------
