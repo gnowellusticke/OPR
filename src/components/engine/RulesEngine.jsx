@@ -1,6 +1,10 @@
 // RulesEngine.js
 import { HOOKS } from './RuleRegistry.js';
-import { Dice } from '../Dice.js';
+import { Dice } from '../Dice';
+
+/** @typedef {import('./UnitFactory.js').Unit} Unit */
+/** @typedef {import('./UnitFactory.js').Weapon} Weapon */
+
 
 /**
  * RulesEngine – core game mechanics, using hooks for all special rules.
@@ -235,7 +239,7 @@ endActivation(unit, gameState) {
       specialRulesApplied,
       isMelee,
       weaponRules: weapon.special_rules || [],
-      weaponParams: weapon.ruleParams || {}
+      weaponParams: weapon.special_rules || {}
     };
 
 // Check if shooting is blocked after moving (e.g. after Rush action)
@@ -338,7 +342,9 @@ endActivation(unit, gameState) {
     let totalWounds = 0;
     for (let i = 0; i < unsavedHits; i++) {
       let wounds = 1;
-      const woundCtx = { ...ctx, weapon, unsavedHit: hitRolls[i], toughPerModel: defender.tough };
+      const toughMatch = (defender.special_rules || '').match(/\bTough\((\d+)\)/);
+      const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 1;
+      const woundCtx = { ...ctx, weapon, unsavedHit: hitRolls[i], toughPerModel };
       const woundResults = this.registry.applyHook(HOOKS.ON_WOUND_CALC, woundCtx, `${attacker.special_rules || ''} ${weapon.special_rules || ''}`);
       woundResults.forEach(r => { if (r.wounds !== undefined) wounds = r.wounds; });
       totalWounds += wounds;
