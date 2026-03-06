@@ -126,7 +126,7 @@ export function createUnit(parsed, owner, pos = { x: 0, y: 0 }) {
     weapons,
 
     // Engine state — all start clean
-    status:                   'active',
+    status:                   'normal',
     wounds_accumulated:       0,       // for Tough wound tracking
     non_hero_models_remaining: nonHeroModels,
     spell_tokens:             0,       // Caster rule populates this on round start

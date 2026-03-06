@@ -14,13 +14,13 @@ import { RuleRegistry } from '../components/engine/RuleRegistry';
 import { OPR_RULES } from '../components/engine/rules/opr-rules';
 import { BattleLogger } from '../components/engine/BattleLogger';
 import { verifyRuleCompliance } from '../components/engine/RuleComplianceVerifier';
-import { attachFactionSpells } from '../components/engine/spells/SpellRegistry';
 import { getPersonality, DEFAULT_PERSONALITY } from '../components/engine/personalities/PersonalityRegistry';
 import { processLogToActivations, NARRATIVE_SYSTEM_PROMPT, STYLE_SUFFIXES, BattleReplayController } from '../components/engine/NarrativeEngine.jsx';
 import { DMNAgent } from '../components/engine/agents/DMNAgent';
 import { LLMAgent }  from '../components/engine/agents/LLMAgent';
 import NarrativeCommentaryBox from '../components/battle/NarrativeCommentaryBox';
 import { Terrain } from '../components/engine/models/Terrain';
+import { createArmy } from '../components/engine/UnitFactory';
 
 // Map faction names to their rule modules – dynamically imported
 const factionRuleMap = {
@@ -356,21 +356,10 @@ export default function Battle() {
 
   // Returns the wounds (Tough value) for a single model in this unit.
   // A unit with Tough(6) has 6 wounds per model; default is 1.
-  const computeWounds = (unitData) => {
-    const sr = Array.isArray(unitData.special_rules)
-      ? unitData.special_rules.join(' ')
-      : (unitData.special_rules || '');
-    const m = sr.match(/Tough\((\d+)\)/);
-    return m ? parseInt(m[1]) : 1;
-  };
-
-  // Returns the display name of the best melee weapon on a unit,
-  // falling back to 'CCW' (close-combat weapon) if none is found.
-  const resolveMeleeWeaponName = (unitData) => {
-    const melee = (unitData.weapons || []).filter(w => (w.range ?? 0) <= 2);
+  const resolveMeleeWeaponName = (weapons = []) => {
+    const melee = weapons.filter(w => (w.range ?? 0) <= 2);
     if (melee.length === 0) return 'CCW';
-    const best = melee.reduce((a, b) => ((b.attacks ?? 1) > (a.attacks ?? 1) ? b : a));
-    return best.name || 'CCW';
+    return melee.reduce((a, b) => ((b.attacks ?? 1) > (a.attacks ?? 1) ? b : a)).name || 'CCW';
   };
 
   // Appends "#1", "#2" etc. to unit names that appear more than once within the
@@ -398,62 +387,39 @@ export default function Battle() {
   // the game engine works with.  Positions are rough placeholders — the DMN
   // deployment phase will overwrite x/y with its own scored placement.
   const deployArmies = (armyA, armyB, advRules) => {
-    let idCounter = 0;
+    const placeFn = (parsed, i, total, owner) => ({
+      x: 10 + Math.random() * 50,
+      y: owner === 'agent_a' ? 10 : 38,
+    });
 
-    const processArmy = (army, owner) => {
-      const roster = army.units || army.roster || [];
-      return roster.map(unitData => {
-        const weapons = (unitData.weapons || unitData.loadout || []).map(w => ({
-          name:          w.name     || 'Weapon',
-          range:         w.range    ?? 12,
-          attacks:       w.attacks  ?? 1,
-          ap:            w.ap       ?? 0,
-          special_rules: Array.isArray(w.special_rules)
-            ? w.special_rules.join(' ')
-            : (w.special_rules || ''),
-        }));
-
-        const modelCount   = unitData.size || unitData.model_count || 1;
-        const toughPerModel = computeWounds(unitData);
-
-        // Reserve flag — real placement happens in runDeploymentPhase.
-        const srStr = Array.isArray(unitData.special_rules)
-          ? unitData.special_rules.join(' ')
-          : (unitData.special_rules || '');
-        const isReserve = /Ambush|Teleport|Infiltrate/.test(srStr);
-
-        return {
-          id:               `unit_${owner}_${idCounter++}`,
-          name:             unitData.name || 'Unknown Unit',
-          owner,
-          // Rough starting coordinates; DMN will move these during deployment.
-          x:  owner === 'agent_a' ? 10 + Math.random() * 50 : 10 + Math.random() * 50,
-          y:  owner === 'agent_a' ? 10 : 38,
-          quality:          unitData.quality  ?? 4,
-          defense:          unitData.defense  ?? 4,
-          total_models:     modelCount,
-          current_models:   modelCount,
-          tough_per_model:  toughPerModel,
-          model_count:      modelCount,
-          weapons,
-          special_rules:    srStr,
-          status:           'normal',
-          is_in_reserve:    isReserve,
-          just_charged:     false,
-          fatigued:         false,
-          rounds_without_offense: 0,
-          spell_tokens:     0,
-          melee_weapon_name: resolveMeleeWeaponName(unitData),
-        };
-      });
+    const addBattleFields = (unit) => {
+      const toughMatch = unit.special_rules.match(/\bTough\((\d+)\)/);
+      const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 1;
+      const isReserve = /Ambush|Teleport|Infiltrate/.test(unit.special_rules);
+      return {
+        ...unit,
+        status:                'normal',
+        tough_per_model:       toughPerModel,
+        model_count:           unit.total_models,
+        is_in_reserve:         isReserve,
+        rounds_without_offense: 0,
+        melee_weapon_name:     resolveMeleeWeaponName(unit.weapons),
+      };
     };
 
-    const raw = [
-      ...processArmy(armyA, 'agent_a'),
-      ...processArmy(armyB, 'agent_b'),
-    ];
+    const unitsA = createArmy(
+      { units: armyA.units || armyA.roster || [] },
+      'agent_a',
+      (parsed, i) => placeFn(parsed, i, null, 'agent_a')
+    ).map(addBattleFields);
 
-    return disambiguateUnitNames(raw);
+    const unitsB = createArmy(
+      { units: armyB.units || armyB.roster || [] },
+      'agent_b',
+      (parsed, i) => placeFn(parsed, i, null, 'agent_b')
+    ).map(addBattleFields);
+
+    return disambiguateUnitNames([...unitsA, ...unitsB]);
   };
 
   // ─── DEPLOYMENT PHASE ────────────────────────────────────────────────────────
