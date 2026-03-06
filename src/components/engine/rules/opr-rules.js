@@ -322,43 +322,64 @@ export const OPR_RULES = {
   Fear: {
     description: 'Fear(X): this model counts as having dealt +X wounds when checking who won melee.',
     parameterised: true,
+    // Fires on ON_MELEE_RESOLUTION (called without special_rules — all handlers fire).
+    // Self-filters by inspecting attacker.special_rules directly.
+    // Engine reads: attackerWounds / defenderWounds from results.
     hooks: {
-      [HOOKS.ON_MELEE_WOUND_COMPARE]: ({ unit, woundsDealt, specialRulesApplied }) => {
-        const x = unit._ruleParamValue ?? 1;
+      [HOOKS.ON_MELEE_RESOLUTION]: ({ attacker, attackerWounds, specialRulesApplied }) => {
+        const sr = Array.isArray(attacker?.special_rules)
+          ? attacker.special_rules.join(' ')
+          : (attacker?.special_rules ?? '');
+        const m = sr.match(/\bFear\((\d+)\)/);
+        if (!m) return {};
+        const x = parseInt(m[1]);
         specialRulesApplied.push({ rule: 'Fear', value: x, effect: `+${x} virtual wound(s) in melee comparison` });
-        return { woundsDealt: woundsDealt + x };
+        return { attackerWounds: attackerWounds + x };
       },
     },
   },
 
   Counter: {
     description: 'Strikes first when charged. Charging unit gets -1 total Impact rolls per model with Counter.',
+    // Priority 10 so Counter fires before Impact on BEFORE_MELEE_ATTACK,
+    // setting counterImpactReduction in context before Impact reads it.
+    priority: 10,
+    // Both hooks fire without special_rules — self-filter via context.
     hooks: {
-      // Defender with Counter strikes before the charging attacker.
-      [HOOKS.ON_MELEE_STRIKE_ORDER]: ({ isDefender, specialRulesApplied }) => {
-        if (!isDefender) return {};
+      [HOOKS.ON_STRIKE_ORDER]: ({ defender, specialRulesApplied }) => {
+        const sr = Array.isArray(defender?.special_rules)
+          ? defender.special_rules.join(' ')
+          : (defender?.special_rules ?? '');
+        if (!sr.includes('Counter')) return {};
         specialRulesApplied.push({ rule: 'Counter', value: null, effect: 'defender strikes first' });
-        return { defenderFirst: true };
+        return { attackerFirst: false };
       },
-      // Reduce the charging attacker's Impact roll count by the number of Counter models.
-      [HOOKS.ON_IMPACT_ROLLS]: ({ counterModelCount, rollCount, specialRulesApplied }) => {
-        const reduction = counterModelCount ?? 1;
-        const reduced = Math.max(0, rollCount - reduction);
+      [HOOKS.BEFORE_MELEE_ATTACK]: ({ attacker, defender, specialRulesApplied }) => {
+        const sr = Array.isArray(defender?.special_rules)
+          ? defender.special_rules.join(' ')
+          : (defender?.special_rules ?? '');
+        if (!sr.includes('Counter')) return {};
+        // Impact reduction = number of models in the defending unit that carry Counter.
+        // Counter is a unit rule so all current models contribute.
+        const reduction = defender.current_models ?? 1;
         specialRulesApplied.push({ rule: 'Counter', value: reduction, effect: `-${reduction} Impact roll(s) from Counter` });
-        return { rollCount: reduced };
+        return { counterImpactReduction: reduction };
       },
     },
   },
 
   Limited: {
     description: 'This weapon may only be used once per game.',
+    // BEFORE_ATTACK is called with combined attacker + weapon special_rules,
+    // so this handler fires when the weapon carries Limited.
+    // Engine reads: preventAttack from results.
     hooks: {
       [HOOKS.BEFORE_ATTACK]: ({ weapon, specialRulesApplied }) => {
-        if (weapon._limitedUsed) {
-          specialRulesApplied.push({ rule: 'Limited', value: null, effect: 'weapon already expended — attack cancelled' });
-          return { cancelAttack: true };
+        if (weapon?._limitedUsed) {
+          specialRulesApplied.push({ rule: 'Limited', value: null, effect: 'weapon already expended — attack blocked' });
+          return { preventAttack: true };
         }
-        weapon._limitedUsed = true;
+        if (weapon) weapon._limitedUsed = true;
         specialRulesApplied.push({ rule: 'Limited', value: null, effect: 'weapon expended (once per game)' });
         return {};
       },
@@ -366,73 +387,71 @@ export const OPR_RULES = {
   },
 
   Hero: {
-    description: 'May deploy as part of one multi-model unit. Takes morale tests on behalf of the unit. Uses unit Defense until all other models are killed.',
+    description: 'May deploy as part of one multi-model unit. Takes morale tests on behalf of the unit. Uses unit Defense until all other models are killed. Assigned wounds last.',
     hooks: {
-      // Hero takes the morale test on behalf of its unit.
-      [HOOKS.ON_MORALE_TEST]: ({ unit, isHero, specialRulesApplied }) => {
-        if (!isHero) return {};
+      // Engine calls ON_MORALE_TEST with unit.special_rules — fires only when the unit has Hero.
+      // Signals that the hero quality/roll should be used for the unit's test.
+      [HOOKS.ON_MORALE_TEST]: ({ unit, specialRulesApplied }) => {
         specialRulesApplied.push({ rule: 'Hero', value: null, effect: 'hero takes morale test on behalf of unit' });
-        return { useHeroForMorale: true };
+        return { useHeroQuality: unit.quality };
       },
-      // Hero uses the unit's Defense stat while non-hero models remain.
-      [HOOKS.BEFORE_SAVE_DEFENSE]: ({ unit, defense, specialRulesApplied }) => {
-        const unitMatesAlive = (unit.non_hero_models_remaining ?? 0) > 0;
-        if (!unitMatesAlive) return {};
-        const unitDefense = unit.unit_defense ?? defense;
-        if (unitDefense === defense) return {};
-        specialRulesApplied.push({ rule: 'Hero', value: null, effect: `using unit Defense (${unitDefense}+) while unit-mates remain` });
-        return { defense: unitDefense };
-      },
-      // Hero is assigned wounds last — engine should target non-hero models first.
-      [HOOKS.ON_WOUND_ASSIGN]: ({ unit, specialRulesApplied }) => {
-        specialRulesApplied.push({ rule: 'Hero', value: null, effect: 'wounds assigned to hero last' });
-        return { assignLast: true };
+      // ON_WOUND_ALLOCATION called with target.special_rules — fires only when unit has Hero.
+      // Signals the engine to assign wounds to non-hero models first.
+      [HOOKS.ON_WOUND_ALLOCATION]: ({ unit, specialRulesApplied }) => {
+        const nonHeroAlive = (unit.non_hero_models_remaining ?? 0) > 0;
+        if (!nonHeroAlive) return {};
+        specialRulesApplied.push({ rule: 'Hero', value: null, effect: 'wounds assigned to non-hero models first' });
+        return { assignHeroLast: true };
       },
     },
   },
 
   Transport: {
-    description: 'Transport(X): may carry up to X transport points of friendly units. When destroyed, embarked units take a dangerous terrain test, are Shaken, and must be placed within 6".',
+    description: 'Transport(X): may carry up to X transport points. When destroyed, embarked units take a dangerous terrain test, are Shaken, and must be placed within 6".',
     parameterised: true,
+    // ON_TRANSPORT_DESTROY fires (without special_rules) when any unit is destroyed.
+    // Self-filters by checking if the destroyed unit has Transport.
+    // Engine reads: applyDangerousTerrainTest, applyShaken, disembarkRadius.
     hooks: {
-      // Validate that a unit can board (capacity check).
-      [HOOKS.ON_TRANSPORT_EMBARK]: ({ transport, unit, currentLoad, specialRulesApplied }) => {
-        const capacity = transport._ruleParamValue ?? 0;
-        const cost = (unit.tough_per_model ?? 1) >= 3 ? 3 : 1;
-        if (currentLoad + cost > capacity) {
-          specialRulesApplied.push({ rule: 'Transport', value: capacity, effect: `no capacity (${currentLoad}/${capacity} used, unit costs ${cost})` });
-          return { canEmbark: false };
-        }
-        specialRulesApplied.push({ rule: 'Transport', value: capacity, effect: `unit embarked (${currentLoad + cost}/${capacity} used)` });
-        return { canEmbark: true, newLoad: currentLoad + cost };
-      },
-      // When transport is destroyed, apply effects to embarked units.
-      [HOOKS.ON_TRANSPORT_DESTROYED]: ({ embarkedUnits, specialRulesApplied }) => {
-        specialRulesApplied.push({ rule: 'Transport', value: null, effect: 'transport destroyed — embarked units take dangerous terrain test and are Shaken' });
+      [HOOKS.ON_TRANSPORT_DESTROY]: ({ unit, specialRulesApplied }) => {
+        const sr = Array.isArray(unit?.special_rules)
+          ? unit.special_rules.join(' ')
+          : (unit?.special_rules ?? '');
+        const m = sr.match(/\bTransport\((\d+)\)/);
+        if (!m) return {};
+        specialRulesApplied.push({ rule: 'Transport', value: null, effect: 'transport destroyed — embarked units take dangerous terrain test, Shaken, placed within 6"' });
         return { applyDangerousTerrainTest: true, applyShaken: true, disembarkRadius: 6 };
       },
     },
   },
 
   Tough: {
-    description: 'Tough(X): this model must take X wounds before being killed. Wounds accumulate; model is only removed when the total reaches X.',
+    description: 'Tough(X): must take X wounds before being killed. Wounds accumulate per-model; overflow does not carry over.',
     parameterised: true,
+    // ON_INCOMING_WOUNDS fires with defender.special_rules — only for units with Tough.
+    // Converts raw wound count into model deaths, accumulating remainder on unit.wounds_accumulated.
+    // Engine reads: wounds (treated as model deaths by _applyWounds).
+    // Priority 0 (default) — fires after Regeneration (priority 10) has already reduced wounds.
     hooks: {
-      [HOOKS.ON_INCOMING_WOUNDS]: ({ wounds, unit, specialRulesApplied }) => {
-        const toughValue = unit._ruleParamValue ?? 1;
-        const currentWounds = unit.wounds_taken ?? 0;
-        const newTotal = currentWounds + wounds;
+      [HOOKS.ON_INCOMING_WOUNDS]: ({ unit, wounds, specialRulesApplied }) => {
+        const sr = Array.isArray(unit?.special_rules)
+          ? unit.special_rules.join(' ')
+          : (unit?.special_rules ?? '');
+        const m = sr.match(/\bTough\((\d+)\)/);
+        if (!m) return {};
+        const toughValue = parseInt(m[1]);
+        if (toughValue <= 1) return {};
 
-        if (newTotal < toughValue) {
-          unit.wounds_taken = newTotal;
-          specialRulesApplied.push({ rule: 'Tough', value: toughValue, effect: `${newTotal}/${toughValue} wounds accumulated — survives` });
-          return { wounds: 0, woundsAccumulated: wounds };
-        }
+        const accumulated = unit.wounds_accumulated ?? 0;
+        const total = accumulated + wounds;
+        const modelsKilled = Math.floor(total / toughValue);
+        unit.wounds_accumulated = total % toughValue;
 
-        // Model dies; excess wounds are discarded (don't carry over).
-        unit.wounds_taken = toughValue;
-        specialRulesApplied.push({ rule: 'Tough', value: toughValue, effect: `${toughValue}/${toughValue} wounds reached — model killed (overflow discarded)` });
-        return { wounds: toughValue, modelKilled: true };
+        specialRulesApplied.push({
+          rule: 'Tough', value: toughValue,
+          effect: `${accumulated}+${wounds} wounds → ${modelsKilled} model(s) killed, ${unit.wounds_accumulated} accumulated`,
+        });
+        return { wounds: modelsKilled };
       },
     },
   },
@@ -440,11 +459,23 @@ export const OPR_RULES = {
   Impact: {
     description: 'Impact(X): roll X dice when attacking after charging (unless fatigued). Each 2+ deals one hit on the target.',
     parameterised: true,
+    // BEFORE_MELEE_ATTACK fires without special_rules — self-filters via attacker.special_rules.
+    // Reads counterImpactReduction set by Counter (priority 10) earlier in the same hook pass.
+    // Engine reads: extraWounds from results.
     hooks: {
-      [HOOKS.BEFORE_MELEE_ATTACK]: ({ unit, dice, specialRulesApplied }) => {
-        if (!unit.just_charged || unit.fatigued) return {};
-        const x = unit._ruleParamValue ?? 0;
-        if (x <= 0) return {};
+      [HOOKS.BEFORE_MELEE_ATTACK]: ({ attacker, dice, counterImpactReduction, specialRulesApplied }) => {
+        if (!attacker?.just_charged || attacker?.fatigued) return {};
+        const sr = Array.isArray(attacker?.special_rules)
+          ? attacker.special_rules.join(' ')
+          : (attacker?.special_rules ?? '');
+        const m = sr.match(/\bImpact\((\d+)\)/);
+        if (!m) return {};
+        const rawX = parseInt(m[1]);
+        const x = Math.max(0, rawX - (counterImpactReduction ?? 0));
+        if (x === 0) {
+          specialRulesApplied.push({ rule: 'Impact', value: rawX, effect: `Impact(${rawX}) fully cancelled by Counter` });
+          return {};
+        }
         let hits = 0;
         const rolls = [];
         for (let i = 0; i < x; i++) {
@@ -452,8 +483,8 @@ export const OPR_RULES = {
           rolls.push(r);
           if (r >= 2) hits++;
         }
-        specialRulesApplied.push({ rule: 'Impact', value: x, effect: `Impact(${x}): rolled [${rolls.join(',')}] → ${hits} hit(s)` });
-        return { impactHits: hits };
+        specialRulesApplied.push({ rule: 'Impact', value: rawX, effect: `Impact(${x}/${rawX} after Counter): [${rolls.join(',')}] → ${hits} hit(s)` });
+        return { extraWounds: hits };
       },
     },
   },
