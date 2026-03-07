@@ -109,20 +109,21 @@ export default function Battle() {
     if (newEvs) setEvents([...newEvs]);
   };
 
-  useEffect(() => { 
-    setLoadingStatus("Loading battle data...");
-    loadBattle().catch(err => {
-      console.error("Battle load error:", err);
-      setLoadingStatus(`Error: ${err.message}`);
-    });
-  }, []);
+    useEffect(() => { 
+        setLoadingStatus("Loading battle data...");
+        loadBattle().catch(err => {
+          console.error("Battle load error:", err);
+          setLoadingStatus(`Error: ${err.message}`);
+        });
+    }, []);
 
-  useEffect(() => {
-    if (!playing || !gsRef.current || battleRef.current?.status === 'completed') return;
-    if (gsRef.current.pending_deployment) {
-      runPendingDeployment();
-      return;
-    }
+    useEffect(() => {
+        console.log('[EFFECT] playing:', playing, 'pending:', gsRef.current?.pending_deployment, 'status:', battleRef.current?.status);
+        if (!playing || !gsRef.current || battleRef.current?.status === 'completed') return;
+        if (gsRef.current.pending_deployment) {
+          runPendingDeployment();
+          return;
+        }
     const timer = setTimeout(() => {
         if (playingRef.current) processNextAction();
       }, simulationSpeed);
@@ -1334,9 +1335,10 @@ let aScore, bScore;
           <Home className="w-4 h-4 mr-2" /> Home
         </Button>
         <div className="flex gap-2">
-          <Button onClick={() => setPlayingBoth(!playing)} disabled={battle.status === 'completed'} className="bg-blue-600 hover:bg-blue-700">
-            {playing ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-            {playing ? 'Pause' : 'Play'}
+          <Button onClick={() => { 
+            console.log('[PLAY CLICK] playing:', playing, 'status:', battle?.status, 'pending:', gsRef.current?.pending_deployment); 
+            setPlayingBoth(!playing); 
+          }} disabled={battle.status === 'completed'} className="bg-blue-600 hover:bg-blue-700">
           </Button>
           <Button variant="outline" onClick={() => window.location.reload()} className="border-slate-600 text-slate-300">
             <RotateCcw className="w-4 h-4 mr-2" /> Reset
