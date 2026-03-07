@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -472,7 +473,7 @@ export default function Battle() {
       const agentRef  = isAgentA ? dmnARef.current : dmnBRef.current;
       const dmnEngine = agentRef.engine || agentRef;  // DMNAgent wraps DMNEngine as .engine
 
-      const placement = dmnEngine.decideDeployment(
+const placement = await dmnEngine.decideDeployment(
         unit, isAgentA, deployedEnemies, deployedFriends, objectives, terrain, usedZones
       );
 

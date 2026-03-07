@@ -8,6 +8,7 @@
  * DMNEngine itself is not modified at all.
  */
 import { Agent } from './Agent';
+import { DMNEngine } from '../GameEngine';
 
 export class DMNAgent extends Agent {
   /**
@@ -20,6 +21,7 @@ export class DMNAgent extends Agent {
 
 // ── Passthrough helpers so Battle.jsx can still call these directly ─────────
   // (used in deployment phase and a few other places that bypass decideAction)
+  get engine() { return this.dmn; }
   get learningData() { return this.dmn.learningData; }
   findNearestEnemy(unit, enemies) { return this.dmn.findNearestEnemy(unit, enemies); }
   findNearestObjective(unit, objectives) { return this.dmn.findNearestObjective(unit, objectives); }
