@@ -282,6 +282,8 @@ export default function Battle() {
     setBattle({ ...battleRef.current });
     console.log('[INIT] complete');
 
+  };
+
 // ─── TERRAIN / OBJECTIVES ────────────────────────────────────────────────────
 
   const generateTerrain = (theme = 'mixed') => {
