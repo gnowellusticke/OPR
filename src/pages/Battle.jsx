@@ -120,10 +120,11 @@ export default function Battle() {
     useEffect(() => {
         console.log('[EFFECT] playing:', playing, 'pending:', gsRef.current?.pending_deployment, 'status:', battleRef.current?.status);
         if (!playing || !gsRef.current || battleRef.current?.status === 'completed') return;
-        if (gsRef.current.pending_deployment) {
-          runPendingDeployment();
-          return;
-        }
+          if (gsRef.current.pending_deployment) {
+                console.log('[EFFECT] calling runPendingDeployment');
+                runPendingDeployment();
+                return;
+              }
     const timer = setTimeout(() => {
         if (playingRef.current) processNextAction();
       }, simulationSpeed);
@@ -547,8 +548,9 @@ const placement = await dmnEngine.decideDeployment(
   // Thin wrapper called by the useEffect when pending_deployment is true.
   // Pulls the current units/objectives/terrain out of the ref so the async
   // deployment phase always works on the freshest state.
-  const runPendingDeployment = async () => {
-    setPlayingBoth(false); // Pause auto-advance while we do deployment
+    const runPendingDeployment = async () => {
+        console.log('[DEPLOY] runPendingDeployment called, gs:', gsRef.current?.pending_deployment);
+        setPlayingBoth(false);
     const gs = gsRef.current;
     await runDeploymentPhase(
       gs.units,
