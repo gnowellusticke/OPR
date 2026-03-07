@@ -1,5 +1,4 @@
 import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Brain, Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PERSONALITIES } from '../engine/personalities/PersonalityRegistry';

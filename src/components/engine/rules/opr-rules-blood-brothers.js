@@ -172,6 +172,7 @@ export const BLOOD_BROTHERS_RULES = {
         }
         return {};
       },
+      },
 
   VersatileAttack: {
     description: 'When activated, choose AP+1 or +1 to hit.',
@@ -220,9 +221,9 @@ export const BLOOD_BROTHERS_RULES = {
       },
     },
   },
-
+},
   // Auras
-  ''Bane in Melee Aura': {
+  'Bane in Melee Aura': {
     description: 'This model and its unit get Bane in melee.',
     hooks: {
       [HOOKS.ON_GET_RULES]: ({ unit }) => {
@@ -376,5 +377,5 @@ export const BLOOD_BROTHERS_RULES = {
         }
       },
     },
-  },
+ },
 };

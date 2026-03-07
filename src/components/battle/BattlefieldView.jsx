@@ -1,6 +1,5 @@
 import React from 'react';
 import { Card } from "@/components/ui/card";
-import { Users, User } from "lucide-react";
 import UnitGroupDisplay from './UnitGroupDisplay';
 
 // Sprite assets for ruins and buildings — randomly assigned per terrain piece using a seeded index
