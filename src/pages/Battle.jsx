@@ -243,8 +243,10 @@ export default function Battle() {
 
     const rulesEngine = new RulesEngine(registry);
     rulesRef.current = rulesEngine;
+    console.log('[INIT] rules engine built, calling deployArmies');
 
     const units = deployArmies(armyA, armyB, advRules);
+    console.log('[INIT] deployArmies complete, units:', units?.length);
 
     const activeRuleKeys = Object.entries(advRules).filter(([, v]) => v).map(([k]) => k);
     logger.setBattleConfig({
