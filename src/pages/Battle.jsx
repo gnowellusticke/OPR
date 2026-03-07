@@ -117,7 +117,8 @@ export default function Battle() {
     });
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
+    console.log('[EFFECT] playing:', playing, 'pending:', gsRef.current?.pending_deployment);
     if (!playing || !gsRef.current || battleRef.current?.status === 'completed') return;
     if (gsRef.current.pending_deployment) {
       runPendingDeployment();
@@ -528,6 +529,7 @@ const placement = await dmnEngine.decideDeployment(
   // Pulls the current units/objectives/terrain out of the ref so the async
   // deployment phase always works on the freshest state.
 const runPendingDeployment = async () => {
+    console.log('[DEPLOYMENT] starting, gs:', gsRef.current?.pending_deployment);
     setPlayingBoth(false);
     const gs = gsRef.current;
     try {
