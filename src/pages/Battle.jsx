@@ -249,10 +249,12 @@ export default function Battle() {
     console.log('[INIT] deployArmies complete, units:', units?.length);
 
     const activeRuleKeys = Object.entries(advRules).filter(([, v]) => v).map(([k]) => k);
+    console.log('[INIT] calling setBattleConfig');
     logger.setBattleConfig({
       scoring_mode: advRules.cumulativeScoring ? 'cumulative' : 'per_round',
       advance_rules: activeRuleKeys,
     });
+    console.log('[INIT] calling commitState');
 
     const pendingState = {
       units,
