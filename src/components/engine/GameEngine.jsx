@@ -850,40 +850,8 @@ export class CMMNEngine {
   }
 }
 
-// Dice Roller
-export class DiceRoller {
-  roll() {
-    return Math.floor(Math.random() * 6) + 1;
-  }
-
-  rollQualityTest(quality, count = 1) {
-    const rolls = [];
-    for (let i = 0; i < count; i++) {
-      const value = this.roll();
-      rolls.push({
-        value,
-        success: value >= quality || value === 6
-      });
-    }
-    return rolls;
-  }
-
-  rollDefense(defense, count = 1) {
-    const rolls = [];
-    for (let i = 0; i < count; i++) {
-      const value = this.roll();
-      rolls.push({
-        value,
-        success: value >= defense || value === 6
-      });
-    }
-    return rolls;
-  }
-}
-
 export default {
   BPMNEngine,
   DMNEngine,
-  CMMNEngine,
-  DiceRoller
+  CMMNEngine
 };

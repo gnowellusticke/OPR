@@ -527,18 +527,22 @@ const placement = await dmnEngine.decideDeployment(
   // Thin wrapper called by the useEffect when pending_deployment is true.
   // Pulls the current units/objectives/terrain out of the ref so the async
   // deployment phase always works on the freshest state.
-  const runPendingDeployment = async () => {
-    setPlayingBoth(false); // Pause auto-advance while we do deployment
+const runPendingDeployment = async () => {
+    setPlayingBoth(false);
     const gs = gsRef.current;
-    await runDeploymentPhase(
-      gs.units,
-      gs.objectives,
-      gs.terrain,
-      loggerRef.current,
-      gs.advance_rules || {}
-    );
-    setPlayingBoth(true); // Resume once deployment is done
-  };
+    try {
+      await runDeploymentPhase(
+        gs.units,
+        gs.objectives,
+        gs.terrain,
+        loggerRef.current,
+        gs.advance_rules || {}
+      );
+    } catch (err) {
+      console.error('[DEPLOYMENT ERROR]', err);
+    }
+    setPlayingBoth(true);
+};
 
   // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 
