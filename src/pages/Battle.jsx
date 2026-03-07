@@ -254,7 +254,7 @@ export default function Battle() {
       scoring_mode: advRules.cumulativeScoring ? 'cumulative' : 'per_round',
       advance_rules: activeRuleKeys,
     });
-    console.log('[INIT] calling commitState');
+
 
     const pendingState = {
       units,
