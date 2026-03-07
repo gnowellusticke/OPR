@@ -274,10 +274,13 @@ export default function Battle() {
       timestamp: new Date().toLocaleTimeString()
     }];
 
+    console.log('[INIT] calling commitState');
     commitState(pendingState, log);
+    console.log('[INIT] commitState done');
     battleRef.current = { ...battleRef.current, status: 'in_progress', current_round: 1 };
+    console.log('[INIT] battleRef updated');
     setBattle({ ...battleRef.current });
-  };
+    console.log('[INIT] complete');
 
 // ─── TERRAIN / OBJECTIVES ────────────────────────────────────────────────────
 
