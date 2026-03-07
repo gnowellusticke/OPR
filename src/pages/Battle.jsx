@@ -97,6 +97,7 @@ export default function Battle() {
   const battleRef = useRef(null);
   const actionTrackingRef = useRef({ agent_a: {}, agent_b: {} });
   const playingRef = useRef(false);
+  const deploymentRunningRef = useRef(false);
 
   // Game state refs
   const gsRef = useRef(null);
@@ -449,6 +450,8 @@ export default function Battle() {
   // side's DMN engine to choose a placement.  Reserve units are flagged and
   // will enter via Ambush/Teleport hooks at the start of later rounds.
   const runDeploymentPhase = async (units, objectives, terrain, logger, advRules) => {
+    const runDeploymentPhase = async (units, objectives, terrain, logger, advRules) => {
+    console.log('[DEPLOY PHASE] starting, units:', units?.length, 'terrain:', terrain?.length, 'objectives:', objectives?.length);
     // Mark reserve units and separate them out.
     const toPlace = [];
     units.forEach(u => {
@@ -560,6 +563,8 @@ const placement = await dmnEngine.decideDeployment(
       gs.advance_rules || {}
     );
     setPlayingBoth(true); // Resume once deployment is done
+    deploymentRunningRef.current = false;
+};
   };
 
   // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
