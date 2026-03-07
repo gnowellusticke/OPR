@@ -144,7 +144,6 @@ export default function Battle() {
     try {
       setLoadingStatus("Fetching battle data...");
       const battleData = await base44.entities.Battle.get(id);
-      const battleData = await base44.entities.Battle.get(id);
       console.log('[LOAD] battle status:', battleData.status, 'id:', id);
       
       setLoadingStatus("Loading armies...");
