@@ -151,8 +151,13 @@ export default function Battle() {
       const armyB = await base44.entities.ArmyList.get(battleData.army_b_id);
 
       setLoadingStatus("Analyzing army performance...");
-      await dmnARef.current.loadLearningData(battleData.army_a_id);
-      await dmnBRef.current.loadLearningData(battleData.army_b_id);
+      try {
+        await dmnARef.current.loadLearningData(battleData.army_a_id);
+        await dmnBRef.current.loadLearningData(battleData.army_b_id);
+      } catch (err) {
+        console.error('[LOAD] loadLearningData failed:', err);
+      }
+      console.log('[LOAD] learning data done, calling initializeBattle');
 
       const gs = battleData.game_state || {};
       const persA = getPersonality(gs.personality_a) || DEFAULT_PERSONALITY;
