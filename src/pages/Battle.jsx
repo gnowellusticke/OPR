@@ -117,8 +117,7 @@ export default function Battle() {
     });
   }, []);
 
-useEffect(() => {
-    console.log('[EFFECT] playing:', playing, 'pending:', gsRef.current?.pending_deployment);
+  useEffect(() => {
     if (!playing || !gsRef.current || battleRef.current?.status === 'completed') return;
     if (gsRef.current.pending_deployment) {
       runPendingDeployment();
@@ -206,8 +205,7 @@ useEffect(() => {
 
   // ─── INIT ────────────────────────────────────────────────────────────────────
 
-const initializeBattle = async (battleData, armyA, armyB, logger) => {
-    console.log('[INIT] starting initializeBattle');
+  const initializeBattle = async (battleData, armyA, armyB, logger) => {
     const mapTheme = battleData.game_state?.map_theme || 'mixed';
     const terrain = generateTerrain(mapTheme);
     const objectives = generateObjectives();
@@ -263,12 +261,10 @@ const initializeBattle = async (battleData, armyA, armyB, logger) => {
       timestamp: new Date().toLocaleTimeString()
     }];
 
-commitState(pendingState, log);
+    commitState(pendingState, log);
     battleRef.current = { ...battleRef.current, status: 'in_progress', current_round: 1 };
     setBattle({ ...battleRef.current });
-    console.log('[INIT] complete — battle status:', battleRef.current.status, 'terrain pieces:', terrain.length, 'units:', units.length, 'pending_deployment:', pendingState.pending_deployment);
   };
-
 
 // ─── TERRAIN / OBJECTIVES ────────────────────────────────────────────────────
 
@@ -331,22 +327,17 @@ commitState(pendingState, log);
           y = Y_MIN + Math.random() * (Y_MAX - Y_MIN);
         }
 
-          try {
-            pieces.push(new Terrain({
-              id: `terrain_${pieceId++}`,
-              name: terrainType.name,
-              x,
-              y,
-              radius,
-              types: terrainType.types,
-            }));
-          } catch (e) {
-            console.error('[TERRAIN] Failed to create terrain piece:', e);
-          }
+        pieces.push(new Terrain({
+          id: `terrain_${pieceId++}`,
+          name: terrainType.name,
+          x,
+          y,
+          radius,
+          types: terrainType.types,
+        }));
       }
     }
 
-    console.log('[TERRAIN] generated', pieces.length, 'pieces for theme:', theme);
     return pieces;
   };
 
@@ -400,21 +391,20 @@ commitState(pendingState, log);
       y: owner === 'agent_a' ? 10 : 38,
     });
 
-  const addBattleFields = (unit) => {
-    const specialRules = unit.special_rules || '';
-    const toughMatch = specialRules.match(/\bTough\((\d+)\)/);
-    const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 1;
-    const isReserve = /Ambush|Teleport|Infiltrate/.test(specialRules);
-    return {
-      ...unit,
-      status:                'normal',
-      tough_per_model:       toughPerModel,
-      model_count:           unit.total_models,
-      is_in_reserve:         isReserve,
-      rounds_without_offense: 0,
-      melee_weapon_name:     resolveMeleeWeaponName(unit.weapons),
+    const addBattleFields = (unit) => {
+      const toughMatch = unit.special_rules.match(/\bTough\((\d+)\)/);
+      const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 1;
+      const isReserve = /Ambush|Teleport|Infiltrate/.test(unit.special_rules);
+      return {
+        ...unit,
+        status:                'normal',
+        tough_per_model:       toughPerModel,
+        model_count:           unit.total_models,
+        is_in_reserve:         isReserve,
+        rounds_without_offense: 0,
+        melee_weapon_name:     resolveMeleeWeaponName(unit.weapons),
+      };
     };
-  };
 
     const unitsA = createArmy(
       { units: armyA.units || armyA.roster || [] },
@@ -537,23 +527,18 @@ const placement = await dmnEngine.decideDeployment(
   // Thin wrapper called by the useEffect when pending_deployment is true.
   // Pulls the current units/objectives/terrain out of the ref so the async
   // deployment phase always works on the freshest state.
-const runPendingDeployment = async () => {
-    console.log('[DEPLOYMENT] starting, gs:', gsRef.current?.pending_deployment);
-    setPlayingBoth(false);
+  const runPendingDeployment = async () => {
+    setPlayingBoth(false); // Pause auto-advance while we do deployment
     const gs = gsRef.current;
-    try {
-      await runDeploymentPhase(
-        gs.units,
-        gs.objectives,
-        gs.terrain,
-        loggerRef.current,
-        gs.advance_rules || {}
-      );
-    } catch (err) {
-      console.error('[DEPLOYMENT ERROR]', err);
-    }
-    setPlayingBoth(true);
-};
+    await runDeploymentPhase(
+      gs.units,
+      gs.objectives,
+      gs.terrain,
+      loggerRef.current,
+      gs.advance_rules || {}
+    );
+    setPlayingBoth(true); // Resume once deployment is done
+  };
 
   // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 
