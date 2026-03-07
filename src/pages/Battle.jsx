@@ -206,7 +206,8 @@ useEffect(() => {
 
   // ─── INIT ────────────────────────────────────────────────────────────────────
 
-  const initializeBattle = async (battleData, armyA, armyB, logger) => {
+const initializeBattle = async (battleData, armyA, armyB, logger) => {
+    console.log('[INIT] starting initializeBattle');
     const mapTheme = battleData.game_state?.map_theme || 'mixed';
     const terrain = generateTerrain(mapTheme);
     const objectives = generateObjectives();
@@ -262,10 +263,12 @@ useEffect(() => {
       timestamp: new Date().toLocaleTimeString()
     }];
 
-    commitState(pendingState, log);
+commitState(pendingState, log);
     battleRef.current = { ...battleRef.current, status: 'in_progress', current_round: 1 };
     setBattle({ ...battleRef.current });
+    console.log('[INIT] complete — battle status:', battleRef.current.status, 'terrain pieces:', terrain.length, 'units:', units.length, 'pending_deployment:', pendingState.pending_deployment);
   };
+
 
 // ─── TERRAIN / OBJECTIVES ────────────────────────────────────────────────────
 
@@ -328,17 +331,22 @@ useEffect(() => {
           y = Y_MIN + Math.random() * (Y_MAX - Y_MIN);
         }
 
-        pieces.push(new Terrain({
-          id: `terrain_${pieceId++}`,
-          name: terrainType.name,
-          x,
-          y,
-          radius,
-          types: terrainType.types,
-        }));
+          try {
+            pieces.push(new Terrain({
+              id: `terrain_${pieceId++}`,
+              name: terrainType.name,
+              x,
+              y,
+              radius,
+              types: terrainType.types,
+            }));
+          } catch (e) {
+            console.error('[TERRAIN] Failed to create terrain piece:', e);
+          }
       }
     }
 
+    console.log('[TERRAIN] generated', pieces.length, 'pieces for theme:', theme);
     return pieces;
   };
 
@@ -392,20 +400,21 @@ useEffect(() => {
       y: owner === 'agent_a' ? 10 : 38,
     });
 
-    const addBattleFields = (unit) => {
-      const toughMatch = unit.special_rules.match(/\bTough\((\d+)\)/);
-      const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 1;
-      const isReserve = /Ambush|Teleport|Infiltrate/.test(unit.special_rules);
-      return {
-        ...unit,
-        status:                'normal',
-        tough_per_model:       toughPerModel,
-        model_count:           unit.total_models,
-        is_in_reserve:         isReserve,
-        rounds_without_offense: 0,
-        melee_weapon_name:     resolveMeleeWeaponName(unit.weapons),
-      };
+  const addBattleFields = (unit) => {
+    const specialRules = unit.special_rules || '';
+    const toughMatch = specialRules.match(/\bTough\((\d+)\)/);
+    const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 1;
+    const isReserve = /Ambush|Teleport|Infiltrate/.test(specialRules);
+    return {
+      ...unit,
+      status:                'normal',
+      tough_per_model:       toughPerModel,
+      model_count:           unit.total_models,
+      is_in_reserve:         isReserve,
+      rounds_without_offense: 0,
+      melee_weapon_name:     resolveMeleeWeaponName(unit.weapons),
     };
+  };
 
     const unitsA = createArmy(
       { units: armyA.units || armyA.roster || [] },
