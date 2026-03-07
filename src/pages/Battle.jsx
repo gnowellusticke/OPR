@@ -160,16 +160,19 @@ export default function Battle() {
       console.log('[LOAD] learning data done, calling initializeBattle');
 
       const gs = battleData.game_state || {};
+      console.log('[LOAD] setting personalities');
       const persA = getPersonality(gs.personality_a) || DEFAULT_PERSONALITY;
       const persB = getPersonality(gs.personality_b) || DEFAULT_PERSONALITY;
       dmnARef.current.setPersonality(persA);
       dmnBRef.current.setPersonality(persB);
-      console.log(`[PERSONALITIES] A: ${persA.name}, B: ${persB.name}`);
+      console.log(`[LOAD] personalities set: A: ${persA.name}, B: ${persB.name}`);
 
+      console.log('[LOAD] creating logger');
       const logger = new BattleLogger(battleData.id, armyA, armyB);
       loggerRef.current = logger;
       battleRef.current = { ...battleData, armyAName: armyA.name, armyBName: armyB.name };
       setBattle(battleRef.current);
+      console.log('[LOAD] calling initializeBattle');
 
       if (battleData.status === 'setup') {
         setLoadingStatus("Initializing battle...");
