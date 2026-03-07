@@ -401,9 +401,10 @@ export default function Battle() {
     });
 
     const addBattleFields = (unit) => {
-      const toughMatch = unit.special_rules.match(/\bTough\((\d+)\)/);
+      const specialRules = unit.special_rules || '';
+      const toughMatch = specialRules.match(/\bTough\((\d+)\)/);
       const toughPerModel = toughMatch ? parseInt(toughMatch[1]) : 1;
-      const isReserve = /Ambush|Teleport|Infiltrate/.test(unit.special_rules);
+      const isReserve = /Ambush|Teleport|Infiltrate/.test(specialRules);
       return {
         ...unit,
         status:                'normal',
@@ -413,7 +414,7 @@ export default function Battle() {
         rounds_without_offense: 0,
         melee_weapon_name:     resolveMeleeWeaponName(unit.weapons),
       };
-    };
+};
 
     const unitsA = createArmy(
       { units: armyA.units || armyA.roster || [] },
