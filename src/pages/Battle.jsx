@@ -123,7 +123,6 @@ export default function Battle() {
   // deployment phase always works on the freshest state.
     const runPendingDeployment = async () => {
         console.log('[DEPLOY] runPendingDeployment called, gs:', gsRef.current?.pending_deployment);
-        setPlayingBoth(false);
     const gs = gsRef.current;
     await runDeploymentPhase(
       gs.units,
@@ -470,7 +469,6 @@ export default function Battle() {
   // side's DMN engine to choose a placement.  Reserve units are flagged and
   // will enter via Ambush/Teleport hooks at the start of later rounds.
   const runDeploymentPhase = async (units, objectives, terrain, logger, advRules) => {
-    const runDeploymentPhase = async (units, objectives, terrain, logger, advRules) => {
     console.log('[DEPLOY PHASE] starting, units:', units?.length, 'terrain:', terrain?.length, 'objectives:', objectives?.length);
     // Mark reserve units and separate them out.
     const toPlace = [];
@@ -587,11 +585,6 @@ const placement = await dmnEngine.decideDeployment(
       return;
     }
 
-    // Deployment hasn't happened yet — hand off to the deployment phase.
-    if (gs.pending_deployment) {
-      await runPendingDeployment();
-      return;
-    }
 
     const round = gs.current_round;
     if (!round || round > 4) {
@@ -1166,7 +1159,7 @@ const scored = candidates.map(u => {
     const evs = [...evRef.current];
 
     const isProgressiveScoring = gs.advance_rules?.progressiveScoring === true;
-    const isFinalRound = newRound === 5;
+    const isFinalRound = newRound === 4;
 
     // Round-end validation and shaken recovery (unchanged)
     const liveUnits = gs.units.filter(u => u.current_models > 0 && u.status !== 'destroyed' && u.status !== 'routed' && !u.is_in_reserve);
@@ -1349,6 +1342,8 @@ let aScore, bScore;
             console.log('[PLAY CLICK] playing:', playing, 'status:', battle?.status, 'pending:', gsRef.current?.pending_deployment); 
             setPlayingBoth(!playing); 
           }} disabled={battle.status === 'completed'} className="bg-blue-600 hover:bg-blue-700">
+            {playing ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+            {playing ? 'Pause' : 'Play'}
           </Button>
           <Button variant="outline" onClick={() => window.location.reload()} className="border-slate-600 text-slate-300">
             <RotateCcw className="w-4 h-4 mr-2" /> Reset
@@ -1474,4 +1469,4 @@ let aScore, bScore;
     </div>
   );
 };
-};
+
