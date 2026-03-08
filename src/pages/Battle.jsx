@@ -118,10 +118,30 @@ export default function Battle() {
         });
     }, []);
 
+      // Thin wrapper called by the useEffect when pending_deployment is true.
+  // Pulls the current units/objectives/terrain out of the ref so the async
+  // deployment phase always works on the freshest state.
+    const runPendingDeployment = async () => {
+        console.log('[DEPLOY] runPendingDeployment called, gs:', gsRef.current?.pending_deployment);
+        setPlayingBoth(false);
+    const gs = gsRef.current;
+    await runDeploymentPhase(
+      gs.units,
+      gs.objectives,
+      gs.terrain,
+      loggerRef.current,
+      gs.advance_rules || {}
+    );
+    setPlayingBoth(true); // Resume once deployment is done
+    deploymentRunningRef.current = false;
+  };
+
     useEffect(() => {
         console.log('[EFFECT] playing:', playing, 'pending:', gsRef.current?.pending_deployment, 'status:', battleRef.current?.status);
         if (!playing || !gsRef.current || battleRef.current?.status === 'completed') return;
           if (gsRef.current.pending_deployment) {
+                if (deploymentRunningRef.current) return;
+                deploymentRunningRef.current = true;
                 console.log('[EFFECT] calling runPendingDeployment');
                 runPendingDeployment();
                 return;
@@ -548,24 +568,7 @@ const placement = await dmnEngine.decideDeployment(
     }, evs);
   };
 
-  // Thin wrapper called by the useEffect when pending_deployment is true.
-  // Pulls the current units/objectives/terrain out of the ref so the async
-  // deployment phase always works on the freshest state.
-    const runPendingDeployment = async () => {
-        console.log('[DEPLOY] runPendingDeployment called, gs:', gsRef.current?.pending_deployment);
-        setPlayingBoth(false);
-    const gs = gsRef.current;
-    await runDeploymentPhase(
-      gs.units,
-      gs.objectives,
-      gs.terrain,
-      loggerRef.current,
-      gs.advance_rules || {}
-    );
-    setPlayingBoth(true); // Resume once deployment is done
-    deploymentRunningRef.current = false;
-};
-  };
+
 
   // ─── MAIN LOOP ────────────────────────────────────────────────────────────────
 
@@ -1470,4 +1473,5 @@ let aScore, bScore;
       </div>
     </div>
   );
-}
+};
+};
