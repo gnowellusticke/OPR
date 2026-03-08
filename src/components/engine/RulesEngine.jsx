@@ -155,8 +155,7 @@ endActivation(unit, gameState) {
     const newY = startY + (endY - startY) * ratio;
 
     // ON_MOVE_PATH hooks
-    const movePathResults = this.registry.applyHook(HOOKS.ON_MOVE_PATH, { ...ctx, fromX: startX, fromY: startY, toX: newX, toY: newY, specialRulesApplied }, unit.special_rules);  const movePathResults = this.registry.applyHook(HOOKS.ON_MOVE_PATH, { ...ctx, fromX: startX, fromY: startY, toX: newX, toY: newY, specialRulesApplied });
-    const ignoreUnits = movePathResults.some(r => r.ignoreUnits);
+        const movePathResults = this.registry.applyHook(HOOKS.ON_MOVE_PATH, { ...ctx, fromX: startX, fromY: startY, toX: newX, toY: newY, specialRulesApplied }, unit.special_rules);
     const ignoreTerrain = movePathResults.some(r => r.ignoreTerrain);
 
     // Unit blocking
