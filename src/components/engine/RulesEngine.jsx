@@ -586,7 +586,8 @@ endActivation(unit, gameState) {
 
   replenishSpellTokens(unit) {
     const tokensBefore = unit.spell_tokens || 0;
-    const ctx = { unit, currentTokens: tokensBefore };
+    const specialRulesApplied = [];
+    const ctx = { unit, currentTokens: tokensBefore, specialRulesApplied };
     const results = this.registry.applyHook(HOOKS.ON_TOKEN_GAIN, ctx, unit.special_rules);
     let tokensAfter = tokensBefore;
     results.forEach(r => { if (r.tokens !== undefined) tokensAfter = r.tokens; });
@@ -803,8 +804,9 @@ endActivation(unit, gameState) {
     return Math.hypot(px - projX, py - projY);
   }
 
-  _applyWounds(target, wounds, sourceUnit, gameState) {
-    const ctx = { unit: target, wounds, sourceUnit, gameState };
+_applyWounds(target, wounds, sourceUnit, gameState) {
+    const specialRulesApplied = [];
+    const ctx = { unit: target, wounds, sourceUnit, gameState, specialRulesApplied };
     const results = this.registry.applyHook(HOOKS.ON_WOUND_ALLOCATION, ctx, target.special_rules);
     let woundsToApply = wounds;
     results.forEach(r => { if (r.wounds !== undefined) woundsToApply = r.wounds; });
