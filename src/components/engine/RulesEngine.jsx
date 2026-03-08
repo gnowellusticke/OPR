@@ -27,7 +27,11 @@ export class RulesEngine {
   startRound(gameState) {
     const specialRulesApplied = [];
     const ctx = { gameState, dice: Dice, specialRulesApplied };
-    this.registry.applyHook(HOOKS.ON_ROUND_START, ctx);
+        gameState.units.forEach(unit => {
+          const unitCtx = { unit, gameState, dice: Dice, specialRulesApplied };
+          const results = this.registry.applyHook(HOOKS.ON_ROUND_START, unitCtx, unit.special_rules);
+          results.forEach(r => { if (r.clearShaken && unit.status === 'shaken') unit.status = 'normal'; });
+        });
     return { specialRulesApplied };
   }
 
@@ -38,8 +42,10 @@ export class RulesEngine {
    */
   endRound(gameState) {
     const specialRulesApplied = [];
-    const ctx = { gameState, dice: Dice, specialRulesApplied };
-    this.registry.applyHook(HOOKS.ON_ROUND_END, ctx);
+    gameState.units.forEach(unit => {
+      const ctx = { unit, gameState, dice: Dice, specialRulesApplied };
+      this.registry.applyHook(HOOKS.ON_ROUND_END, ctx, unit.special_rules);
+    });
     return { specialRulesApplied };
   }
 
@@ -149,7 +155,7 @@ endActivation(unit, gameState) {
     const newY = startY + (endY - startY) * ratio;
 
     // ON_MOVE_PATH hooks
-    const movePathResults = this.registry.applyHook(HOOKS.ON_MOVE_PATH, { ...ctx, fromX: startX, fromY: startY, toX: newX, toY: newY, specialRulesApplied });
+    const movePathResults = this.registry.applyHook(HOOKS.ON_MOVE_PATH, { ...ctx, fromX: startX, fromY: startY, toX: newX, toY: newY, specialRulesApplied }, unit.special_rules);  const movePathResults = this.registry.applyHook(HOOKS.ON_MOVE_PATH, { ...ctx, fromX: startX, fromY: startY, toX: newX, toY: newY, specialRulesApplied });
     const ignoreUnits = movePathResults.some(r => r.ignoreUnits);
     const ignoreTerrain = movePathResults.some(r => r.ignoreTerrain);
 
@@ -316,7 +322,7 @@ endActivation(unit, gameState) {
 
       // BEFORE_SAVE_DEFENSE
       const saveCtx = { ...ctx, defender, weapon, terrain: null, defense, ap };
-      const saveResults = this.registry.applyHook(HOOKS.BEFORE_SAVE_DEFENSE, saveCtx);
+      const saveResults = this.registry.applyHook(HOOKS.BEFORE_SAVE_DEFENSE, saveCtx, `${attacker.special_rules || ''} ${defender.special_rules || ''}`);
       saveResults.forEach(r => { if (r.ap !== undefined) ap = r.ap; });
       saveResults.forEach(r => { if (r.defense !== undefined) defense = r.defense; });
       const ignoresCover = saveResults.some(r => r.ignoresCover);
@@ -360,6 +366,10 @@ endActivation(unit, gameState) {
 
     const afterAttackCtx = { unit: attacker, gameState, specialRulesApplied };
     this.registry.applyHook(HOOKS.AFTER_ATTACK, afterAttackCtx, attacker.special_rules);
+    if (!isMelee) {
+      const afterShootCtx = { unit: attacker, gameState, specialRulesApplied };
+      this.registry.applyHook(HOOKS.AFTER_SHOOTING, afterShootCtx, attacker.special_rules);
+    }
 
     return {
       hits,
@@ -379,7 +389,7 @@ endActivation(unit, gameState) {
     const specialRulesApplied = [];
     const ctx = { unit: attacker, target: defender, gameState, dice: Dice, specialRulesApplied, isMelee: true };
 
-    const beforeResults = this.registry.applyHook(HOOKS.BEFORE_MELEE_ATTACK, ctx);
+    const beforeResults = this.registry.applyHook(HOOKS.BEFORE_MELEE_ATTACK, ctx, `${attacker.special_rules || ''} ${defender.special_rules || ''}`);
     let extraAttackerWounds = 0;
     let extraAttacks = 0;
     beforeResults.forEach(r => {
@@ -389,7 +399,7 @@ endActivation(unit, gameState) {
 
     let attackerFirst = true;
     const orderCtx = { attacker, defender, gameState };
-    const orderResults = this.registry.applyHook(HOOKS.ON_STRIKE_ORDER, orderCtx);
+    const orderResults = this.registry.applyHook(HOOKS.ON_STRIKE_ORDER, orderCtx, `${attacker.special_rules || ''} ${defender.special_rules || ''}`);
     orderResults.forEach(r => { if (r.attackerFirst !== undefined) attackerFirst = r.attackerFirst; });
 
     let attackerWounds = 0, defenderWounds = 0;
@@ -406,7 +416,7 @@ endActivation(unit, gameState) {
     }
 
     const meleeResCtx = { attacker, defender, attackerWounds, defenderWounds, gameState, specialRulesApplied };
-    const meleeResResults = this.registry.applyHook(HOOKS.ON_MELEE_RESOLUTION, meleeResCtx);
+    const meleeResResults = this.registry.applyHook(HOOKS.ON_MELEE_RESOLUTION, meleeResCtx, `${attacker.special_rules || ''} ${defender.special_rules || ''}`);
     meleeResResults.forEach(r => {
       if (r.attackerWounds !== undefined) attackerWounds = r.attackerWounds;
       if (r.defenderWounds !== undefined) defenderWounds = r.defenderWounds;
@@ -416,13 +426,16 @@ endActivation(unit, gameState) {
     if (defenderWounds > 0) this._applyWounds(attacker, defenderWounds, defender, gameState);
 
     const afterAttackerCtx = { unit: attacker, gameState, specialRulesApplied };
-    this.registry.applyHook(HOOKS.AFTER_MELEE_ATTACK, afterAttackerCtx);
+    this.registry.applyHook(HOOKS.AFTER_MELEE_ATTACK, afterAttackerCtx, attacker.special_rules);
     const afterDefenderCtx = { unit: defender, gameState, specialRulesApplied };
-    this.registry.applyHook(HOOKS.AFTER_MELEE_ATTACK, afterDefenderCtx);
+    this.registry.applyHook(HOOKS.AFTER_MELEE_ATTACK, afterDefenderCtx, defender.special_rules);
 
-    const afterMeleeCtx = { attacker, defender, gameState, dice: Dice, specialRulesApplied };
-    const afterMeleeResults = this.registry.applyHook(HOOKS.AFTER_MELEE, afterMeleeCtx);
-    this._processAfterMeleeResults(afterMeleeResults, attacker, defender, gameState);
+    const afterMeleeAttackerCtx = { unit: attacker, attacker, defender, gameState, dice: Dice, specialRulesApplied };
+    const afterMeleeAttackerResults = this.registry.applyHook(HOOKS.AFTER_MELEE, afterMeleeAttackerCtx, attacker.special_rules);
+    this._processAfterMeleeResults(afterMeleeAttackerResults, attacker, defender, gameState);
+    const afterMeleeDefenderCtx = { unit: defender, attacker, defender, gameState, dice: Dice, specialRulesApplied };
+    const afterMeleeDefenderResults = this.registry.applyHook(HOOKS.AFTER_MELEE, afterMeleeDefenderCtx, defender.special_rules);
+    this._processAfterMeleeResults(afterMeleeDefenderResults, defender, attacker, gameState);
 
     return {
       attacker_wounds: attackerWounds,
@@ -450,7 +463,7 @@ endActivation(unit, gameState) {
     const specialRulesApplied = [];
     const ctx = { caster, spell, target, gameState, dice: Dice, specialRulesApplied };
 
-    const results = this.registry.applyHook(HOOKS.ON_SPELL_CAST, ctx);
+    const results = this.registry.applyHook(HOOKS.ON_SPELL_CAST, ctx, caster.special_rules);
     let success = false;
     let finalRoll = 0;
     let modifiedRoll = 0;
@@ -555,7 +568,7 @@ endActivation(unit, gameState) {
 
   deployAmbush(unit, gameState) {
     const ctx = { unit, gameState, dice: Dice };
-    const results = this.registry.applyHook(HOOKS.ON_RESERVE_ENTRY, ctx);
+    const results = this.registry.applyHook(HOOKS.ON_RESERVE_ENTRY, ctx, unit.special_rules);
     if (results.length > 0) {
       const r = results[0];
       if (r.x !== undefined && r.y !== undefined) {
@@ -574,7 +587,7 @@ endActivation(unit, gameState) {
   replenishSpellTokens(unit) {
     const tokensBefore = unit.spell_tokens || 0;
     const ctx = { unit, currentTokens: tokensBefore };
-    const results = this.registry.applyHook(HOOKS.ON_TOKEN_GAIN, ctx);
+    const results = this.registry.applyHook(HOOKS.ON_TOKEN_GAIN, ctx, unit.special_rules);
     let tokensAfter = tokensBefore;
     results.forEach(r => { if (r.tokens !== undefined) tokensAfter = r.tokens; });
     unit.spell_tokens = tokensAfter;
@@ -591,7 +604,7 @@ endActivation(unit, gameState) {
 
   checkDangerousTerrain(unit, terrain, action) {
     const dangerCtx = { unit, terrain, action, dice: Dice };
-    const results = this.registry.applyHook(HOOKS.ON_DANGEROUS_TERRAIN, dangerCtx);
+    const results = this.registry.applyHook(HOOKS.ON_DANGEROUS_TERRAIN, dangerCtx, unit.special_rules);
     return results.reduce((sum, r) => sum + (r.wounds || 0), 0);
   }
 
@@ -602,7 +615,7 @@ endActivation(unit, gameState) {
   getActiveRules(unit, gameState) {
     const rules = new Set(typeof unit.special_rules === 'string' ? unit.special_rules.split(' ') : (unit.special_rules || []));
     const ctx = { unit, gameState };
-    const results = this.registry.applyHook(HOOKS.ON_GET_RULES, ctx);
+    const results = this.registry.applyHook(HOOKS.ON_GET_RULES, ctx, unit.special_rules);
     results.forEach(r => {
       if (r.additionalRules) {
         r.additionalRules.forEach(rule => rules.add(rule));
